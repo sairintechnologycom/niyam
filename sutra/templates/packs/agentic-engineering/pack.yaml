@@ -1,0 +1,10 @@
+name: agentic-engineering
+version: 0.1.0
+description: Research → Plan → Execute → Review → Ship methodology
+provides:
+  agents: [architect]
+  skills: [brainstorming, writing-plans, executing-plans, verification-before-completion]
+  commands: [brief, plan-review]
+  policies: []
+  design: []
+requires: []

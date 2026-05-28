@@ -1,0 +1,4 @@
+# Evidence policy — what evidence is required
+require_diff_summary: true
+require_validation_results: true
+require_policy_events: true

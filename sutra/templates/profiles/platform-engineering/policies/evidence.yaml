@@ -1,0 +1,5 @@
+# Evidence policy - platform-engineering
+require_diff_summary: true
+require_validation_results: true
+require_policy_events: true
+evidence_required: true

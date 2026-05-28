@@ -1,0 +1,7 @@
+# Approval policy - platform-engineering
+approval_required_for:
+  - infrastructure
+  - auth
+  - secrets
+  - ci_cd
+  - production_config

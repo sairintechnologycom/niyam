@@ -1,0 +1,8 @@
+# Runtime adapters configuration
+# Uncomment and configure runtimes as needed.
+# claude:
+#   generate_claude_md: true
+#   generate_hooks: true
+#   generate_settings: true
+# codex:
+#   generate_agents_md: true

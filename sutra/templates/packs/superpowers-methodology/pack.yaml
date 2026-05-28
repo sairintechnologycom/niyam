@@ -1,0 +1,10 @@
+name: superpowers-methodology
+version: 0.1.0
+description: Superpowers lab methodology for autonomous execution.
+provides:
+  agents: []
+  skills: [superpowers]
+  commands: [superpower]
+  policies: []
+  design: []
+requires: []

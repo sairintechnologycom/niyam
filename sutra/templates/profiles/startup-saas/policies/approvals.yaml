@@ -1,0 +1,6 @@
+# Approval policy - startup-saas
+approval_policy: high-risk-only
+approval_required_for:
+  - payment_changes
+  - infrastructure_changes
+  - secrets

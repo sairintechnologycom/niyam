@@ -1,0 +1,7 @@
+# Security policy - startup-saas
+block_secrets_in_code: true
+require_auth_review: true
+require_input_validation: true
+design_quality: true
+tdd_default: true
+guard: enabled

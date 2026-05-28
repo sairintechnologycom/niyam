@@ -1,0 +1,8 @@
+# Security policy - governed-enterprise
+block_secrets_in_code: true
+require_auth_review: true
+require_input_validation: true
+mode: semi-autonomous
+tdd_default: true
+codex_second_opinion: required
+destructive_commands: block

@@ -1,0 +1,16 @@
+# Project configuration
+name: ""
+description: ""
+stack:
+  languages: []
+  frameworks: []
+  package_managers: []
+  databases: []
+validation:
+  build: null
+  test: null
+  lint: null
+  format: null
+  typecheck: null
+source_dirs: []
+test_dirs: []

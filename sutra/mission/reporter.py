@@ -1,0 +1,168 @@
+"""Sutra mission reporter — generate evidence package for completed missions."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import subprocess
+from datetime import datetime
+import yaml
+from rich.console import Console
+from rich.panel import Panel
+
+from sutra.core.config import get_sutra_dir
+from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.executor import load_plan
+
+
+def run_mission_report(console: Console) -> None:
+    """Generate final evidence package for the latest mission."""
+    repo_root = Path.cwd()
+    sutra_dir = get_sutra_dir(repo_root)
+
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise SystemExit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+    mission_meta = plan_data.get("mission", {})
+
+    status = mission_meta.get("status", "unknown")
+    created = mission_meta.get("created", "")
+    orchestrator = mission_meta.get("orchestrator", "claude")
+
+    # 1. Collect Git Diff
+    git_diff = ""
+    try:
+        res = subprocess.run(["git", "diff"], capture_output=True, text=True)
+        if res.returncode == 0:
+            git_diff = res.stdout
+    except Exception:
+        pass
+
+    # Write diff to run directory
+    diff_path = run_dir / "diff-summary.md"
+    if git_diff:
+        diff_path.write_text(f"### Git Diff Summary\n\n```diff\n{git_diff}\n```\n", encoding="utf-8")
+    else:
+        diff_path.write_text("No changes detected in Git.\n", encoding="utf-8")
+
+    # 2. Collect Validation Results
+    val_path = run_dir / "validation-results.md"
+    val_results = ""
+    if val_path.exists():
+        val_results = val_path.read_text(encoding="utf-8")
+    else:
+        val_results = "*No validation runs recorded for this mission.*\n"
+
+    # 3. Collect Policy Events
+    policy_events_path = run_dir / "policy-events.json"
+    policy_events: list[dict] = []
+    
+    # Also check the global policy events and filter by time if possible
+    global_policy_path = sutra_dir / "evidence" / "policy-events.json"
+    
+    # Combine events
+    for path in (policy_events_path, global_policy_path):
+        if path.exists():
+            try:
+                with open(path, encoding="utf-8") as f:
+                    events = json.load(f)
+                    if isinstance(events, list):
+                        for e in events:
+                            if e not in policy_events:
+                                policy_events.append(e)
+            except Exception:
+                pass
+
+    # Sort events by timestamp
+    policy_events.sort(key=lambda e: e.get("timestamp", ""))
+
+    # 4. Collect Execution Log
+    exec_log_path = run_dir / "execution-log.json"
+    exec_log: list[dict] = []
+    if exec_log_path.exists():
+        try:
+            with open(exec_log_path, encoding="utf-8") as f:
+                exec_log = json.load(f)
+        except Exception:
+            pass
+
+    # 5. Build final evidence.md content
+    report_sections = []
+    report_sections.append(f"# Sutra Mission Evidence Package - {mission_id}")
+    report_sections.append("")
+    report_sections.append(f"- **Requirement Source:** `{mission_meta.get('requirement', '')}`")
+    report_sections.append(f"- **Generated:** `{datetime.utcnow().isoformat()}Z`")
+    report_sections.append(f"- **Status:** `{status.upper()}`")
+    report_sections.append(f"- **Orchestrator:** `{orchestrator}`")
+    report_sections.append("")
+    report_sections.append("## Task Checklist")
+    report_sections.append("")
+    for task in plan_data.get("tasks", []):
+        icon = "✓" if task.get("status") == "completed" else "✗"
+        report_sections.append(f"- [{icon}] **{task.get('id', '')}**: {task.get('title', '')} ({task.get('agent', '')})")
+    report_sections.append("")
+
+    report_sections.append("## Execution Log")
+    report_sections.append("")
+    if exec_log:
+        for event in exec_log:
+            task_str = f" [{event.get('task_id')}]" if event.get("task_id") else ""
+            report_sections.append(f"- `{event.get('timestamp')}` **{event.get('event')}**{task_str}: {event.get('details')}")
+    else:
+        report_sections.append("*No execution logs recorded.*")
+    report_sections.append("")
+
+    report_sections.append("## Policy Guard Audit Trail")
+    report_sections.append("")
+    if policy_events:
+        report_sections.append("| Timestamp | Type | Event Details |")
+        report_sections.append("|-----------|------|---------------|")
+        for event in policy_events:
+            report_sections.append(f"| `{event.get('timestamp')}` | `{event.get('type')}` | {event.get('details')} |")
+    else:
+        report_sections.append("*No policy events triggered.*")
+    report_sections.append("")
+
+    report_sections.append("## Validation Results")
+    report_sections.append("")
+    report_sections.append(val_results)
+    report_sections.append("")
+
+    report_sections.append("## Changes Made (Git Diff)")
+    report_sections.append("")
+    if git_diff:
+        report_sections.append(f"```diff\n{git_diff}\n```")
+    else:
+        report_sections.append("*No changes detected in source code.*")
+    report_sections.append("")
+
+    # Write report
+    report_file = run_dir / "evidence.md"
+    report_file.write_text("\n".join(report_sections), encoding="utf-8")
+
+    # Also copy or link to evidence.json if requested
+    evidence_json = run_dir / "evidence.json"
+    json_data = {
+        "mission_id": mission_id,
+        "status": status,
+        "created": created,
+        "completed": datetime.utcnow().isoformat() + "Z",
+        "orchestrator": orchestrator,
+        "tasks": plan_data.get("tasks", []),
+        "policy_events": policy_events,
+        "execution_log": exec_log,
+    }
+    with open(evidence_json, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=2)
+
+    console.print(Panel(
+        f"Evidence Markdown: [bold cyan]evidence.md[/]\n"
+        f"Evidence JSON: [bold cyan]evidence.json[/]\n"
+        f"Location: [bold].sutra/runs/{mission_id}/[/]",
+        title="[bold green]✓ Evidence Report Generated[/]",
+        border_style="green"
+    ))

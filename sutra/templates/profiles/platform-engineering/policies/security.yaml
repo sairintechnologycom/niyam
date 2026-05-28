@@ -1,0 +1,5 @@
+# Security policy - platform-engineering
+block_secrets_in_code: true
+require_auth_review: true
+require_input_validation: true
+guard: strict

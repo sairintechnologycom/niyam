@@ -1,0 +1,9 @@
+# Approval policy - governed-enterprise
+approval_required_for:
+  - auth_changes
+  - payment_changes
+  - infrastructure_changes
+  - secrets
+  - database_migrations
+  - production_config_changes
+  - ci_cd_changes
