@@ -13,6 +13,44 @@ from rich.panel import Panel
 from sutra.core.config import get_sutra_dir
 from sutra.mission.planner import get_latest_mission_id
 from sutra.mission.executor import load_plan
+import hashlib
+
+
+def compute_sha256(file_path: Path) -> str:
+    """Compute the SHA-256 hash of a file."""
+    if not file_path.exists() or not file_path.is_file():
+        return "DELETED"
+    h = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            while chunk := f.read(8192):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def get_changed_files(repo_root: Path) -> list[str]:
+    """Retrieve list of modified/untracked files from Git."""
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        files = []
+        for line in res.stdout.splitlines():
+            if line.strip():
+                parts = line.strip().split(maxsplit=1)
+                if len(parts) == 2:
+                    rel_path = parts[1]
+                    if not rel_path.startswith(".sutra") and not rel_path.startswith("evidence.md"):
+                        files.append(rel_path)
+        return files
+    except Exception:
+        return []
 
 
 def run_mission_report(console: Console) -> None:
@@ -140,6 +178,30 @@ def run_mission_report(console: Console) -> None:
         report_sections.append("*No changes detected in source code.*")
     report_sections.append("")
 
+    # Generate cryptographic manifest signature block
+    manifest_files = {}
+    for run_file in ("mission-plan.yaml", "execution-log.json", "validation-results.md", "policy-events.json"):
+        full_path = run_dir / run_file
+        if full_path.exists():
+            manifest_files[run_file] = compute_sha256(full_path)
+            
+    changed_files = get_changed_files(repo_root)
+    for f in changed_files:
+        manifest_files[f] = compute_sha256(repo_root / f)
+        
+    manifest = {
+        "mission_id": mission_id,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "files": manifest_files,
+    }
+    
+    report_sections.append("## Cryptographic Integrity Manifest")
+    report_sections.append("")
+    report_sections.append("<!-- SUTRA_SIGNATURE_START")
+    report_sections.append(json.dumps(manifest, indent=2))
+    report_sections.append("SUTRA_SIGNATURE_END -->")
+    report_sections.append("")
+
     # Write report
     report_file = run_dir / "evidence.md"
     report_file.write_text("\n".join(report_sections), encoding="utf-8")
@@ -155,6 +217,7 @@ def run_mission_report(console: Console) -> None:
         "tasks": plan_data.get("tasks", []),
         "policy_events": policy_events,
         "execution_log": exec_log,
+        "signature_manifest": manifest,
     }
     with open(evidence_json, "w", encoding="utf-8") as f:
         json.dump(json_data, f, indent=2)
@@ -164,5 +227,61 @@ def run_mission_report(console: Console) -> None:
         f"Evidence JSON: [bold cyan]evidence.json[/]\n"
         f"Location: [bold].sutra/runs/{mission_id}/[/]",
         title="[bold green]✓ Evidence Report Generated[/]",
+        border_style="green"
+    ))
+
+
+def run_verify_report(evidence_path: str, console: Console) -> None:
+    """Verify cryptographic integrity of an evidence report."""
+    path = Path(evidence_path)
+    if not path.exists():
+        console.print(f"[bold red]Error:[/] Evidence file '{evidence_path}' not found.")
+        raise SystemExit(1)
+
+    content = path.read_text(encoding="utf-8")
+    
+    start_tag = "<!-- SUTRA_SIGNATURE_START"
+    end_tag = "SUTRA_SIGNATURE_END -->"
+    
+    if start_tag not in content or end_tag not in content:
+        console.print("[bold red]❌ Integrity check failed:[/] No cryptographic signature manifest found in evidence report.")
+        raise SystemExit(1)
+
+    try:
+        sig_part = content.split(start_tag)[1].split(end_tag)[0].strip()
+        manifest = json.loads(sig_part)
+    except Exception as e:
+        console.print(f"[bold red]❌ Integrity check failed:[/] Signature manifest block is corrupt: {e}")
+        raise SystemExit(1)
+
+    run_dir = path.parent
+    repo_root = Path.cwd()
+
+    failures = []
+    verified_count = 0
+
+    for rel_file, expected_hash in manifest.get("files", {}).items():
+        if rel_file in ("mission-plan.yaml", "execution-log.json", "validation-results.md", "policy-events.json"):
+            file_path = run_dir / rel_file
+        else:
+            file_path = repo_root / rel_file
+
+        actual_hash = compute_sha256(file_path)
+        if actual_hash != expected_hash:
+            failures.append((rel_file, expected_hash, actual_hash))
+        else:
+            verified_count += 1
+
+    if failures:
+        console.print(f"[bold red]❌ Integrity check failed:[/] {len(failures)} file(s) tampered or modified since the report was generated.")
+        for rel_file, exp, act in failures:
+            console.print(f"  - [red]{rel_file}[/]: expected `{exp[:10]}...`, got `{act[:10]}...`")
+        raise SystemExit(1)
+
+    console.print(Panel(
+        f"Mission ID: [bold cyan]{manifest.get('mission_id')}[/]\n"
+        f"Signed On: [bold cyan]{manifest.get('timestamp')}[/]\n"
+        f"Verified Files: [bold green]{verified_count}[/]",
+        title="[bold green]✓ Evidence Report Verified Successfully[/]",
         border_style="green"
     ))

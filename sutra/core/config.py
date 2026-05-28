@@ -127,6 +127,8 @@ class SecurityPolicy(BaseModel):
     block_secrets_in_code: bool = True
     require_auth_review: bool = True
     require_input_validation: bool = True
+    deny_write_patterns: list[str] = Field(default_factory=list)
+    allow_write_patterns: list[str] = Field(default_factory=list)
 
 
 class EvidencePolicy(BaseModel):

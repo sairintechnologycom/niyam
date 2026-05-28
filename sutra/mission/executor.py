@@ -10,6 +10,7 @@ import subprocess
 import threading
 from datetime import datetime, timezone
 import yaml
+import fnmatch
 from rich.console import Console
 from rich.panel import Panel
 
@@ -59,6 +60,31 @@ def log_execution_event(run_dir: Path, event_type: str, task_id: str, details: s
 
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(events, f, indent=2)
+
+
+def log_policy_event(run_dir: Path, sutra_dir: Path, event_type: str, details: str) -> None:
+    """Log policy guardrail violation to policy-events.json (both run-level and global)."""
+    for log_path in (run_dir / "policy-events.json", sutra_dir / "evidence" / "policy-events.json"):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        events = []
+        if log_path.exists():
+            try:
+                with open(log_path, encoding="utf-8") as f:
+                    events = json.load(f)
+            except Exception:
+                events = []
+
+        events.append({
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "type": event_type,
+            "details": details,
+        })
+
+        try:
+            with open(log_path, "w", encoding="utf-8") as f:
+                json.dump(events, f, indent=2)
+        except Exception:
+            pass
 
 
 def update_token_ledger(
@@ -410,6 +436,7 @@ def execute_single_task(
     use_worktree: bool,
     project_config: any,
     console: Console,
+    non_interactive: bool = False,
 ) -> bool:
     """Execute a single task, isolating in worktree if enabled."""
     task_id = task["id"]
@@ -459,6 +486,25 @@ Do not perform destructive operations.
     is_test = os.environ.get("SUTRA_TEST") == "1"
     success = True
     
+    # Track pre-existing changes to ignore them in write restriction checks
+    pre_changed_files = set()
+    if not use_worktree and is_git_repo(repo_root):
+        try:
+            res_status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if res_status.returncode == 0:
+                for line in res_status.stdout.splitlines():
+                    if line.strip():
+                        parts = line.strip().split(maxsplit=1)
+                        if len(parts) == 2:
+                            pre_changed_files.add(parts[1])
+        except Exception:
+            pass
+
     if is_test:
         with _print_lock:
             console.print(f"[{task_id}] [dim]Mocking execution of {task_id}...[/]")
@@ -478,11 +524,11 @@ Do not perform destructive operations.
             with _print_lock:
                 console.print(f"[{task_id}] [cyan]Invoking {orchestrator} CLI...[/]")
             try:
-                if parallel_limit == 1:
+                if parallel_limit == 1 and not non_interactive:
                     # Sequential: full interactive pass-through
                     subprocess.run([orchestrator, str(prompt_path)], cwd=task_cwd, check=True)
                 else:
-                    # Parallel: headless execution
+                    # Parallel or non-interactive: headless execution
                     task_log_path = (worktree_path if use_worktree else run_dir) / f"task-{task_id}-output.log"
                     with open(task_log_path, "w", encoding="utf-8") as log_f:
                         subprocess.run(
@@ -494,9 +540,9 @@ Do not perform destructive operations.
                             check=True,
                         )
             except subprocess.CalledProcessError as e:
-                if parallel_limit > 1:
+                if parallel_limit > 1 or non_interactive:
                     with _print_lock:
-                        console.print(f"[{task_id}] [red]Orchestrator failed in parallel execution: {e}[/]")
+                        console.print(f"[{task_id}] [red]Orchestrator failed in headless execution: {e}[/]")
                         console.print(f"[{task_id}] To complete this task manually, run:")
                         console.print(f"  [bold]cat {prompt_path}[/]")
                     success = False
@@ -508,7 +554,7 @@ Do not perform destructive operations.
                     except (KeyboardInterrupt, EOFError):
                         success = False
         else:
-            if parallel_limit > 1:
+            if parallel_limit > 1 or non_interactive:
                 with _print_lock:
                     console.print(f"[{task_id}] [red]Orchestrator '{orchestrator}' CLI not found in PATH.[/]")
                     console.print(f"[{task_id}] To complete this task manually, run:")
@@ -524,6 +570,79 @@ Do not perform destructive operations.
                     input()
                 except (KeyboardInterrupt, EOFError):
                     success = False
+                    
+    # Write Guard Check
+    if success:
+        security_yaml = sutra_dir / "policies" / "security.yaml"
+        deny_patterns = []
+        allow_patterns = []
+        if security_yaml.exists():
+            try:
+                with open(security_yaml, encoding="utf-8") as f:
+                    sec_data = yaml.safe_load(f) or {}
+                    deny_patterns = sec_data.get("deny_write_patterns", [])
+                    allow_patterns = sec_data.get("allow_write_patterns", [])
+            except Exception:
+                pass
+        
+        # Also enforce task-specific files_allowed restriction
+        task_allowed = task.get("files_allowed")
+        if task_allowed and "*" not in task_allowed and "Any" not in task_allowed:
+            # Treat task-specific files_allowed list as additional allow patterns
+            allow_patterns.extend(task_allowed)
+
+        if (deny_patterns or allow_patterns) and is_git_repo(repo_root):
+            try:
+                res_status = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=task_cwd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                changed_files = []
+                for line in res_status.stdout.splitlines():
+                    if line.strip():
+                        parts = line.strip().split(maxsplit=1)
+                        if len(parts) == 2:
+                            rel_path = parts[1]
+                            if not rel_path.startswith(".sutra"):
+                                changed_files.append(rel_path)
+
+                violated_files = []
+                for f in changed_files:
+                    if f in pre_changed_files:
+                        continue
+                    if deny_patterns and any(fnmatch.fnmatch(f, pat) for pat in deny_patterns):
+                        violated_files.append(f)
+                    elif allow_patterns and not any(fnmatch.fnmatch(f, pat) for pat in allow_patterns):
+                        violated_files.append(f)
+
+                if violated_files:
+                    with _print_lock:
+                        console.print(f"[{task_id}] [bold red]❌ Write restriction violation detected![/]")
+                        for f in violated_files:
+                            console.print(f"  - Reverting unauthorized change to: [red]{f}[/]")
+
+                    for f in violated_files:
+                        subprocess.run(["git", "checkout", "--", f], cwd=task_cwd)
+                        full_p = task_cwd / f
+                        if full_p.exists() and not full_p.is_dir():
+                            try:
+                                full_p.unlink()
+                            except Exception:
+                                pass
+
+                    log_policy_event(
+                        run_dir=run_dir,
+                        sutra_dir=sutra_dir,
+                        event_type="WRITE_VIOLATION",
+                        details=f"Task {task_id} attempted unauthorized modifications to: {', '.join(violated_files)}"
+                    )
+                    success = False
+            except Exception as e:
+                with _print_lock:
+                    console.print(f"[{task_id}] [yellow]Warning during write guard check:[/] {e}")
                     
     # Validation
     if success and project_config and project_config.validation:
@@ -630,7 +749,12 @@ Do not perform destructive operations.
 
 # ── Public Entry Points ───────────────────────────────────────────────
 
-def run_mission_start(console: Console, parallel: int | None = None, worktree: bool | None = None) -> None:
+def run_mission_start(
+    console: Console,
+    parallel: int | None = None,
+    worktree: bool | None = None,
+    non_interactive: bool = False,
+) -> None:
     """Start or resume the latest approved mission."""
     repo_root = Path.cwd()
     sutra_dir = get_sutra_dir(repo_root)
@@ -644,15 +768,27 @@ def run_mission_start(console: Console, parallel: int | None = None, worktree: b
     approval_path = run_dir / "approval.json"
 
     # Check approval
-    if not approval_path.exists():
-        console.print("[bold red]Error:[/] Mission has not been approved.")
-        raise SystemExit(1)
+    approved = False
+    if approval_path.exists():
+        try:
+            with open(approval_path, encoding="utf-8") as f:
+                app_data = json.load(f)
+            if app_data.get("approved", False):
+                approved = True
+        except Exception:
+            pass
 
-    with open(approval_path, encoding="utf-8") as f:
-        app_data = json.load(f)
-    if not app_data.get("approved", False):
-        console.print("[bold red]Error:[/] Mission has not been approved yet.")
-        raise SystemExit(1)
+    if not approved:
+        if non_interactive and os.environ.get("SUTRA_CI_AUTO_APPROVE") == "1":
+            console.print("[cyan]Non-interactive mode & SUTRA_CI_AUTO_APPROVE=1: Auto-approving mission...[/]")
+            approval_data = {
+                "approved": True,
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
+            approval_path.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+        else:
+            console.print("[bold red]Error:[/] Mission has not been approved.")
+            raise SystemExit(1)
 
     # Load plan
     plan_data = load_plan(run_dir)
@@ -773,6 +909,7 @@ def run_mission_start(console: Console, parallel: int | None = None, worktree: b
                         use_worktree=use_worktree,
                         project_config=project_config,
                         console=console,
+                        non_interactive=non_interactive,
                     )
                     futures_map[future] = t
                     
@@ -867,7 +1004,12 @@ def run_mission_pause(console: Console) -> None:
     console.print(f"[bold green]✓[/] Mission '[cyan]{mission_id}[/]' has been paused.")
 
 
-def run_mission_resume(console: Console, parallel: int | None = None, worktree: bool | None = None) -> None:
+def run_mission_resume(
+    console: Console,
+    parallel: int | None = None,
+    worktree: bool | None = None,
+    non_interactive: bool = False,
+) -> None:
     """Resume a paused mission."""
     repo_root = Path.cwd()
     sutra_dir = get_sutra_dir(repo_root)
@@ -886,4 +1028,4 @@ def run_mission_resume(console: Console, parallel: int | None = None, worktree: 
         return
 
     # Start the execution
-    run_mission_start(console, parallel=parallel, worktree=worktree)
+    run_mission_start(console, parallel=parallel, worktree=worktree, non_interactive=non_interactive)

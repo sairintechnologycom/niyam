@@ -20,6 +20,8 @@ KNOWN_POLICY_FILES = {
             "block_secrets_in_code",
             "require_auth_review",
             "require_input_validation",
+            "deny_write_patterns",
+            "allow_write_patterns",
         ],
     },
     "evidence.yaml": {

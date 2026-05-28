@@ -72,6 +72,20 @@ mission_app = typer.Typer(
 )
 app.add_typer(mission_app)
 
+review_app = typer.Typer(
+    name="review",
+    help="Run structured reviews on code or pull requests.",
+    no_args_is_help=False,
+)
+app.add_typer(review_app)
+
+pr_app = typer.Typer(
+    name="pr",
+    help="Manage pull requests with evidence reports.",
+    no_args_is_help=True,
+)
+app.add_typer(pr_app)
+
 
 # ── Enums ──────────────────────────────────────────────────────────────
 
@@ -178,8 +192,9 @@ def report(
     run_report(format=format.value, console=console)
 
 
-@app.command()
+@review_app.callback(invoke_without_command=True)
 def review(
+    ctx: typer.Context,
     lens: Annotated[
         ReviewLens,
         typer.Option("--lens", "-l", help="Review lens/perspective."),
@@ -194,6 +209,8 @@ def review(
     ] = ReviewMode.collaborative,
 ) -> None:
     """Run a structured code review on current changes."""
+    if ctx.invoked_subcommand is not None:
+        return
     from sutra.core.review import run_review
 
     run_review(
@@ -202,6 +219,69 @@ def review(
         mode=mode.value,
         console=console,
     )
+
+
+@review_app.command("pr")
+def review_pr(
+    pr: Annotated[str, typer.Argument(help="Pull Request ID.")],
+    lens: Annotated[
+        ReviewLens,
+        typer.Option("--lens", "-l", help="Review lens/perspective."),
+    ] = ReviewLens.engineering,
+    runtime: Annotated[
+        Runtime,
+        typer.Option("--runtime", "-r", help="Runtime to execute the review with."),
+    ] = Runtime.claude,
+    mode: Annotated[
+        ReviewMode,
+        typer.Option("--mode", "-m", help="Review mode."),
+    ] = ReviewMode.collaborative,
+    token: Annotated[
+        Optional[str],
+        typer.Option("--token", help="GitHub token (overrides GITHUB_TOKEN environment variable)."),
+    ] = None,
+) -> None:
+    """Run a structured code review on a GitHub pull request."""
+    from sutra.core.pr import run_pr_review
+
+    try:
+        run_pr_review(
+            pr_id=pr,
+            lens=lens.value,
+            runtime=runtime.value,
+            mode=mode.value,
+            token=token,
+            console=console,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@pr_app.command("create")
+def pr_create(
+    title: Annotated[str, typer.Option("--title", "-t", help="Pull Request title.")],
+    body: Annotated[Optional[str], typer.Option("--body", "-b", help="Pull Request body/description.")] = None,
+    base: Annotated[str, typer.Option("--base", help="Target branch for the pull request.")] = "main",
+    token: Annotated[
+        Optional[str],
+        typer.Option("--token", help="GitHub token (overrides GITHUB_TOKEN environment variable)."),
+    ] = None,
+) -> None:
+    """Push the active branch and create a GitHub pull request with evidence report attached."""
+    from sutra.core.pr import run_pr_create
+
+    try:
+        run_pr_create(
+            title=title,
+            body=body,
+            base=base,
+            token=token,
+            console=console,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -489,12 +569,16 @@ def mission_start(
         Optional[bool],
         typer.Option("--worktree/--no-worktree", help="Enable or disable git worktree isolation."),
     ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", "--ci", help="Run in non-interactive (CI/CD) mode."),
+    ] = False,
 ) -> None:
     """Start or resume the latest approved mission."""
     from sutra.mission.executor import run_mission_start
 
     try:
-        run_mission_start(parallel=parallel, worktree=worktree, console=console)
+        run_mission_start(parallel=parallel, worktree=worktree, non_interactive=non_interactive, console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -534,12 +618,16 @@ def mission_resume(
         Optional[bool],
         typer.Option("--worktree/--no-worktree", help="Enable or disable git worktree isolation."),
     ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", "--ci", help="Run in non-interactive (CI/CD) mode."),
+    ] = False,
 ) -> None:
     """Resume a paused mission."""
     from sutra.mission.executor import run_mission_resume
 
     try:
-        run_mission_resume(parallel=parallel, worktree=worktree, console=console)
+        run_mission_resume(parallel=parallel, worktree=worktree, non_interactive=non_interactive, console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -552,6 +640,20 @@ def mission_report() -> None:
 
     try:
         run_mission_report(console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("verify-report")
+def mission_verify_report(
+    evidence_file: Annotated[str, typer.Argument(help="Path to the evidence.md report to verify.")],
+) -> None:
+    """Verify the cryptographic integrity of an evidence report."""
+    from sutra.mission.reporter import run_verify_report
+
+    try:
+        run_verify_report(evidence_path=evidence_file, console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
