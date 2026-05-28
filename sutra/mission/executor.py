@@ -517,7 +517,7 @@ Do not perform destructive operations.
     else:
         plan_data = load_plan(run_dir)
         mission_meta = plan_data.get("mission", {})
-        orchestrator = mission_meta.get("orchestrator", "claude")
+        orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
         parallel_limit = mission_meta.get("parallel", 1)
         
         if shutil.which(orchestrator):
@@ -716,7 +716,7 @@ Do not perform destructive operations.
         # Get active runtime
         plan_data = load_plan(run_dir)
         mission_meta = plan_data.get("mission", {})
-        orchestrator = mission_meta.get("orchestrator", "claude")
+        orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
 
         update_token_ledger(
             run_dir=run_dir,

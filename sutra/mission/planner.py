@@ -94,8 +94,9 @@ Instructions:
 1. Break down the requirement into a list of tasks.
 2. The tasks must be ordered logically. Any task depending on another task must list it in `depends_on`.
 3. Assign each task to the most appropriate agent from the list of Available Agents. For example, assign development to 'backend-specialist' or 'frontend-specialist', code review to 'security-reviewer', and verification/testing to 'qa-reviewer'.
-4. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
-5. Return ONLY a valid YAML block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the YAML inside ```yaml code fences.
+4. Optionally, you can assign a custom execution `runtime` (such as `claude`, `gemini`, or `codex`) to a task if a specific runtime is better suited for it (e.g. `gemini` for coding, `codex` for scripting). If omitted, the task will use the default global runtime.
+5. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
+6. Return ONLY a valid YAML block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the YAML inside ```yaml code fences.
 
 YAML Schema:
 ```yaml
@@ -109,12 +110,14 @@ tasks:
     title: "Implementation: write failing tests"
     type: "implementation"
     agent: "{available_agents[0]}"
+    runtime: "claude"
     depends_on: ["T1"]
     files_allowed: ["tests/**"]
   - id: T3
     title: "Implementation: implement the feature changes"
     type: "implementation"
     agent: "{available_agents[0]}"
+    runtime: "gemini"
     depends_on: ["T2"]
     files_allowed: ["*"]
   - id: T4
@@ -127,6 +130,7 @@ tasks:
     title: "Validation: verify all tests pass"
     type: "validation"
     agent: "{available_agents[0]}"
+    runtime: "codex"
     depends_on: ["T4"]
 ```
 """
@@ -220,6 +224,9 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
                                 t_deps = [t_deps]
                             elif not isinstance(t_deps, list):
                                 t_deps = []
+                            t_runtime = t.get("runtime")
+                            if t_runtime is not None:
+                                t_runtime = str(t_runtime).strip()
                             t_writes = t.get("writes_files")
                             if t_writes is None:
                                 t_writes = t_type == "implementation"
@@ -232,6 +239,7 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
                                 "type": t_type,
                                 "status": "pending",
                                 "agent": t_agent,
+                                "runtime": t_runtime,
                                 "depends_on": t_deps,
                                 "writes_files": t_writes,
                                 "files_allowed": t_files,
