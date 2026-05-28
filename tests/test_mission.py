@@ -153,3 +153,15 @@ class TestMission:
 
         plan = load_plan(run_dir)
         assert plan["mission"]["status"] == "completed"
+
+    def test_mission_plan_strict(self, sutra_repo: Path) -> None:
+        """Should raise SystemExit when strict=True and AI planner is not available."""
+        os.chdir(sutra_repo)
+        console = Console(quiet=True)
+
+        req_file = sutra_repo / "requirements.md"
+        req_file.write_text("# Strict planning test\n", encoding="utf-8")
+
+        with pytest.raises(SystemExit) as excinfo:
+            run_mission_plan(str(req_file), strict=True, console=console)
+        assert excinfo.value.code == 1

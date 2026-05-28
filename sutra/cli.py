@@ -204,6 +204,23 @@ def review(
     )
 
 
+@app.command()
+def dashboard(
+    watch: Annotated[
+        bool,
+        typer.Option("--watch", "-w", help="Periodically refresh the dashboard (live mode)."),
+    ] = False,
+) -> None:
+    """Show real-time dashboard of the active or latest mission."""
+    from sutra.mission.dashboard import run_mission_dashboard
+
+    try:
+        run_mission_dashboard(watch=watch, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
 # ── Context subcommands ────────────────────────────────────────────────
 
 
@@ -418,12 +435,33 @@ def memory_clear(
 @mission_app.command("plan")
 def mission_plan(
     requirements: Annotated[str, typer.Argument(help="Path to requirements markdown file.")],
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Fail if AI-powered planning fails, instead of falling back."),
+    ] = False,
 ) -> None:
     """Generate a mission plan from a requirements file."""
     from sutra.mission.planner import run_mission_plan
 
     try:
-        run_mission_plan(requirements_path=requirements, console=console)
+        run_mission_plan(requirements_path=requirements, strict=strict, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("dashboard")
+def mission_dashboard(
+    watch: Annotated[
+        bool,
+        typer.Option("--watch", "-w", help="Periodically refresh the dashboard (live mode)."),
+    ] = False,
+) -> None:
+    """Show real-time dashboard of the active or latest mission."""
+    from sutra.mission.dashboard import run_mission_dashboard
+
+    try:
+        run_mission_dashboard(watch=watch, console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

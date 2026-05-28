@@ -61,6 +61,89 @@ def log_execution_event(run_dir: Path, event_type: str, task_id: str, details: s
         json.dump(events, f, indent=2)
 
 
+def update_token_ledger(
+    run_dir: Path,
+    task_id: str,
+    agent: str,
+    runtime: str,
+    input_tokens: int,
+    output_tokens: int,
+    baseline_multiplier: float = 5.0,
+) -> None:
+    """Update token & cost ledger with task metrics."""
+    ledger_path = run_dir / "token-ledger.json"
+    ledger = {"mission_id": run_dir.name, "events": [], "summary": {}}
+    if ledger_path.exists():
+        try:
+            with open(ledger_path, encoding="utf-8") as f:
+                ledger = json.load(f) or ledger
+        except Exception:
+            pass
+
+    # Rates per million tokens
+    rates = {
+        "claude": {"input": 3.0, "output": 15.0},
+        "gemini": {"input": 1.25, "output": 5.0},
+        "default": {"input": 3.0, "output": 15.0},
+    }
+    r = rates.get(runtime.lower(), rates["default"])
+    
+    cost = (input_tokens * r["input"] + output_tokens * r["output"]) / 1_000_000.0
+    
+    baseline_input = int(input_tokens * baseline_multiplier)
+    baseline_output = int(output_tokens * baseline_multiplier)
+    baseline_total = baseline_input + baseline_output
+    baseline_cost = (baseline_input * r["input"] + baseline_output * r["output"]) / 1_000_000.0
+    
+    savings_usd = baseline_cost - cost
+    
+    event = {
+        "task_id": task_id,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "agent": agent,
+        "runtime": runtime,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "cost_usd": cost,
+        "baseline_tokens": baseline_total,
+        "baseline_cost_usd": baseline_cost,
+        "savings_usd": savings_usd,
+    }
+    
+    events = ledger.setdefault("events", [])
+    # Remove existing event for this task if we are re-running/resuming
+    events = [e for e in events if e.get("task_id") != task_id]
+    events.append(event)
+    ledger["events"] = events
+    
+    # Calculate summary
+    total_input = sum(e.get("input_tokens", 0) for e in events)
+    total_output = sum(e.get("output_tokens", 0) for e in events)
+    total_tokens = total_input + total_output
+    total_cost = sum(e.get("cost_usd", 0.0) for e in events)
+    
+    total_baseline_tokens = sum(e.get("baseline_tokens", 0) for e in events)
+    total_baseline_cost = sum(e.get("baseline_cost_usd", 0.0) for e in events)
+    total_savings = total_baseline_cost - total_cost
+    
+    savings_pct = (total_savings / total_baseline_cost * 100.0) if total_baseline_cost > 0 else 0.0
+    
+    ledger["summary"] = {
+        "total_input_tokens": total_input,
+        "total_output_tokens": total_output,
+        "total_tokens": total_tokens,
+        "total_cost_usd": total_cost,
+        "total_baseline_tokens": total_baseline_tokens,
+        "total_baseline_cost_usd": total_baseline_cost,
+        "total_savings_usd": total_savings,
+        "savings_percent": savings_pct,
+    }
+    
+    with open(ledger_path, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, indent=2)
+
+
 def run_validation_command(cmd: str, run_dir: Path, cwd: Path, console: Console) -> bool:
     """Run a validation command and log the results."""
     with _print_lock:
@@ -390,17 +473,32 @@ Do not perform destructive operations.
         mission_meta = plan_data.get("mission", {})
         orchestrator = mission_meta.get("orchestrator", "claude")
         parallel_limit = mission_meta.get("parallel", 1)
-        is_parallel = parallel_limit > 1 or use_worktree
         
         if shutil.which(orchestrator):
             with _print_lock:
                 console.print(f"[{task_id}] [cyan]Invoking {orchestrator} CLI...[/]")
             try:
-                subprocess.run([orchestrator, str(prompt_path)], cwd=task_cwd, check=True)
+                if parallel_limit == 1:
+                    # Sequential: full interactive pass-through
+                    subprocess.run([orchestrator, str(prompt_path)], cwd=task_cwd, check=True)
+                else:
+                    # Parallel: headless execution
+                    task_log_path = (worktree_path if use_worktree else run_dir) / f"task-{task_id}-output.log"
+                    with open(task_log_path, "w", encoding="utf-8") as log_f:
+                        subprocess.run(
+                            [orchestrator, str(prompt_path)],
+                            cwd=task_cwd,
+                            stdin=subprocess.DEVNULL,
+                            stdout=log_f,
+                            stderr=log_f,
+                            check=True,
+                        )
             except subprocess.CalledProcessError as e:
-                if is_parallel:
+                if parallel_limit > 1:
                     with _print_lock:
                         console.print(f"[{task_id}] [red]Orchestrator failed in parallel execution: {e}[/]")
+                        console.print(f"[{task_id}] To complete this task manually, run:")
+                        console.print(f"  [bold]cat {prompt_path}[/]")
                     success = False
                 else:
                     with _print_lock:
@@ -410,9 +508,11 @@ Do not perform destructive operations.
                     except (KeyboardInterrupt, EOFError):
                         success = False
         else:
-            if is_parallel:
+            if parallel_limit > 1:
                 with _print_lock:
                     console.print(f"[{task_id}] [red]Orchestrator '{orchestrator}' CLI not found in PATH.[/]")
+                    console.print(f"[{task_id}] To complete this task manually, run:")
+                    console.print(f"  [bold]cat {prompt_path}[/]")
                 success = False
             else:
                 with _print_lock:
@@ -436,6 +536,82 @@ Do not perform destructive operations.
                     console.print(f"[{task_id}] [bold red]❌ Validation failed! Check validation-results.md[/]")
                 log_execution_event(run_dir, "TASK_FAILED", task_id, "Task validation failed.")
                 
+    # Record token usage in the ledger
+    try:
+        # Estimate input tokens
+        input_tokens = 0
+        if prompt_path.exists():
+            try:
+                prompt_content = prompt_path.read_text(encoding="utf-8")
+                input_tokens = max(1, len(prompt_content) // 4)
+            except Exception:
+                pass
+
+        # Estimate output tokens
+        output_tokens = 0
+        task_log_path = (worktree_path if use_worktree else run_dir) / f"task-{task_id}-output.log"
+        if task_log_path.exists():
+            try:
+                output_content = task_log_path.read_text(encoding="utf-8")
+                output_tokens = len(output_content) // 4
+            except Exception:
+                pass
+        
+        # If output_tokens is 0 (e.g. sequential mode, or log is empty), try git diff
+        if output_tokens == 0 and is_git_repo(repo_root):
+            try:
+                if use_worktree and worktree_path:
+                    diff_cmd = ["git", "diff", "HEAD~1", "HEAD"] if success else ["git", "diff"]
+                    diff_res = subprocess.run(
+                        diff_cmd,
+                        cwd=worktree_path,
+                        capture_output=True,
+                        text=True,
+                    )
+                else:
+                    diff_res = subprocess.run(
+                        ["git", "diff"],
+                        cwd=repo_root,
+                        capture_output=True,
+                        text=True,
+                    )
+                if diff_res.returncode == 0 and diff_res.stdout:
+                    output_tokens = max(1, len(diff_res.stdout) // 4)
+            except Exception:
+                pass
+
+        if output_tokens == 0 and success:
+            output_tokens = 250  # fallback for a successful task
+
+        # Get baseline_multiplier
+        baseline_multiplier = 5.0
+        try:
+            sutra_yaml_path = sutra_dir / "sutra.yaml"
+            if sutra_yaml_path.exists():
+                with open(sutra_yaml_path, encoding="utf-8") as f:
+                    s_conf = yaml.safe_load(f) or {}
+                    baseline_multiplier = float(s_conf.get("baseline_multiplier", 5.0))
+        except Exception:
+            pass
+
+        # Get active runtime
+        plan_data = load_plan(run_dir)
+        mission_meta = plan_data.get("mission", {})
+        orchestrator = mission_meta.get("orchestrator", "claude")
+
+        update_token_ledger(
+            run_dir=run_dir,
+            task_id=task_id,
+            agent=task["agent"],
+            runtime=orchestrator,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            baseline_multiplier=baseline_multiplier,
+        )
+    except Exception as e:
+        with _print_lock:
+            console.print(f"[{task_id}] [yellow]Warning: Failed to update token ledger:[/] {e}")
+
     # Commit changes if worktree is active and task succeeded
     if success and use_worktree and worktree_path:
         try:
