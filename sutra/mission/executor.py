@@ -540,6 +540,21 @@ def delete_mission_branches(repo_root: Path, mission_id: str, tasks: list[dict],
     )
 
 
+def get_mock_change_path(allowed_files: list[str], task_id: str) -> str:
+    """Resolve a relative path matching allowed patterns for mock writing."""
+    for pattern in allowed_files:
+        if pattern in ("*", "Any"):
+            return f"change-{task_id}.txt"
+        if pattern.endswith("/**"):
+            return os.path.join(pattern[:-3], f"change-{task_id}.txt")
+        if pattern.endswith("/*"):
+            return os.path.join(pattern[:-2], f"change-{task_id}.txt")
+        if "*" in pattern:
+            return pattern.replace("**/", "").replace("*", f"change-{task_id}")
+        return pattern
+    return f"change-{task_id}.txt"
+
+
 # ── Task Execution Thread Runner ───────────────────────────────────────
 
 def execute_single_task(
@@ -616,7 +631,10 @@ Do not perform destructive operations.
         
         # Write dummy file to record change in worktree git diff only if writes_files is True
         if use_worktree and worktree_path and task.get("writes_files", True):
-            dummy_file = worktree_path / f"change-{task_id}.txt"
+            allowed = task.get("allowed_files") or task.get("files_allowed") or ["*"]
+            mock_rel_path = get_mock_change_path(allowed, task_id)
+            dummy_file = worktree_path / mock_rel_path
+            dummy_file.parent.mkdir(parents=True, exist_ok=True)
             dummy_file.write_text(f"Changes by task {task_id}", encoding="utf-8")
     else:
         plan_data = load_plan(run_dir)
