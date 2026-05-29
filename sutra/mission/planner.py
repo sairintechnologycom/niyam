@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -136,7 +136,140 @@ tasks:
 """
 
 
-def run_mission_plan(requirements_path: str, strict: bool = False, console: Console = None) -> str:
+DEFAULT_TEMPLATES = {
+    "api-endpoint": {
+        "name": "api-endpoint",
+        "description": "Add a new API endpoint",
+        "variables": [
+            {"name": "endpoint_path", "prompt": "Enter the API route path (e.g. /api/v1/users)", "default": "/api/v1/resource"},
+            {"name": "method", "prompt": "HTTP Method (GET/POST/PUT/DELETE)", "default": "GET"},
+        ],
+        "tasks": [
+            {
+                "id": "T1",
+                "title": "Discovery: analyze current API patterns in the codebase",
+                "type": "discovery",
+                "agent": "backend-specialist",
+                "writes_files": False,
+            },
+            {
+                "id": "T2",
+                "title": "TDD: Write endpoint contract test case for {{method}} {{endpoint_path}}",
+                "type": "implementation",
+                "agent": "backend-specialist",
+                "depends_on": ["T1"],
+                "writes_files": True,
+                "files_allowed": ["tests/**"],
+            },
+            {
+                "id": "T3",
+                "title": "Implementation: implement the {{method}} {{endpoint_path}} controller and router",
+                "type": "implementation",
+                "agent": "backend-specialist",
+                "depends_on": ["T2"],
+                "writes_files": True,
+                "files_allowed": ["*"],
+            },
+            {
+                "id": "T4",
+                "title": "Review: review the endpoint security",
+                "type": "review",
+                "agent": "security-reviewer",
+                "depends_on": ["T3"],
+                "writes_files": False,
+            },
+            {
+                "id": "T5",
+                "title": "Validation: run all verification tests to confirm success",
+                "type": "validation",
+                "agent": "qa-reviewer",
+                "depends_on": ["T4"],
+            }
+        ]
+    },
+    "bugfix": {
+        "name": "bugfix",
+        "description": "Fix a bug with TDD",
+        "variables": [
+            {"name": "bug_description", "prompt": "Brief description of the bug", "default": "Fix unexpected error"},
+        ],
+        "tasks": [
+            {
+                "id": "T1",
+                "title": "Discovery: locate the source of: {{bug_description}}",
+                "type": "discovery",
+                "agent": "backend-specialist",
+                "writes_files": False,
+            },
+            {
+                "id": "T2",
+                "title": "TDD: write a test case reproducing the bug",
+                "type": "implementation",
+                "agent": "backend-specialist",
+                "depends_on": ["T1"],
+                "writes_files": True,
+                "files_allowed": ["tests/**"],
+            },
+            {
+                "id": "T3",
+                "title": "Implementation: apply fix for: {{bug_description}}",
+                "type": "implementation",
+                "agent": "backend-specialist",
+                "depends_on": ["T2"],
+                "writes_files": True,
+                "files_allowed": ["*"],
+            },
+            {
+                "id": "T4",
+                "title": "Validation: run verify check to ensure bug is fixed",
+                "type": "validation",
+                "agent": "qa-reviewer",
+                "depends_on": ["T3"],
+            }
+        ]
+    },
+    "refactor": {
+        "name": "refactor",
+        "description": "Refactor code without changing behavior",
+        "variables": [
+            {"name": "target_file", "prompt": "Path to file/module to refactor", "default": ""},
+        ],
+        "tasks": [
+            {
+                "id": "T1",
+                "title": "Discovery: analyze structure of {{target_file}}",
+                "type": "discovery",
+                "agent": "backend-specialist",
+                "writes_files": False,
+            },
+            {
+                "id": "T2",
+                "title": "Implementation: refactor code in {{target_file}}",
+                "type": "implementation",
+                "agent": "backend-specialist",
+                "depends_on": ["T1"],
+                "writes_files": True,
+                "files_allowed": ["*"],
+            },
+            {
+                "id": "T3",
+                "title": "Validation: verify all existing tests still pass",
+                "type": "validation",
+                "agent": "qa-reviewer",
+                "depends_on": ["T2"],
+            }
+        ]
+    }
+}
+
+
+def run_mission_plan(
+    requirements_path: str,
+    strict: bool = False,
+    console: Console = None,
+    template: str | None = None,
+    runtime_override: str | None = None,
+) -> str:
     """Generate a mission plan from a requirements file."""
     if console is None:
         console = Console()
@@ -153,21 +286,33 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
         raise SystemExit(1)
 
     req_file = Path(requirements_path)
-    if not req_file.exists():
-        console.print(f"[bold red]Error:[/] Requirements file '{requirements_path}' not found.")
-        raise SystemExit(1)
+    if req_file.exists() and req_file.is_file():
+        requirement_content = req_file.read_text(encoding="utf-8")
+        clean_name = "".join(c if c.isalnum() else "-" for c in req_file.stem).strip("-").lower()
+        if not clean_name:
+            clean_name = "requirement"
+        is_inline = False
+    else:
+        requirement_content = requirements_path
+        # Limit clean_name to 30 chars
+        clean_name = "".join(c if c.isalnum() else "-" for c in requirements_path[:30]).strip("-").lower()
+        if not clean_name:
+            clean_name = "inline"
+        is_inline = True
 
     # 1. Generate unique mission ID
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    clean_name = "".join(c if c.isalnum() else "-" for c in req_file.stem).strip("-")
     mission_id = f"{clean_name}-{timestamp}"
 
     # 2. Create runs directory
     run_dir = sutra_dir / "runs" / mission_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # 3. Copy requirements file
-    shutil.copy2(req_file, run_dir / "requirement.md")
+    # 3. Copy or write requirements file
+    if is_inline:
+        (run_dir / "requirement.md").write_text(requirement_content, encoding="utf-8")
+    else:
+        shutil.copy2(req_file, run_dir / "requirement.md")
 
     # 4. Determine available agents
     agents_dir = sutra_dir / "agents"
@@ -183,6 +328,106 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
     qa_agent = "qa-reviewer" if "qa-reviewer" in available_agents else available_agents[0]
 
     plan_data = None
+
+    # Load config if exists
+    config = None
+    try:
+        config = load_sutra_config(repo_root)
+    except Exception:
+        pass
+
+    # Template planning
+    if template:
+        # Load template
+        template_file = sutra_dir / "templates" / "missions" / f"{template}.yaml"
+        template_data = None
+        if template_file.exists():
+            try:
+                with open(template_file, encoding="utf-8") as f:
+                    template_data = yaml.safe_load(f)
+            except Exception as e:
+                console.print(f"[yellow]Warning: failed to load template file '{template_file}': {e}[/]")
+        
+        if not template_data:
+            if template in DEFAULT_TEMPLATES:
+                template_data = DEFAULT_TEMPLATES[template]
+                console.print(f"[dim]Using built-in template '{template}'...[/]")
+            else:
+                console.print(f"[bold red]Error:[/] Mission template '{template}' not found.")
+                raise SystemExit(1)
+        
+        # Resolve variables
+        variables = template_data.get("variables", [])
+        var_values = {}
+        for var in variables:
+            var_name = var.get("name")
+            prompt_text = var.get("prompt", f"Value for {var_name}")
+            default_val = var.get("default", "")
+            
+            # If running in non-interactive/test, use default
+            is_non_interactive = os.environ.get("SUTRA_TEST") == "1" or "pytest" in sys.modules
+            if is_non_interactive:
+                var_values[var_name] = default_val
+            else:
+                from rich.prompt import Prompt
+                try:
+                    var_values[var_name] = Prompt.ask(prompt_text, default=default_val)
+                except (KeyboardInterrupt, EOFError):
+                    console.print("\n[red]Mission planning aborted.[/]")
+                    raise SystemExit(1)
+                
+        # Render tasks
+        raw_tasks = template_data.get("tasks", [])
+        rendered_tasks = []
+        for i, t in enumerate(raw_tasks, start=1):
+            t_id = t.get("id") or f"T{i}"
+            t_title = t.get("title", "")
+            t_type = t.get("type", "implementation")
+            t_agent = t.get("agent")
+            if t_agent == "backend-specialist":
+                t_agent = backend_agent
+            elif t_agent == "security-reviewer":
+                t_agent = security_agent
+            elif t_agent == "qa-reviewer":
+                t_agent = qa_agent
+            elif t_agent not in available_agents:
+                t_agent = available_agents[0]
+            t_deps = t.get("depends_on", [])
+            t_rt = t.get("runtime") or runtime_override
+            t_writes = t.get("writes_files")
+            if t_writes is None:
+                t_writes = t_type == "implementation"
+            t_files = t.get("files_allowed") or ["*"]
+            
+            # String replacement for variables
+            for var_name, var_val in var_values.items():
+                pattern = "{{" + var_name + "}}"
+                t_title = t_title.replace(pattern, var_val)
+                
+            rendered_tasks.append({
+                "id": t_id,
+                "title": t_title,
+                "type": t_type,
+                "status": "pending",
+                "agent": t_agent,
+                "runtime": t_rt,
+                "depends_on": t_deps,
+                "writes_files": t_writes,
+                "files_allowed": t_files,
+            })
+            
+        plan_data = {
+            "mission": {
+                "id": mission_id,
+                "requirement": str(requirements_path),
+                "created": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "status": "planned",
+                "orchestrator": runtime_override or (config.runtimes[0] if config and config.runtimes else "claude"),
+                "parallel": 1,
+            },
+            "tasks": rendered_tasks
+        }
+        console.print(f"[bold green]✓[/] Generated mission plan from template '[cyan]{template}[/]' with {len(rendered_tasks)} tasks.")
     
     # 5. Try AI planning if not in basic unit tests
     is_test = (os.environ.get("SUTRA_TEST") == "1" or "pytest" in sys.modules) and os.environ.get("SUTRA_TEST_PLANNER") != "1"
@@ -195,7 +440,7 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
     if config and not is_test:
         orchestrator = config.runtimes[0] if config.runtimes else "claude"
         if shutil.which(orchestrator):
-            requirement_content = req_file.read_text(encoding="utf-8")
+
             repo_map = get_repo_map(repo_root)
             prompt = build_planner_prompt(requirement_content, repo_map, available_agents)
             
@@ -253,9 +498,9 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
                             "mission": {
                                 "id": mission_id,
                                 "requirement": str(requirements_path),
-                                "created": datetime.utcnow().isoformat() + "Z",
+                                "created": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                                 "status": "planned",
-                                "orchestrator": orchestrator,
+                                "orchestrator": runtime_override or orchestrator,
                                 "parallel": 1,
                             },
                             "tasks": normalized_tasks
@@ -274,9 +519,9 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
             "mission": {
                 "id": mission_id,
                 "requirement": str(requirements_path),
-                "created": datetime.utcnow().isoformat() + "Z",
+                "created": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "status": "planned",
-                "orchestrator": "claude",
+                "orchestrator": runtime_override or "claude",
                 "parallel": 1,
             },
             "tasks": [
@@ -362,7 +607,7 @@ def get_latest_mission_id(sutra_dir: Path) -> str | None:
     return runs[0].name
 
 
-def run_mission_approve(console: Console) -> None:
+def run_mission_approve(console: Console, interactive: bool = False) -> None:
     """Approve the latest planned mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -400,13 +645,83 @@ def run_mission_approve(console: Console) -> None:
     with open(plan_path, encoding="utf-8") as f:
         plan_data = yaml.safe_load(f) or {}
 
-
     mission_meta = plan_data.get("mission", {})
     status = mission_meta.get("status", "planned")
 
     if status != "planned":
         console.print(f"[yellow]Mission '{mission_id}' is already {status}.[/]")
         return
+
+    if interactive:
+        from rich.table import Table
+        from rich.panel import Panel
+
+        while True:
+            # Re-load plan data
+            with open(plan_path, encoding="utf-8") as f:
+                plan_data = yaml.safe_load(f) or {}
+
+            tasks = plan_data.get("tasks", [])
+            mission_meta = plan_data.get("mission", {})
+
+            table = Table(title=f"Mission Plan preview: [cyan]{mission_id}[/]", expand=True)
+            table.add_column("ID", style="bold magenta", justify="center", width=4)
+            table.add_column("Title")
+            table.add_column("Agent", style="yellow")
+            table.add_column("Runtime", style="cyan")
+            table.add_column("Depends On", style="dim white")
+            table.add_column("Writes", style="green")
+
+            for t in tasks:
+                t_id = t.get("id")
+                t_title = t.get("title")
+                t_agent = t.get("agent")
+                t_rt = t.get("runtime") or mission_meta.get("orchestrator", "claude")
+                t_deps = ", ".join(t.get("depends_on", [])) or "-"
+                t_writes = "Yes" if t.get("writes_files", True) else "No"
+                table.add_row(t_id, t_title, t_agent, t_rt, t_deps, t_writes)
+
+            console.print(Panel(table, border_style="magenta"))
+
+            try:
+                answer = input("Approve all tasks? [Y/n/edit]: ").strip().lower()
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[red]Mission approval cancelled.[/]")
+                raise SystemExit(1)
+
+            if not answer or answer in ("y", "yes"):
+                break
+            elif answer in ("n", "no"):
+                console.print("[red]Mission approval cancelled.[/]")
+                raise SystemExit(1)
+            elif answer == "edit":
+                editor = os.environ.get("EDITOR", "nano")
+                import subprocess
+                try:
+                    subprocess.run([editor, str(plan_path)], check=True)
+                except Exception as e:
+                    console.print(f"[bold red]Failed to launch editor '{editor}':[/] {e}")
+                    try:
+                        subprocess.run(["vi", str(plan_path)], check=True)
+                    except Exception:
+                        pass
+
+                # Re-validate
+                try:
+                    validate_mission_plan(plan_path, repo_root)
+                    console.print("[bold green]✓ Edited plan is valid.[/]")
+                except PlanValidationError as e:
+                    console.print(f"[bold red]❌ Mission plan validation failed after editing:[/]")
+                    for err in e.errors:
+                        console.print(f"  • [red]{err}[/]")
+                except Exception as e:
+                    console.print(f"[bold red]Error during validation:[/] {e}")
+            else:
+                console.print("[yellow]Invalid option. Please choose y, n, or edit.[/]")
+
+    # Re-load plan data final time to make sure we write approved status
+    with open(plan_path, encoding="utf-8") as f:
+        plan_data = yaml.safe_load(f) or {}
 
     # Update status to approved
     plan_data["mission"]["status"] = "approved"
@@ -417,7 +732,7 @@ def run_mission_approve(console: Console) -> None:
     approval_path = run_dir / "approval.json"
     approval_data = {
         "approved": True,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     import json
     approval_path.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")

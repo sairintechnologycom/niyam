@@ -225,8 +225,9 @@ def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
     with open(plan_path, encoding="utf-8") as f:
         plan_data = yaml.safe_load(f)
 
-    # Modify first task to have writes_files: false
-    plan_data["tasks"][0]["writes_files"] = False
+    # Modify all tasks to have writes_files: false
+    for t in plan_data["tasks"]:
+        t["writes_files"] = False
     with open(plan_path, "w", encoding="utf-8") as f:
         yaml.dump(plan_data, f)
 

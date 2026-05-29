@@ -179,10 +179,51 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
 
     header_cols = Columns([meta_panel, ledger_panel], expand=True)
 
+    # Active log tail
+    running_task_ids = [t.get("id") for t in tasks if t.get("status") == "running"]
+    log_contents = []
+    for r_id in running_task_ids:
+        log_path = run_dir / "worktrees" / r_id / f"task-{r_id}-output.log"
+        if not log_path.exists():
+            log_path = run_dir / f"task-{r_id}-output.log"
+        if log_path.exists():
+            try:
+                with open(log_path, encoding="utf-8") as lf:
+                    lines = lf.readlines()
+                    last_lines = [line.rstrip() for line in lines[-12:]]
+                    log_contents.append(f"[bold cyan]Task {r_id} Log Output:[/]\n" + "\n".join(last_lines))
+            except Exception:
+                pass
+
+    if not log_contents:
+        log_disp = "[dim]No active task logs. Execution is either paused, completed, or waiting...[/]"
+    else:
+        log_disp = "\n\n".join(log_contents)
+        
+    log_panel = Panel(log_disp, title="[bold]Active Task Logs[/]", border_style="magenta", expand=True)
+
+    # Validation results tail
+    val_path = run_dir / "validation-results.md"
+    val_disp = "[dim]No validation checks run yet for this mission.[/]"
+    if val_path.exists():
+        try:
+            with open(val_path, encoding="utf-8") as vf:
+                lines = vf.readlines()
+                last_val_lines = [line.rstrip() for line in lines[-12:]]
+                val_disp = "\n".join(last_val_lines)
+        except Exception:
+            pass
+            
+    val_panel = Panel(val_disp, title="[bold]Validation Suite Output[/]", border_style="blue", expand=True)
+
     main_group = Table.grid(expand=True)
     main_group.add_row(header_cols)
     main_group.add_row("")
     main_group.add_row(tasks_table)
+    main_group.add_row("")
+    
+    lower_cols = Columns([log_panel, val_panel], expand=True)
+    main_group.add_row(lower_cols)
 
     return Panel(
         main_group,

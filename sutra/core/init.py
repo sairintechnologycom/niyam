@@ -190,6 +190,14 @@ def run_init(
     for subdir in ["tasks", "runs", "templates", "worktrees", "evidence"]:
         (sutra_dir / subdir).mkdir(exist_ok=True)
 
+    # Write default mission templates
+    (sutra_dir / "templates" / "missions").mkdir(parents=True, exist_ok=True)
+    from sutra.mission.planner import DEFAULT_TEMPLATES
+    for name, template_data in DEFAULT_TEMPLATES.items():
+        template_file = sutra_dir / "templates" / "missions" / f"{name}.yaml"
+        with open(template_file, "w", encoding="utf-8") as f:
+            yaml.dump(template_data, f, default_flow_style=False, sort_keys=False)
+
     # If runtime specified, trigger sync
     if runtime:
         from sutra.core.sync import run_sync

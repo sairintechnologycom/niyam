@@ -233,6 +233,90 @@ def _check_gemini_runtime(repo_root: Path) -> list[DiagnosticResult]:
     return results
 
 
+def _check_runtimes_in_path(repo_root: Path, config: SutraConfig) -> list[DiagnosticResult]:
+    import shutil
+    results = []
+    for rt in config.runtimes:
+        if shutil.which(rt):
+            results.append(DiagnosticResult(f"Runtime in PATH: {rt}", True, "Found in PATH"))
+        else:
+            results.append(DiagnosticResult(f"Runtime in PATH: {rt}", False, f"Binary '{rt}' not found in PATH", severity="warning"))
+    return results
+
+
+def _check_agents_validity(repo_root: Path) -> list[DiagnosticResult]:
+    results = []
+    agents_dir = repo_root / ".sutra" / "agents"
+    if agents_dir.is_dir():
+        for agent_file in agents_dir.glob("*.md"):
+            try:
+                content = agent_file.read_text(encoding="utf-8").strip()
+                if not content:
+                    results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", False, "File is empty", severity="warning"))
+                else:
+                    results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", True, "Valid and non-empty", severity="info"))
+            except Exception as e:
+                results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", False, f"Failed to read: {e}", severity="warning"))
+    return results
+
+
+def _check_validation_commands_in_path(repo_root: Path) -> list[DiagnosticResult]:
+    import shutil
+    from sutra.core.config import load_project_config
+    results = []
+    try:
+        project_config = load_project_config(repo_root)
+        if project_config.validation:
+            v_cmds = project_config.validation
+            checks = {
+                "build": v_cmds.build,
+                "test": v_cmds.test,
+                "lint": v_cmds.lint,
+                "format": v_cmds.format,
+                "typecheck": v_cmds.typecheck,
+            }
+            for name, cmd in checks.items():
+                if cmd:
+                    binary = cmd.split()[0]
+                    if shutil.which(binary):
+                        results.append(DiagnosticResult(f"Validation: {name} command", True, f"Binary '{binary}' found"))
+                    else:
+                        results.append(DiagnosticResult(f"Validation: {name} command", False, f"Binary '{binary}' (from '{cmd}') not found in PATH", severity="warning"))
+    except Exception:
+        pass
+    return results
+
+
+def _check_git_status(repo_root: Path) -> list[DiagnosticResult]:
+    import subprocess
+    results = []
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        results.append(DiagnosticResult("Git Repository", False, "Not a Git repository", severity="warning"))
+        return results
+
+    results.append(DiagnosticResult("Git Repository", True, "Detected"))
+
+    # Check commits
+    res = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=repo_root, capture_output=True)
+    if res.returncode != 0:
+        results.append(DiagnosticResult("Git Commits", False, "No commits found in repository", severity="warning"))
+        return results
+    else:
+        results.append(DiagnosticResult("Git Commits", True, "Commits found"))
+
+    # Check clean
+    res = subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True)
+    if res.returncode == 0:
+        clean = not res.stdout.strip()
+        if clean:
+            results.append(DiagnosticResult("Git Status", True, "Working directory clean", severity="info"))
+        else:
+            results.append(DiagnosticResult("Git Status", False, "Uncommitted changes present (may conflict with worktree isolation)", severity="warning"))
+            
+    return results
+
+
 def run_doctor(
     runtime: str | None,
     console: Console,
@@ -247,14 +331,19 @@ def run_doctor(
 
     all_results: list[DiagnosticResult] = []
 
+    # core load config
+    from sutra.core.config import SutraConfig
+    config = load_sutra_config(root)
+
     # Core checks
     if runtime is None:
         all_results.extend(_check_sutra_structure(root))
         all_results.extend(_check_yaml_validity(root))
         all_results.extend(_check_config_schema(root))
-
-    # Runtime-specific checks
-    config = load_sutra_config(root)
+        all_results.extend(_check_runtimes_in_path(root, config))
+        all_results.extend(_check_agents_validity(root))
+        all_results.extend(_check_validation_commands_in_path(root))
+        all_results.extend(_check_git_status(root))
 
     if runtime == "claude" or (runtime is None and "claude" in config.runtimes):
         all_results.extend(_check_claude_runtime(root))

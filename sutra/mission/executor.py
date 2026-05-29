@@ -557,6 +557,70 @@ def get_mock_change_path(allowed_files: list[str], task_id: str) -> str:
 
 # ── Task Execution Thread Runner ───────────────────────────────────────
 
+def run_hooks(stage: str, context: dict, sutra_dir: Path, console: Console) -> None:
+    """Run lifecycle hooks for a given stage."""
+    hooks_file = sutra_dir / "hooks.yaml"
+    if not hooks_file.exists():
+        hooks_file = sutra_dir / "hooks.yml"
+        if not hooks_file.exists():
+            return
+
+    try:
+        with open(hooks_file, encoding="utf-8") as f:
+            hooks_config = yaml.safe_load(f) or {}
+    except Exception as e:
+        with _print_lock:
+            console.print(f"[yellow]Warning: failed to load hooks.yaml: {e}[/]")
+        return
+
+    hooks = hooks_config.get("hooks", {}).get(stage, [])
+    if not hooks:
+        return
+
+    with _print_lock:
+        console.print(f"[dim]Running lifecycle hooks for {stage}...[/]")
+
+    for hook in hooks:
+        cmd = ""
+        if isinstance(hook, str):
+            cmd = hook
+        elif isinstance(hook, dict):
+            cmd = hook.get("run") or hook.get("cmd") or hook.get("script") or ""
+            when = hook.get("when")
+            if when:
+                if "task.type" in when and "task" in context:
+                    t_type = context["task"].get("type")
+                    if f"'{t_type}'" not in when and f'"{t_type}"' not in when:
+                        continue
+                if "task.status" in when and "task" in context:
+                    t_status = context["task"].get("status")
+                    if f"'{t_status}'" not in when and f'"{t_status}"' not in when:
+                        continue
+
+        if not cmd:
+            continue
+
+        # Format placeholders
+        for k, v in context.items():
+            if k == "task":
+                for tk, tv in v.items():
+                    cmd = cmd.replace("{{" + f"task.{tk}" + "}}", str(tv))
+            else:
+                cmd = cmd.replace("{{" + k + "}}", str(v))
+
+        with _print_lock:
+            console.print(f"[dim]Executing hook: {cmd}[/]")
+        
+        try:
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if res.returncode != 0:
+                with _print_lock:
+                    console.print(f"[yellow]Warning: hook execution returned exit code {res.returncode}[/]\n{res.stderr or res.stdout}")
+        except Exception as e:
+            with _print_lock:
+                console.print(f"[yellow]Warning: hook execution failed: {e}[/]")
+
+
 def execute_single_task(
     task: dict,
     run_dir: Path,
@@ -573,6 +637,7 @@ def execute_single_task(
     task_cwd = repo_root
     worktree_path = None
     branch_name = f"sutra-{mission_id}-{task_id}"
+    run_hooks("pre_task", {"mission_id": mission_id, "task": task}, sutra_dir, console)
     
     if use_worktree:
         try:
@@ -765,13 +830,21 @@ Do not perform destructive operations.
 
             if is_git:
                 for f in violated_files:
-                    subprocess.run(["git", "checkout", "--", f], cwd=task_cwd, capture_output=True)
-                    full_p = task_cwd / f
-                    if full_p.exists() and not full_p.is_dir():
-                        try:
-                            full_p.unlink()
-                        except Exception:
-                            pass
+                    # Check if file existed in HEAD
+                    res_cat = subprocess.run(["git", "cat-file", "-e", f"HEAD:{f}"], cwd=task_cwd, capture_output=True)
+                    if res_cat.returncode == 0:
+                        # Existed in HEAD: reset and checkout to restore original
+                        subprocess.run(["git", "reset", "HEAD", f], cwd=task_cwd, capture_output=True)
+                        subprocess.run(["git", "checkout", "--", f], cwd=task_cwd, capture_output=True)
+                    else:
+                        # Newly created: remove from index if staged, and delete from disk
+                        subprocess.run(["git", "rm", "--cached", "-f", f], cwd=task_cwd, capture_output=True)
+                        full_p = task_cwd / f
+                        if full_p.exists() and not full_p.is_dir():
+                            try:
+                                full_p.unlink()
+                            except Exception:
+                                pass
             else:
                 for f in violated_files:
                     restore_non_git_file(f, backup_dir, task_cwd)
@@ -954,6 +1027,11 @@ Do not perform destructive operations.
     if use_worktree and worktree_path:
         cleanup_worktree(repo_root, worktree_path, branch_name, console)
         
+    # Run post_task hook
+    task_copy = dict(task)
+    task_copy["status"] = "completed" if success else "failed"
+    run_hooks("post_task", {"mission_id": mission_id, "task": task_copy}, sutra_dir, console)
+        
     return success
 
 
@@ -1076,6 +1154,7 @@ def run_mission_start(
             plan_data["mission"]["base_sha"] = res.stdout.strip()
     save_plan(run_dir, plan_data)
     log_execution_event(run_dir, "MISSION_STARTED", "", f"Mission execution started (parallel={parallel_limit}, worktree={use_worktree}).")
+    run_hooks("pre_mission", {"mission_id": mission_id}, sutra_dir, console)
 
 
     # Read project.yaml validation commands
@@ -1102,6 +1181,7 @@ def run_mission_start(
                     console.print("[yellow]Mission execution paused. Waiting for active tasks to finish...[/]")
                 if futures_map:
                     concurrent.futures.wait(futures_map.keys())
+                run_hooks("post_mission", {"mission_id": mission_id, "mission_status": "paused"}, sutra_dir, console)
                 return
                 
             # Find ready tasks
@@ -1115,11 +1195,11 @@ def run_mission_start(
                     dep_tasks = [task_by_id[dep] for dep in deps if dep in task_by_id]
                     
                     if all(dt["status"] in finished_statuses for dt in dep_tasks):
-                        # If any dependency failed or was skipped, this task must be skipped
-                        if any(dt["status"] in {"failed", "skipped"} for dt in dep_tasks):
+                        # If any dependency failed, this task must be skipped
+                        if any(dt["status"] == "failed" for dt in dep_tasks):
                             t["status"] = "skipped"
                             save_plan(run_dir, plan_data)
-                            log_execution_event(run_dir, "TASK_SKIPPED", t_id, f"Dependency failed or was skipped, skipping task.")
+                            log_execution_event(run_dir, "TASK_SKIPPED", t_id, f"Dependency failed, skipping task.")
                             continue
                         ready_tasks.append(t)
                         
@@ -1200,6 +1280,7 @@ def run_mission_start(
         final_plan["mission"]["status"] = "failed"
         save_plan(run_dir, final_plan)
         log_execution_event(run_dir, "MISSION_FAILED", "", "Mission execution failed due to task failures.")
+        run_hooks("post_mission", {"mission_id": mission_id, "mission_status": "failed"}, sutra_dir, console)
         console.print(Panel("[bold red]❌ Mission execution failed.[/]", title="[bold red]Mission Failed[/]", border_style="red"))
         raise SystemExit(1)
         
@@ -1218,6 +1299,7 @@ def run_mission_start(
     final_plan["mission"]["status"] = "completed"
     save_plan(run_dir, final_plan)
     log_execution_event(run_dir, "MISSION_COMPLETED", "", "All tasks completed successfully.")
+    run_hooks("post_mission", {"mission_id": mission_id, "mission_status": "completed"}, sutra_dir, console)
     console.print(Panel("[bold green]✓ Mission execution completed successfully![/]\nRun `sutra mission report` to generate evidence.", title="[bold green]Mission Success[/]", border_style="green"))
 
 
@@ -1280,3 +1362,129 @@ def run_mission_resume(
 
     # Start the execution
     run_mission_start(console, parallel=parallel, worktree=worktree, non_interactive=non_interactive)
+
+
+def run_mission_retry(
+    console: Console,
+    parallel: int | None = None,
+    worktree: bool | None = None,
+    non_interactive: bool = False,
+) -> None:
+    """Retry failed tasks of the latest mission."""
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise SystemExit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+
+    tasks = plan_data.get("tasks", [])
+    failed_any = False
+    
+    # Helper to recursively reset skipped tasks depending on failed ones
+    def reset_downstream(task_id: str):
+        for t in tasks:
+            if task_id in t.get("depends_on", []) and t["status"] == "skipped":
+                t["status"] = "pending"
+                reset_downstream(t["id"])
+
+    for t in tasks:
+        if t["status"] in ("failed", "skipped"):
+            t["status"] = "pending"
+            failed_any = True
+            reset_downstream(t["id"])
+
+    if not failed_any:
+        console.print("[yellow]No failed or skipped tasks found to retry.[/]")
+        return
+
+    plan_data["mission"]["status"] = "approved"
+    save_plan(run_dir, plan_data)
+    log_execution_event(run_dir, "MISSION_RETRIED", "", "Retrying failed/skipped tasks.")
+    console.print(f"[bold green]✓[/] Re-queued tasks. Resuming mission [cyan]{mission_id}[/]...")
+    run_mission_start(console, parallel=parallel, worktree=worktree, non_interactive=non_interactive)
+
+
+def run_mission_skip(
+    task_id: str,
+    console: Console,
+    parallel: int | None = None,
+    worktree: bool | None = None,
+    non_interactive: bool = False,
+) -> None:
+    """Skip a specific task and resume execution."""
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise SystemExit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+
+    tasks = plan_data.get("tasks", [])
+    target_task = None
+    for t in tasks:
+        if t["id"] == task_id:
+            target_task = t
+            break
+
+    if not target_task:
+        console.print(f"[bold red]Error:[/] Task '{task_id}' not found in mission plan.")
+        raise SystemExit(1)
+
+    target_task["status"] = "skipped"
+    plan_data["mission"]["status"] = "approved"
+    save_plan(run_dir, plan_data)
+    log_execution_event(run_dir, "TASK_SKIPPED_BY_USER", task_id, "Task skipped by user intervention.")
+    console.print(f"[bold green]✓[/] Marked task [cyan]{task_id}[/] as skipped. Resuming mission...")
+    run_mission_start(console, parallel=parallel, worktree=worktree, non_interactive=non_interactive)
+
+
+def run_mission_rollback(console: Console) -> None:
+    """Rollback all workspace changes back to the start of the latest mission."""
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise SystemExit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+    base_sha = plan_data["mission"].get("base_sha")
+
+    if not base_sha:
+        console.print("[yellow]No base commit SHA recorded for this mission. Cannot rollback automatically.[/]")
+        return
+
+    console.print(f"[cyan]Rolling back changes to base commit [bold]{base_sha}[/]...[/]")
+    res = subprocess.run(["git", "checkout", base_sha, "--", "."], cwd=repo_root, capture_output=True, text=True)
+    if res.returncode == 0:
+        plan_data["mission"]["status"] = "failed"
+        save_plan(run_dir, plan_data)
+        console.print("[bold green]✓[/] Workspace rolled back successfully.")
+    else:
+        console.print(f"[bold red]Failed to rollback changes:[/] {res.stderr or res.stdout}")

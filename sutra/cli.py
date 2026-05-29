@@ -162,6 +162,75 @@ def init(
 
 
 @app.command()
+def run(
+    requirement: Annotated[
+        str,
+        typer.Argument(help="Requirement text or path to requirements markdown file."),
+    ],
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option("--runtime", "-r", help="Runtime override for this mission."),
+    ] = None,
+    parallel: Annotated[
+        Optional[int],
+        typer.Option("--parallel", "-p", help="Number of parallel workers."),
+    ] = None,
+    auto_approve: Annotated[
+        bool,
+        typer.Option("--auto-approve", help="Skip approval gate and execute immediately."),
+    ] = False,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Fail if AI-powered planning fails, instead of falling back."),
+    ] = False,
+    worktree: Annotated[
+        Optional[bool],
+        typer.Option("--worktree/--no-worktree", help="Enable or disable git worktree isolation."),
+    ] = None,
+    template: Annotated[
+        Optional[str],
+        typer.Option("--template", "-t", help="Use a mission template for planning."),
+    ] = None,
+) -> None:
+    """Plan, approve, and execute a mission in one step."""
+    from sutra.core.context import run_context_refresh
+    from sutra.core.sync import run_sync
+    from sutra.mission.planner import run_mission_plan, run_mission_approve
+    from sutra.mission.executor import run_mission_start
+
+    # 1. Refresh context
+    console.print("[cyan]1. Refreshing project context...[/]")
+    run_context_refresh(console=console)
+
+    # 2. Sync configured runtimes
+    console.print("\n[cyan]2. Syncing runtimes...[/]")
+    run_sync(runtime=None, console=console)
+
+    # 3. Plan the mission
+    console.print(f"\n[cyan]3. Generating mission plan...[/]")
+    mission_id = run_mission_plan(
+        requirements_path=requirement,
+        strict=strict,
+        console=console,
+        template=template,
+        runtime_override=runtime.value if runtime else None
+    )
+
+    # 4. Approve plan
+    console.print(f"\n[cyan]4. Checking plan approval...[/]")
+    run_mission_approve(console=console, interactive=not auto_approve)
+
+    # 5. Start execution
+    console.print(f"\n[cyan]5. Starting execution for mission '{mission_id}'...[/]")
+    run_mission_start(
+        parallel=parallel,
+        worktree=worktree,
+        non_interactive=auto_approve,
+        console=console
+    )
+
+
+@app.command()
 def sync(
     runtime: Annotated[
         Optional[Runtime],
@@ -172,6 +241,14 @@ def sync(
     from sutra.core.sync import run_sync
 
     run_sync(runtime=runtime.value if runtime else None, console=console)
+
+
+@app.command()
+def setup() -> None:
+    """Run the interactive onboarding wizard to configure your workspace."""
+    from sutra.core.setup import run_setup
+
+    run_setup(console=console)
 
 
 @app.command()
@@ -304,6 +381,18 @@ def dashboard(
 
     try:
         run_mission_dashboard(watch=watch, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def watch() -> None:
+    """Watch the active or latest mission in real-time (live mode)."""
+    from sutra.mission.dashboard import run_mission_dashboard
+
+    try:
+        run_mission_dashboard(watch=True, console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -548,15 +637,93 @@ def mission_plan(
         bool,
         typer.Option("--strict", help="Fail if AI-powered planning fails, instead of falling back."),
     ] = False,
+    template: Annotated[
+        Optional[str],
+        typer.Option("--template", "-t", help="Use a mission template for planning."),
+    ] = None,
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option("--runtime", "-r", help="Runtime override for this mission."),
+    ] = None,
 ) -> None:
     """Generate a mission plan from a requirements file."""
     from sutra.mission.planner import run_mission_plan
 
     try:
-        run_mission_plan(requirements_path=requirements, strict=strict, console=console)
+        run_mission_plan(
+            requirements_path=requirements,
+            strict=strict,
+            console=console,
+            template=template,
+            runtime_override=runtime.value if runtime else None
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
+
+@mission_app.command("show")
+def mission_show() -> None:
+    """Display tasks and configuration of the latest planned or active mission."""
+    from sutra.mission.planner import get_latest_mission_id
+    from sutra.core.config import get_sutra_dir, find_sutra_root
+    from sutra.core.errors import SutraConfigError
+    from rich.table import Table
+    from rich.panel import Panel
+    import yaml
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_path = run_dir / "mission-plan.yaml"
+
+    if not plan_path.exists():
+        console.print(f"[bold red]Error:[/] Mission plan for '{mission_id}' not found.")
+        raise typer.Exit(1)
+
+    with open(plan_path, encoding="utf-8") as f:
+        plan_data = yaml.safe_load(f) or {}
+
+    tasks = plan_data.get("tasks", [])
+    mission_meta = plan_data.get("mission", {})
+
+    table = Table(title=f"Mission: [cyan]{mission_id}[/]", expand=True)
+    table.add_column("ID", style="bold magenta", justify="center", width=4)
+    table.add_column("Title")
+    table.add_column("Agent", style="yellow")
+    table.add_column("Runtime", style="cyan")
+    table.add_column("Depends On", style="dim white")
+    table.add_column("Writes", style="green")
+    table.add_column("Status", style="bold")
+
+    status_colors = {
+        "pending": "white",
+        "running": "yellow",
+        "completed": "green",
+        "failed": "red",
+        "skipped": "dim white",
+    }
+
+    for t in tasks:
+        t_id = t.get("id")
+        t_title = t.get("title")
+        t_agent = t.get("agent")
+        t_rt = t.get("runtime") or mission_meta.get("orchestrator", "claude")
+        t_deps = ", ".join(t.get("depends_on", [])) or "-"
+        t_writes = "Yes" if t.get("writes_files", True) else "No"
+        t_status = t.get("status", "pending")
+        col = status_colors.get(t_status.lower(), "white")
+        table.add_row(t_id, t_title, t_agent, t_rt, t_deps, t_writes, f"[{col}]{t_status}[/]")
+
+    console.print(Panel(table, border_style="magenta"))
 
 
 @mission_app.command("dashboard")
@@ -610,12 +777,17 @@ def mission_validate_plan() -> None:
 
 
 @mission_app.command("approve")
-def mission_approve() -> None:
+def mission_approve(
+    interactive: Annotated[
+        bool,
+        typer.Option("--interactive", "-i", help="Approve tasks interactively with option to edit the plan."),
+    ] = False,
+) -> None:
     """Approve the latest planned mission."""
     from sutra.mission.planner import run_mission_approve
 
     try:
-        run_mission_approve(console=console)
+        run_mission_approve(console=console, interactive=interactive)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -691,6 +863,80 @@ def mission_resume(
 
     try:
         run_mission_resume(parallel=parallel, worktree=worktree, non_interactive=non_interactive, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("retry")
+def mission_retry(
+    parallel: Annotated[
+        Optional[int],
+        typer.Option("--parallel", "-p", help="Override the number of parallel workers."),
+    ] = None,
+    worktree: Annotated[
+        Optional[bool],
+        typer.Option("--worktree/--no-worktree", help="Enable or disable git worktree isolation."),
+    ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", "--ci", help="Run in non-interactive (CI/CD) mode."),
+    ] = False,
+) -> None:
+    """Retry failed or skipped tasks of the latest mission."""
+    from sutra.mission.executor import run_mission_retry
+
+    try:
+        run_mission_retry(
+            console=console,
+            parallel=parallel,
+            worktree=worktree,
+            non_interactive=non_interactive,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("skip")
+def mission_skip(
+    task_id: Annotated[str, typer.Argument(help="ID of the task to skip.")],
+    parallel: Annotated[
+        Optional[int],
+        typer.Option("--parallel", "-p", help="Override the number of parallel workers."),
+    ] = None,
+    worktree: Annotated[
+        Optional[bool],
+        typer.Option("--worktree/--no-worktree", help="Enable or disable git worktree isolation."),
+    ] = None,
+    non_interactive: Annotated[
+        bool,
+        typer.Option("--non-interactive", "--ci", help="Run in non-interactive (CI/CD) mode."),
+    ] = False,
+) -> None:
+    """Skip a specific task and resume the mission execution."""
+    from sutra.mission.executor import run_mission_skip
+
+    try:
+        run_mission_skip(
+            task_id=task_id,
+            console=console,
+            parallel=parallel,
+            worktree=worktree,
+            non_interactive=non_interactive,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("rollback")
+def mission_rollback() -> None:
+    """Rollback all workspace changes back to the start of the latest mission."""
+    from sutra.mission.executor import run_mission_rollback
+
+    try:
+        run_mission_rollback(console=console)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

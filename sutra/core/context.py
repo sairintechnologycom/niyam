@@ -101,6 +101,154 @@ CI_FILES = [
 ]
 
 
+def _extract_dependency_versions(repo_root: Path) -> list[str]:
+    versions = []
+    pkg_json = repo_root / "package.json"
+    if pkg_json.exists():
+        try:
+            with open(pkg_json, encoding="utf-8") as f:
+                data = json.load(f)
+            deps = data.get("dependencies", {})
+            dev_deps = data.get("devDependencies", {})
+            for name, ver in sorted({**deps, **dev_deps}.items()):
+                clean_ver = str(ver).lstrip("^~>=<")
+                versions.append(f"{name} ({clean_ver})")
+        except Exception:
+            pass
+
+    pyproject = repo_root / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            import tomllib
+        except ImportError:
+            try:
+                import tomli as tomllib
+            except ImportError:
+                tomllib = None
+        if tomllib:
+            try:
+                with open(pyproject, "rb") as f:
+                    data = tomllib.load(f)
+                poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+                project_deps = data.get("project", {}).get("dependencies", [])
+                for name, ver in sorted(poetry_deps.items()):
+                    if name != "python":
+                        versions.append(f"{name} ({ver})")
+                for dep in project_deps:
+                    versions.append(str(dep))
+            except Exception:
+                pass
+        else:
+            try:
+                content = pyproject.read_text(encoding="utf-8")
+                in_deps = False
+                for line in content.splitlines():
+                    if line.strip().startswith("[tool.poetry.dependencies]"):
+                        in_deps = True
+                        continue
+                    if line.strip().startswith("[") and in_deps:
+                        in_deps = False
+                    if in_deps and "=" in line:
+                        parts = line.split("=")
+                        name = parts[0].strip()
+                        ver = parts[1].strip().strip('"').strip("'")
+                        if name != "python":
+                            versions.append(f"{name} ({ver})")
+            except Exception:
+                pass
+
+    cargo = repo_root / "Cargo.toml"
+    if cargo.exists():
+        try:
+            content = cargo.read_text(encoding="utf-8")
+            in_deps = False
+            for line in content.splitlines():
+                if line.strip().startswith("[dependencies]"):
+                    in_deps = True
+                    continue
+                if line.strip().startswith("[") and in_deps:
+                    in_deps = False
+                if in_deps and "=" in line:
+                    parts = line.split("=")
+                    name = parts[0].strip()
+                    ver = parts[1].strip().strip('"').strip("'")
+                    versions.append(f"{name} ({ver})")
+        except Exception:
+            pass
+
+    return versions[:30]
+
+
+def _extract_db_schema(repo_root: Path) -> list[str]:
+    info = []
+    prisma = repo_root / "prisma" / "schema.prisma"
+    if prisma.exists():
+        try:
+            lines = prisma.read_text(encoding="utf-8").splitlines()
+            models = []
+            for line in lines:
+                if line.strip().startswith("model "):
+                    models.append(line.split()[1])
+            if models:
+                info.append(f"Prisma schema with models: {', '.join(models)}")
+        except Exception:
+            pass
+
+    for m_dir in ["migrations", "alembic", "db/migrate"]:
+        mig_path = repo_root / m_dir
+        if mig_path.is_dir():
+            files = sorted([f.name for f in mig_path.glob("**/*") if f.is_file()])
+            if files:
+                info.append(f"Database migrations found in {m_dir}/ ({len(files)} files)")
+
+    for sql_name in ["schema.sql", "db.sql", "init.sql"]:
+        sql_path = repo_root / sql_name
+        if sql_path.exists():
+            info.append(f"SQL Schema file found: {sql_name}")
+            
+    return info
+
+
+def _extract_api_routes(repo_root: Path) -> list[str]:
+    routes = []
+    for r_dir in ["api", "routes", "controllers"]:
+        dir_path = repo_root / r_dir
+        if dir_path.is_dir():
+            files = [str(f.relative_to(repo_root)) for f in dir_path.glob("**/*") if f.is_file() and f.suffix in (".py", ".js", ".ts", ".go", ".rs")]
+            if files:
+                routes.append(f"Routes / controllers in {r_dir}/: {', '.join(files[:10])}" + ("..." if len(files) > 10 else ""))
+    return routes
+
+
+def _extract_env_vars(repo_root: Path) -> list[str]:
+    env_vars = []
+    for env_name in [".env.example", ".env.template", ".env.defaults"]:
+        env_path = repo_root / env_name
+        if env_path.exists():
+            try:
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        var_name = line.split("=")[0].strip()
+                        env_vars.append(var_name)
+            except Exception:
+                pass
+            break
+    return sorted(list(set(env_vars)))
+
+
+def _get_readme_summary(repo_root: Path) -> str:
+    for r_name in ["README.md", "readme.md", "README", "README.txt"]:
+        r_path = repo_root / r_name
+        if r_path.exists():
+            try:
+                lines = r_path.read_text(encoding="utf-8").splitlines()
+                return "\n".join(lines[:50])
+            except Exception:
+                pass
+    return ""
+
+
 def _scan_repo(repo_root: Path) -> dict:
     """Scan repository and return detected context."""
     languages: set[str] = set()
@@ -154,6 +302,11 @@ def _scan_repo(repo_root: Path) -> dict:
         "source_dirs": source_dirs,
         "test_dirs": test_dirs,
         "ci": ci_detected,
+        "dependency_versions": _extract_dependency_versions(repo_root),
+        "db_schema": _extract_db_schema(repo_root),
+        "api_routes": _extract_api_routes(repo_root),
+        "env_vars": _extract_env_vars(repo_root),
+        "readme_summary": _get_readme_summary(repo_root),
     }
 
 
@@ -176,6 +329,37 @@ def _generate_architecture_md(scan_result: dict, project_name: str) -> str:
         lines.append("## Frameworks")
         for fw in scan_result["frameworks"]:
             lines.append(f"- {fw}")
+        lines.append("")
+
+    if scan_result.get("dependency_versions"):
+        lines.append("## Dependency Versions")
+        for dep in scan_result["dependency_versions"]:
+            lines.append(f"- {dep}")
+        lines.append("")
+
+    if scan_result.get("db_schema"):
+        lines.append("## Database Schema & Migrations")
+        for db in scan_result["db_schema"]:
+            lines.append(f"- {db}")
+        lines.append("")
+
+    if scan_result.get("api_routes"):
+        lines.append("## API Routes & Controllers")
+        for route in scan_result["api_routes"]:
+            lines.append(f"- {route}")
+        lines.append("")
+
+    if scan_result.get("env_vars"):
+        lines.append("## Environment Variables")
+        for ev in scan_result["env_vars"]:
+            lines.append(f"- `{ev}`")
+        lines.append("")
+
+    if scan_result.get("readme_summary"):
+        lines.append("## Project Readme Summary")
+        lines.append("```markdown")
+        lines.append(scan_result["readme_summary"])
+        lines.append("```")
         lines.append("")
 
     if scan_result["package_managers"]:
@@ -315,6 +499,10 @@ def run_context_refresh(console: Console) -> None:
     project_data["validation"] = scan["validation"]
     project_data["source_dirs"] = scan["source_dirs"]
     project_data["test_dirs"] = scan["test_dirs"]
+    project_data["dependency_versions"] = scan.get("dependency_versions", [])
+    project_data["db_schema"] = scan.get("db_schema", [])
+    project_data["api_routes"] = scan.get("api_routes", [])
+    project_data["env_vars"] = scan.get("env_vars", [])
 
     with open(project_yaml_path, "w") as f:
         yaml.dump(project_data, f, default_flow_style=False, sort_keys=False)
