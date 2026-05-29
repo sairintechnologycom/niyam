@@ -23,6 +23,17 @@ class TestInit:
 
         assert (tmp_repo / ".sutra").is_dir()
 
+    def test_init_creates_mvp_directories(self, tmp_repo: Path) -> None:
+        """sutra init should create required MVP subdirectories."""
+        from sutra.core.init import run_init
+
+        console = Console(quiet=True)
+        os.chdir(tmp_repo)
+        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+
+        for subdir in ["tasks", "runs", "templates", "worktrees", "evidence"]:
+            assert (tmp_repo / ".sutra" / subdir).is_dir()
+
     def test_init_creates_sutra_yaml(self, tmp_repo: Path) -> None:
         """sutra init should create valid sutra.yaml."""
         from sutra.core.init import run_init

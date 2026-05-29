@@ -184,9 +184,9 @@ def run_init(
     )
     save_sutra_config(config, repo_root)
 
-    # Create evidence directory
-    evidence_dir = sutra_dir / "evidence"
-    evidence_dir.mkdir(exist_ok=True)
+    # Create required directories
+    for subdir in ["tasks", "runs", "templates", "worktrees", "evidence"]:
+        (sutra_dir / subdir).mkdir(exist_ok=True)
 
     # If runtime specified, trigger sync
     if runtime:

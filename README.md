@@ -90,6 +90,10 @@ AGENTS.md            ← Generated for Codex CLI
 | `backend` | backend, security, QA | API/service projects |
 | `frontend` | frontend, QA | Frontend-only projects |
 
+## Roadmap
+
+See [ROADMAP.md](file:///Users/bhushan/Documents/Projects/sutra/ROADMAP.md) for the detailed vision, target architecture, and target build phases.
+
 ## License
 
 MIT
