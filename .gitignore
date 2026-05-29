@@ -122,6 +122,7 @@ pip-wheel-metadata/
 .sutra/runs/
 .sutra/worktrees/
 .sutra/evidence/
+.sutra/hook-cache/
 .sutra/sutra.yaml
 .sutra/project.yaml
 .sutra/runtimes.yaml
