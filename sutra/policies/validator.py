@@ -54,6 +54,41 @@ def run_policy_validate(console: Console) -> None:
 
     errors = 0
 
+    # Validate remote policies if remote_policy_url is set
+    from sutra.core.config import load_sutra_config
+    try:
+        config = load_sutra_config(root)
+        remote_url = config.guard.remote_policy_url
+    except Exception:
+        remote_url = None
+
+    if remote_url:
+        from sutra.policies.guard import _fetch_remote_policy
+        for filename, schema in KNOWN_POLICY_FILES.items():
+            if filename not in ("security.yaml", "commands.yaml"):
+                continue
+            remote_data = _fetch_remote_policy(remote_url, filename)
+            if remote_data is None:
+                table.add_row(f"[Remote] {filename}", "[bold red]✗[/]", f"Failed to fetch from {remote_url}")
+                errors += 1
+                continue
+
+            if not isinstance(remote_data, dict):
+                table.add_row(f"[Remote] {filename}", "[bold red]✗[/]", "Expected a YAML mapping")
+                errors += 1
+                continue
+
+            all_known = set(schema["required_keys"]) | set(schema["optional_keys"])
+            unknown = set(remote_data.keys()) - all_known
+            if unknown:
+                table.add_row(
+                    f"[Remote] {filename}",
+                    "[bold yellow]⚠[/]",
+                    f"Unknown keys: {', '.join(unknown)}",
+                )
+            else:
+                table.add_row(f"[Remote] {filename}", "[bold green]✓[/]", "Valid")
+
     # Check known policy files
     for filename, schema in KNOWN_POLICY_FILES.items():
         fpath = policies_dir / filename

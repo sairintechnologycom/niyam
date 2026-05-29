@@ -32,6 +32,7 @@ class GuardState(BaseModel):
     enabled: bool = False
     careful: bool = False
     frozen_paths: list[str] = Field(default_factory=list)
+    remote_policy_url: Optional[str] = None
 
 
 # ── sutra.yaml ─────────────────────────────────────────────────────────

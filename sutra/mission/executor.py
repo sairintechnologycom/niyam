@@ -573,17 +573,10 @@ Do not perform destructive operations.
                     
     # Write Guard Check
     if success:
-        security_yaml = sutra_dir / "policies" / "security.yaml"
-        deny_patterns = []
-        allow_patterns = []
-        if security_yaml.exists():
-            try:
-                with open(security_yaml, encoding="utf-8") as f:
-                    sec_data = yaml.safe_load(f) or {}
-                    deny_patterns = sec_data.get("deny_write_patterns", [])
-                    allow_patterns = sec_data.get("allow_write_patterns", [])
-            except Exception:
-                pass
+        from sutra.policies.guard import load_security_policy
+        sec_data = load_security_policy(repo_root)
+        deny_patterns = sec_data.get("deny_write_patterns", [])
+        allow_patterns = sec_data.get("allow_write_patterns", [])
         
         # Also enforce task-specific files_allowed restriction
         task_allowed = task.get("files_allowed")

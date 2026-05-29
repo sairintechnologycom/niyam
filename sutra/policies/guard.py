@@ -149,3 +149,78 @@ def run_guard_freeze(path: str, console: Console) -> None:
             border_style="cyan",
         )
     )
+
+
+def _fetch_remote_policy(url: str, filename: str) -> dict | None:
+    """Fetch policy YAML from a remote URL."""
+    import urllib.request
+    import urllib.error
+    import yaml
+
+    if url.endswith(".yaml") or url.endswith(".yml"):
+        if filename in url:
+            target_url = url
+        else:
+            parts = url.rsplit("/", 1)
+            target_url = f"{parts[0]}/{filename}"
+    else:
+        target_url = f"{url.rstrip('/')}/{filename}"
+
+    try:
+        req = urllib.request.Request(
+            target_url,
+            headers={"User-Agent": "Sutra-CLI"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            content = response.read().decode("utf-8")
+            return yaml.safe_load(content) or {}
+    except Exception:
+        return None
+
+
+def load_security_policy(root: Path) -> dict:
+    """Load security policy from remote URL if configured, falling back to local file."""
+    try:
+        config = load_sutra_config(root)
+        remote_url = config.guard.remote_policy_url
+    except Exception:
+        remote_url = None
+
+    if remote_url:
+        remote_data = _fetch_remote_policy(remote_url, "security.yaml")
+        if remote_data is not None:
+            return remote_data
+
+    # Fallback to local
+    local_path = root / ".sutra" / "policies" / "security.yaml"
+    if local_path.exists():
+        try:
+            with open(local_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            pass
+    return {}
+
+
+def load_commands_policy(root: Path) -> dict:
+    """Load commands policy from remote URL if configured, falling back to local file."""
+    try:
+        config = load_sutra_config(root)
+        remote_url = config.guard.remote_policy_url
+    except Exception:
+        remote_url = None
+
+    if remote_url:
+        remote_data = _fetch_remote_policy(remote_url, "commands.yaml")
+        if remote_data is not None:
+            return remote_data
+
+    # Fallback to local
+    local_path = root / ".sutra" / "policies" / "commands.yaml"
+    if local_path.exists():
+        try:
+            with open(local_path, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            pass
+    return {}
