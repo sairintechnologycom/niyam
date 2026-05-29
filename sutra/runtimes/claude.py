@@ -252,7 +252,6 @@ Configuration is loaded from .sutra/hook-cache/guard-config.json at runtime.
 
 import json
 import sys
-import os
 import fnmatch
 from datetime import datetime
 from pathlib import Path

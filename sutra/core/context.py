@@ -65,7 +65,7 @@ VALIDATION_RULES: dict[str, dict] = {
     "pyproject.toml": {
         "test": "pytest",
         "lint": "ruff check .",
-        "format": "ruff format .",
+        "format": "ruff format --check .",
     },
     "Cargo.toml": {
         "build": "cargo build",
@@ -377,6 +377,7 @@ def run_context_diff(console: Console) -> None:
     if arch_path.exists():
         existing = arch_path.read_text(encoding="utf-8")
         new_content = _generate_architecture_md(scan, config.project_name)
+        new_content = _preserve_manual_section(existing, new_content)
         if existing.strip() == new_content.strip():
             console.print("[dim]architecture.md — no changes[/]")
         else:
@@ -389,6 +390,7 @@ def run_context_diff(console: Console) -> None:
     if val_path.exists():
         existing = val_path.read_text(encoding="utf-8")
         new_content = _generate_validation_md(scan)
+        new_content = _preserve_manual_section(existing, new_content)
         if existing.strip() == new_content.strip():
             console.print("[dim]validation.md — no changes[/]")
         else:

@@ -68,24 +68,29 @@ def _get_diff_summary(repo_root: Path) -> str:
         return "Git not available."
 
 
-def _get_validation_results(repo_root: Path) -> str:
-    """Run validation commands and collect results."""
+def _get_validation_results(repo_root: Path) -> tuple[str, bool]:
+    """Run validation commands and collect results.
+
+    Returns:
+        A tuple of (results_markdown, has_failures).
+    """
     import yaml
 
     from sutra.core.security import CommandSecurityError, safe_run_command
 
     project_yaml = repo_root / ".sutra" / "project.yaml"
     if not project_yaml.exists():
-        return "No project.yaml found — run `sutra context refresh` first."
+        return "No project.yaml found — run `sutra context refresh` first.", False
 
     with open(project_yaml) as f:
         project_data = yaml.safe_load(f) or {}
 
     validation = project_data.get("validation", {})
     if not validation:
-        return "No validation commands configured."
+        return "No validation commands configured.", False
 
     results = []
+    has_failures = False
     for cmd_type, cmd in validation.items():
         results.append(f"### {cmd_type.title()}")
         results.append(f"Command: `{cmd}`")
@@ -96,6 +101,8 @@ def _get_validation_results(repo_root: Path) -> str:
                 timeout=120,
             )
             status = "✓ Passed" if result.returncode == 0 else "✗ Failed"
+            if result.returncode != 0:
+                has_failures = True
             results.append(f"Status: {status}")
             if result.stdout.strip():
                 output = result.stdout.strip()
@@ -109,14 +116,17 @@ def _get_validation_results(repo_root: Path) -> str:
                     stderr = stderr[:1000] + "\n... (truncated)"
                 results.append(f"```\n{stderr}\n```")
         except CommandSecurityError as e:
+            has_failures = True
             results.append(f"Status: 🛑 Blocked by security policy: {e}")
         except subprocess.TimeoutExpired:
+            has_failures = True
             results.append("Status: ⚠ Timed out (120s)")
         except Exception as e:
+            has_failures = True
             results.append(f"Status: ⚠ Error: {e}")
         results.append("")
 
-    return "\n".join(results)
+    return "\n".join(results), has_failures
 
 
 def _get_policy_events(repo_root: Path) -> list[dict]:
@@ -197,7 +207,7 @@ def run_report(format: str, console: Console) -> None:
 
     # Collect evidence
     diff_summary = _get_diff_summary(root)
-    validation_results = _get_validation_results(root)
+    validation_results, has_failures = _get_validation_results(root)
     policy_events = _get_policy_events(root)
 
     # Create evidence directory for this branch
@@ -217,7 +227,10 @@ def run_report(format: str, console: Console) -> None:
         }
         json_path = evidence_dir / "evidence.json"
         json_path.write_text(json.dumps(evidence_data, indent=2), encoding="utf-8")
-        console.print(f"[green]✓[/] Evidence exported: [cyan]{json_path.relative_to(root)}[/]")
+        if has_failures:
+            console.print(f"[yellow]⚠[/] Evidence exported with validation failures: [cyan]{json_path.relative_to(root)}[/]")
+        else:
+            console.print(f"[green]✓[/] Evidence exported: [cyan]{json_path.relative_to(root)}[/]")
 
     else:
         # Markdown report
@@ -241,15 +254,32 @@ def run_report(format: str, console: Console) -> None:
         )
         (evidence_dir / "evidence.md").write_text(evidence_md, encoding="utf-8")
 
-        console.print(
-            Panel(
-                f"[bold green]✓[/] Evidence generated for branch [cyan]{branch}[/]\n\n"
-                f"  [dim]•[/] {evidence_dir.relative_to(root)}/evidence.md\n"
-                f"  [dim]•[/] {evidence_dir.relative_to(root)}/diff-summary.md\n"
-                f"  [dim]•[/] {evidence_dir.relative_to(root)}/validation-results.md\n"
-                f"  [dim]•[/] {evidence_dir.relative_to(root)}/policy-events.json\n"
-                f"\n  Policy events: {len(policy_events)}",
-                title="[bold green]Evidence Report[/]",
-                border_style="green",
+        if has_failures:
+            console.print(
+                Panel(
+                    f"[bold yellow]⚠[/] Evidence generated with validation failures for branch [cyan]{branch}[/]\n\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/evidence.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/diff-summary.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/validation-results.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/policy-events.json\n"
+                    f"\n  Policy events: {len(policy_events)}",
+                    title="[bold yellow]Evidence Report (Degraded)[/]",
+                    border_style="yellow",
+                )
             )
-        )
+        else:
+            console.print(
+                Panel(
+                    f"[bold green]✓[/] Evidence generated for branch [cyan]{branch}[/]\n\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/evidence.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/diff-summary.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/validation-results.md\n"
+                    f"  [dim]•[/] {evidence_dir.relative_to(root)}/policy-events.json\n"
+                    f"\n  Policy events: {len(policy_events)}",
+                    title="[bold green]Evidence Report[/]",
+                    border_style="green",
+                )
+            )
+
+    if has_failures:
+        raise SystemExit(1)

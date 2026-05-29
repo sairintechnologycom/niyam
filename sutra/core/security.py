@@ -29,7 +29,7 @@ ALLOWED_VALIDATION_EXECUTABLES: set[str] = {
     # Security scanners
     "semgrep", "gitleaks", "detect-secrets", "trivy", "grype",
     # Shell utilities commonly used in validation
-    "sh", "bash", "echo", "cat", "grep", "wc", "diff", "test",
+    "echo", "cat", "grep", "wc", "diff", "test",
 }
 
 
