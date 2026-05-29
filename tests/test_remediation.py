@@ -83,8 +83,10 @@ def test_context_diff_ignores_manual_sections(sutra_repo: Path, capsys: pytest.C
     assert "changes detected" not in captured.out
 
 
-def test_claude_hook_script_has_no_unused_os_import(tmp_path: Path) -> None:
-    """Generated Claude pre-tool hook should not contain unused os import."""
+def test_claude_hook_script_formatting_and_imports(tmp_path: Path) -> None:
+    """Generated Claude pre-tool hook should be clean of unused imports and format violations."""
+    import subprocess
+
     adapter = ClaudeAdapter(repo_root=tmp_path)
     script = adapter._render_hook_script(
         deny_list=[],
@@ -96,3 +98,10 @@ def test_claude_hook_script_has_no_unused_os_import(tmp_path: Path) -> None:
         remote_policy_url=None
     )
     assert "import os" not in script
+
+    # Write hook script to tmp file and assert ruff format checks pass
+    hook_file = tmp_path / "pre_tool_guard.py"
+    hook_file.write_text(script, encoding="utf-8")
+
+    res = subprocess.run(["ruff", "format", "--check", str(hook_file)], capture_output=True, text=True)
+    assert res.returncode == 0, f"Ruff format check failed on generated hook: {res.stdout}\n{res.stderr}"

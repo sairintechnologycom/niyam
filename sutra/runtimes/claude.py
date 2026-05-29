@@ -256,7 +256,9 @@ import fnmatch
 from datetime import datetime
 from pathlib import Path
 
+
 # ── Load configuration from .sutra/ at runtime ─────────────────────────
+
 
 def _find_sutra_root():
     """Walk up from the hook file to find the .sutra directory."""
@@ -267,6 +269,7 @@ def _find_sutra_root():
             return current
         current = current.parent
     return hook_dir.parent.parent
+
 
 _REPO_ROOT = _find_sutra_root()
 _CONFIG_PATH = _REPO_ROOT / ".sutra" / "hook-cache" / "guard-config.json"
@@ -290,6 +293,7 @@ if _CONFIG_PATH.exists():
         FROZEN_PATHS = _cfg.get("frozen_paths", [])
     except Exception:
         pass
+
 
 def log_policy_event(event_type, details):
     """Log a policy event for evidence."""
@@ -330,13 +334,15 @@ def log_policy_event(event_type, details):
             except Exception:
                 pass
 
+
 # ── Hook logic ─────────────────────────────────────────────────────────
+
 
 def _matches_pattern(command_lower, pattern):
     """Token-prefix + glob matching for command patterns."""
     cmd_tokens = command_lower.split()
     pat_tokens = pattern.lower().split()
-    if cmd_tokens[:len(pat_tokens)] == pat_tokens:
+    if cmd_tokens[: len(pat_tokens)] == pat_tokens:
         return True
     return fnmatch.fnmatch(command_lower, pattern.lower())
 
@@ -353,7 +359,9 @@ def check_command(command):
             log_policy_event("BLOCKED", "Denied command: " + command)
             return {
                 "allowed": False,
-                "reason": "Blocked by Sutra policy: '" + pattern + "' is in the deny list.",
+                "reason": "Blocked by Sutra policy: '"
+                + pattern
+                + "' is in the deny list.",
             }
 
     for pattern in WARN_PATTERNS:
@@ -372,17 +380,29 @@ def check_file_path(file_path):
     if not GUARD_ENABLED:
         return {"allowed": True}
 
-    if DENY_WRITE_PATTERNS and any(fnmatch.fnmatch(file_path, pat) for pat in DENY_WRITE_PATTERNS):
-        log_policy_event("BLOCKED", "Write restriction violation (deny list): " + file_path)
+    if DENY_WRITE_PATTERNS and any(
+        fnmatch.fnmatch(file_path, pat) for pat in DENY_WRITE_PATTERNS
+    ):
+        log_policy_event(
+            "BLOCKED", "Write restriction violation (deny list): " + file_path
+        )
         return {
             "allowed": False,
-            "reason": "Blocked by Sutra security policy: file '" + file_path + "' matches deny_write_patterns.",
+            "reason": "Blocked by Sutra security policy: file '"
+            + file_path
+            + "' matches deny_write_patterns.",
         }
-    if ALLOW_WRITE_PATTERNS and not any(fnmatch.fnmatch(file_path, pat) for pat in ALLOW_WRITE_PATTERNS):
-        log_policy_event("BLOCKED", "Write restriction violation (not in allow list): " + file_path)
+    if ALLOW_WRITE_PATTERNS and not any(
+        fnmatch.fnmatch(file_path, pat) for pat in ALLOW_WRITE_PATTERNS
+    ):
+        log_policy_event(
+            "BLOCKED", "Write restriction violation (not in allow list): " + file_path
+        )
         return {
             "allowed": False,
-            "reason": "Blocked by Sutra security policy: file '" + file_path + "' does not match allow_write_patterns.",
+            "reason": "Blocked by Sutra security policy: file '"
+            + file_path
+            + "' does not match allow_write_patterns.",
         }
 
     if FROZEN_PATHS:
@@ -392,7 +412,10 @@ def check_file_path(file_path):
         log_policy_event("BLOCKED", "File outside frozen scope: " + file_path)
         return {
             "allowed": False,
-            "reason": "Blocked by Sutra guard: file '" + file_path + "' is outside the allowed scope: " + str(FROZEN_PATHS),
+            "reason": "Blocked by Sutra guard: file '"
+            + file_path
+            + "' is outside the allowed scope: "
+            + str(FROZEN_PATHS),
         }
 
     return {"allowed": True}
@@ -408,7 +431,12 @@ if __name__ == "__main__":
     if tool_name in ("bash", "shell", "terminal", "run_command"):
         command = tool_input.get("command", "") or tool_input.get("CommandLine", "")
         result = check_command(command)
-    elif tool_name in ("write_file", "edit_file", "replace_file_content", "multi_replace_file_content"):
+    elif tool_name in (
+        "write_file",
+        "edit_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+    ):
         file_path = tool_input.get("file_path", "") or tool_input.get("TargetFile", "")
         result = check_file_path(file_path)
 
