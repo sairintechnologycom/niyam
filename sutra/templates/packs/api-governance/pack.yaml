@@ -1,0 +1,10 @@
+name: api-governance
+version: 0.1.0
+description: API architecture standards, OpenAPI generation, and backwards compatibility verification
+provides:
+  agents: [api-architect]
+  skills: [api-design]
+  commands: []
+  policies: []
+  design: []
+requires: []

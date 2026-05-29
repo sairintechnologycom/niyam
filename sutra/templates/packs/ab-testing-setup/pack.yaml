@@ -1,0 +1,10 @@
+name: ab-testing-setup
+version: 0.1.0
+description: Design, implement, and validate A/B testing flag structures and allocation gates
+provides:
+  agents: [ab-testing-specialist]
+  skills: [ab-testing]
+  commands: []
+  policies: []
+  design: []
+requires: []

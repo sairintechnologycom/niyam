@@ -1,0 +1,10 @@
+name: security-scanning
+version: 0.1.0
+description: Security auditing, secrets check, and vulnerability scanning methodology
+provides:
+  agents: [security-auditor]
+  skills: [vulnerability-scanning]
+  commands: []
+  policies: []
+  design: []
+requires: []

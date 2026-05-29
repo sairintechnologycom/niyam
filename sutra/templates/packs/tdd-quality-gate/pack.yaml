@@ -1,0 +1,10 @@
+name: tdd-quality-gate
+version: 0.1.0
+description: Test-Driven Development loops and automated quality gate enforcement
+provides:
+  agents: [tdd-executor]
+  skills: [tdd-workflow]
+  commands: []
+  policies: []
+  design: []
+requires: []
