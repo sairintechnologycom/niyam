@@ -140,13 +140,18 @@ class EvidencePolicy(BaseModel):
     require_policy_events: bool = True
 
 
-# ── Task & Mission Plan schemas ───────────────────────────────────────
+from pydantic import BaseModel, Field, AliasChoices
+
+class TaskValidationConfig(BaseModel):
+    """Validation commands configuration for a task."""
+
+    commands: list[str] = Field(default_factory=list)
 
 
 class TaskContract(BaseModel):
     """Pydantic model for task contracts to enforce schema and defaults."""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "forbid"}
 
     id: str
     title: str
@@ -155,10 +160,26 @@ class TaskContract(BaseModel):
     agent: str
     runtime: Optional[str] = None
     depends_on: list[str] = Field(default_factory=list)
-    files_allowed: list[str] = Field(default_factory=lambda: ["*"])
+    allowed_files: list[str] = Field(
+        default_factory=lambda: ["*"],
+        validation_alias=AliasChoices("allowed_files", "files_allowed")
+    )
+    blocked_files: list[str] = Field(default_factory=list)
     writes_files: bool = True
-    timeout_seconds: int = 600
+    timeout_seconds: int = Field(
+        default=600,
+        validation_alias=AliasChoices("timeout_seconds", "timeout")
+    )
     risk: Literal["low", "medium", "high"] = "medium"
+    objective: str = ""
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    validation: TaskValidationConfig = Field(default_factory=TaskValidationConfig)
+    approval_required: bool = False
+    tdd_required: Optional[bool] = None
+    commit_sha: Optional[str] = None
+
+
+
 
 
 class MissionMeta(BaseModel):
@@ -172,6 +193,10 @@ class MissionMeta(BaseModel):
     status: str
     orchestrator: str
     parallel: int = 1
+    worktree: bool = True
+    base_sha: Optional[str] = None
+
+
 
 
 class MissionPlan(BaseModel):

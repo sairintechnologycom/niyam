@@ -67,3 +67,55 @@ class TestReview:
             assert "# Secure Code Review" in content
         finally:
             del os.environ["SUTRA_TEST"]
+
+    def test_get_git_diff_file_size_limit(self, sutra_repo: Path) -> None:
+        """Should skip untracked files exceeding 50 KB size limit."""
+        os.chdir(sutra_repo)
+
+        # Create a large untracked file (60 KB)
+        large_file = sutra_repo / "large_file.py"
+        large_file.write_text("A" * (60 * 1024), encoding="utf-8")
+
+        diff = get_git_diff(sutra_repo)
+        assert "large_file.py" in diff
+        assert "exceeds 50 KB size limit" in diff
+        assert "AAAAA" not in diff  # Content should not be included
+
+    def test_get_git_diff_budget_limit(self, sutra_repo: Path) -> None:
+        """Should skip untracked files that exceed the 200 KB total budget limit."""
+        os.chdir(sutra_repo)
+
+        # Create multiple files that total over 200 KB but individually are under 50 KB
+        for i in range(5):
+            f = sutra_repo / f"file_{i}.py"
+            f.write_text("A" * (45 * 1024), encoding="utf-8")
+
+        diff = get_git_diff(sutra_repo)
+        assert "exceeds total prompt budget limit" in diff
+
+    def test_get_git_diff_skip_binary_files(self, sutra_repo: Path) -> None:
+        """Should skip binary files entirely."""
+        os.chdir(sutra_repo)
+
+        binary_file = sutra_repo / "binary.bin"
+        binary_file.write_bytes(b"\x00\x01\x02\x03\x00")
+
+        diff = get_git_diff(sutra_repo)
+        assert "binary.bin" not in diff
+
+    def test_get_git_diff_redact_secrets(self, sutra_repo: Path) -> None:
+        """Should redact secrets (AWS keys, tokens, api keys) in git diff."""
+        os.chdir(sutra_repo)
+
+        secret_file = sutra_repo / "secret.py"
+        secret_file.write_text(
+            "aws_key = 'AKIA1234567890123456'\n"
+            "token = 'my-super-secret-token'\n",
+            encoding="utf-8"
+        )
+
+        diff = get_git_diff(sutra_repo)
+        assert "AKIA1234567890123456" not in diff
+        assert "[REDACTED_AWS_KEY]" in diff
+        assert "my-super-secret-token" not in diff
+        assert "[REDACTED_SECRET]" in diff

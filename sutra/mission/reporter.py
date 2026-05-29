@@ -77,7 +77,12 @@ def get_changed_files(repo_root: Path) -> list[str]:
 
 def run_mission_report(console: Console) -> None:
     """Generate final evidence package for the latest mission."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     mission_id = get_latest_mission_id(sutra_dir)
@@ -95,8 +100,12 @@ def run_mission_report(console: Console) -> None:
 
     # 1. Collect Git Diff
     git_diff = ""
+    base_sha = mission_meta.get("base_sha")
     try:
-        res = subprocess.run(["git", "diff"], capture_output=True, text=True)
+        if base_sha:
+            res = subprocess.run(["git", "diff", base_sha], capture_output=True, text=True)
+        else:
+            res = subprocess.run(["git", "diff"], capture_output=True, text=True)
         if res.returncode == 0:
             git_diff = res.stdout
     except Exception:
@@ -163,7 +172,8 @@ def run_mission_report(console: Console) -> None:
     report_sections.append("")
     for task in plan_data.get("tasks", []):
         icon = "✓" if task.get("status") == "completed" else "✗"
-        report_sections.append(f"- [{icon}] **{task.get('id', '')}**: {task.get('title', '')} ({task.get('agent', '')})")
+        sha_str = f" (commit: `{task['commit_sha'][:7]}`)" if task.get("commit_sha") else ""
+        report_sections.append(f"- [{icon}] **{task.get('id', '')}**: {task.get('title', '')} ({task.get('agent', '')}){sha_str}")
     report_sections.append("")
 
     report_sections.append("## Execution Log")
@@ -285,7 +295,8 @@ def run_verify_report(evidence_path: str, console: Console) -> None:
         raise SystemExit(1)
 
     run_dir = path.parent
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    repo_root = find_sutra_root(start=run_dir) or find_sutra_root() or Path.cwd()
 
     failures = []
     verified_count = 0

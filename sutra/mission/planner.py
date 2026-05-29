@@ -140,7 +140,12 @@ def run_mission_plan(requirements_path: str, strict: bool = False, console: Cons
     """Generate a mission plan from a requirements file."""
     if console is None:
         console = Console()
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     if not sutra_dir.exists():
@@ -359,7 +364,12 @@ def get_latest_mission_id(sutra_dir: Path) -> str | None:
 
 def run_mission_approve(console: Console) -> None:
     """Approve the latest planned mission."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     mission_id = get_latest_mission_id(sutra_dir)
@@ -374,8 +384,22 @@ def run_mission_approve(console: Console) -> None:
         console.print(f"[bold red]Error:[/] Mission plan for '{mission_id}' not found.")
         raise SystemExit(1)
 
+    # Automatically validate plan before approval
+    from sutra.mission.validator import validate_mission_plan, PlanValidationError
+    try:
+        validate_mission_plan(plan_path, repo_root)
+    except PlanValidationError as e:
+        console.print(f"[bold red]❌ Mission approval rejected due to validation failures:[/]")
+        for err in e.errors:
+            console.print(f"  • [red]{err}[/]")
+        raise SystemExit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error during validation:[/] {e}")
+        raise SystemExit(1)
+
     with open(plan_path, encoding="utf-8") as f:
         plan_data = yaml.safe_load(f) or {}
+
 
     mission_meta = plan_data.get("mission", {})
     status = mission_meta.get("status", "planned")

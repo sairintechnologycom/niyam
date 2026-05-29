@@ -20,6 +20,7 @@ from sutra.mission.planner import get_latest_mission_id
 # Locks for thread-safe operations
 _print_lock = threading.Lock()
 _validation_lock = threading.Lock()
+_plan_lock = threading.RLock()
 
 
 def load_plan(run_dir: Path) -> dict:
@@ -27,21 +28,24 @@ def load_plan(run_dir: Path) -> dict:
     from sutra.core.config import MissionPlan
     from sutra.core.security import safe_load_yaml
 
-    plan_path = run_dir / "mission-plan.yaml"
-    data = safe_load_yaml(plan_path)
-    validated = MissionPlan(**data)
-    return validated.model_dump()
+    with _plan_lock:
+        plan_path = run_dir / "mission-plan.yaml"
+        data = safe_load_yaml(plan_path)
+        validated = MissionPlan(**data)
+        return validated.model_dump()
 
 
 def save_plan(run_dir: Path, plan_data: dict) -> None:
     """Save mission plan YAML and update task-list.yaml."""
-    plan_path = run_dir / "mission-plan.yaml"
-    with open(plan_path, "w", encoding="utf-8") as f:
-        yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+    with _plan_lock:
+        plan_path = run_dir / "mission-plan.yaml"
+        with open(plan_path, "w", encoding="utf-8") as f:
+            yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
 
-    tasks_path = run_dir / "task-list.yaml"
-    with open(tasks_path, "w", encoding="utf-8") as f:
-        yaml.dump(plan_data.get("tasks", []), f, default_flow_style=False, sort_keys=False)
+        tasks_path = run_dir / "task-list.yaml"
+        with open(tasks_path, "w", encoding="utf-8") as f:
+            yaml.dump(plan_data.get("tasks", []), f, default_flow_style=False, sort_keys=False)
+
 
 
 def _lock_and_write_events(log_path: Path, new_event: dict) -> None:
@@ -219,6 +223,89 @@ def run_validation_command(cmd: str, run_dir: Path, cwd: Path, console: Console)
                 f.write("### stderr\n```\n" + res.stderr + "\n```\n")
             
     return res.returncode == 0
+
+
+def compute_sha256(file_path: Path) -> str:
+    """Compute the SHA-256 hash of a file."""
+    import hashlib
+    if not file_path.exists() or not file_path.is_file():
+        return "DELETED"
+    h = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            while chunk := f.read(8192):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def get_snapshot(cwd: Path, is_git: bool) -> dict[str, str]:
+    """Get a dictionary mapping relative file paths to their hashes or status."""
+    if is_git:
+        res = subprocess.run(["git", "status", "--porcelain"], cwd=cwd, capture_output=True, text=True)
+        snapshot = {}
+        for line in res.stdout.splitlines():
+            if line.strip():
+                parts = line.strip().split(maxsplit=1)
+                if len(parts) == 2:
+                    status, rel_path = parts[0], parts[1]
+                    if not rel_path.startswith(".sutra"):
+                        snapshot[rel_path] = status
+        return snapshot
+    else:
+        snapshot = {}
+        ignore_dirs = {".git", ".sutra", "__pycache__", ".venv", "node_modules", ".antigravitycli"}
+        for root, dirs, files in os.walk(cwd):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+            for f in files:
+                full_path = Path(root) / f
+                try:
+                    rel_path = str(full_path.relative_to(cwd))
+                    snapshot[rel_path] = compute_sha256(full_path)
+                except Exception:
+                    pass
+        return snapshot
+
+
+def backup_non_git_workspace(cwd: Path, backup_dir: Path) -> None:
+    """Create a backup of all non-git workspace files."""
+    if backup_dir.exists():
+        try:
+            shutil.rmtree(backup_dir)
+        except Exception:
+            pass
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ignore_dirs = {".git", ".sutra", "__pycache__", ".venv", "node_modules", ".antigravitycli"}
+    for root, dirs, files in os.walk(cwd):
+        dirs[:] = [d for d in dirs if d not in ignore_dirs]
+        for f in files:
+            full_path = Path(root) / f
+            try:
+                rel_path = full_path.relative_to(cwd)
+                dest_path = backup_dir / rel_path
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(full_path, dest_path)
+            except Exception:
+                pass
+
+
+def restore_non_git_file(rel_path: str, backup_dir: Path, cwd: Path) -> None:
+    """Restore a single file from the backup directory, or delete if it wasn't in backup."""
+    backup_file = backup_dir / rel_path
+    target_file = cwd / rel_path
+    if backup_file.exists():
+        try:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_file, target_file)
+        except Exception:
+            pass
+    else:
+        if target_file.exists():
+            try:
+                target_file.unlink()
+            except Exception:
+                pass
 
 
 # ── Git Worktree & Branching Utilities ─────────────────────────────────
@@ -504,7 +591,7 @@ Assigned Agent: {task['agent']}
 
 --- INSTRUCTIONS ---
 Please execute the changes required for this task.
-Only modify files allowed under: {task.get('files_allowed', ['Any'])}
+Only modify files allowed under: {task.get('allowed_files') or task.get('files_allowed', ['Any'])}
 Do not perform destructive operations.
 """
     # Write prompt
@@ -514,32 +601,21 @@ Do not perform destructive operations.
     is_test = os.environ.get("SUTRA_TEST") == "1"
     success = True
     
-    # Track pre-existing changes to ignore them in write restriction checks
-    pre_changed_files = set()
-    if not use_worktree and is_git_repo(repo_root):
-        try:
-            res_status = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=repo_root,
-                capture_output=True,
-                text=True,
-            )
-            if res_status.returncode == 0:
-                for line in res_status.stdout.splitlines():
-                    if line.strip():
-                        parts = line.strip().split(maxsplit=1)
-                        if len(parts) == 2:
-                            pre_changed_files.add(parts[1])
-        except Exception:
-            pass
+    is_git = is_git_repo(repo_root)
+    backup_dir = run_dir / "backups" / task_id
+    if not is_git:
+        backup_non_git_workspace(task_cwd, backup_dir)
+        
+    # Take before snapshot
+    before_snapshot = get_snapshot(task_cwd, is_git)
 
     if is_test:
         with _print_lock:
             console.print(f"[{task_id}] [dim]Mocking execution of {task_id}...[/]")
         log_execution_event(run_dir, "TASK_EXECUTION_MOCK", task_id, "Mocked execution successfully.")
         
-        # Write dummy file to record change in worktree git diff
-        if use_worktree and worktree_path:
+        # Write dummy file to record change in worktree git diff only if writes_files is True
+        if use_worktree and worktree_path and task.get("writes_files", True):
             dummy_file = worktree_path / f"change-{task_id}.txt"
             dummy_file.write_text(f"Changes by task {task_id}", encoding="utf-8")
     else:
@@ -551,7 +627,7 @@ Do not perform destructive operations.
         if shutil.which(orchestrator):
             with _print_lock:
                 console.print(f"[{task_id}] [cyan]Invoking {orchestrator} CLI...[/]")
-            timeout = task.get("timeout_seconds") or 600
+            timeout = task.get("timeout_seconds") or task.get("timeout") or 600
             try:
                 if parallel_limit == 1 and not non_interactive:
                     # Sequential: full interactive pass-through
@@ -609,83 +685,141 @@ Do not perform destructive operations.
                 except (KeyboardInterrupt, EOFError):
                     success = False
                     
-    # Write Guard Check
+    # Mechanical Task Boundary Check
     if success:
+        after_snapshot = get_snapshot(task_cwd, is_git)
+        
+        # Compare before and after to find all changed files
+        changed_files = []
+        if is_git:
+            for f in after_snapshot:
+                if f not in before_snapshot or after_snapshot[f] != before_snapshot[f]:
+                    changed_files.append(f)
+            # Find deleted files that were tracked but deleted (git status shows D)
+            for f in before_snapshot:
+                if f not in after_snapshot:
+                    changed_files.append(f)
+        else:
+            all_keys = set(before_snapshot.keys()) | set(after_snapshot.keys())
+            for f in all_keys:
+                if before_snapshot.get(f) != after_snapshot.get(f):
+                    changed_files.append(f)
+
+        violated_files = []
+        writes_files = task.get("writes_files", True)
+        allowed_files = task.get("allowed_files") or task.get("files_allowed") or ["*"]
+        blocked_files = task.get("blocked_files", [])
+
+        # Load global security policies
         from sutra.policies.guard import load_security_policy
         sec_data = load_security_policy(repo_root)
         deny_patterns = sec_data.get("deny_write_patterns", [])
         allow_patterns = sec_data.get("allow_write_patterns", [])
-        
-        # Also enforce task-specific files_allowed restriction
-        task_allowed = task.get("files_allowed")
-        if task_allowed and "*" not in task_allowed and "Any" not in task_allowed:
-            # Treat task-specific files_allowed list as additional allow patterns
-            allow_patterns.extend(task_allowed)
 
-        if (deny_patterns or allow_patterns) and is_git_repo(repo_root):
-            try:
-                res_status = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=task_cwd,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                changed_files = []
-                for line in res_status.stdout.splitlines():
-                    if line.strip():
-                        parts = line.strip().split(maxsplit=1)
-                        if len(parts) == 2:
-                            rel_path = parts[1]
-                            if not rel_path.startswith(".sutra"):
-                                changed_files.append(rel_path)
-
-                violated_files = []
+        if changed_files:
+            if not writes_files:
+                # Task is writes_files: false, but changes were detected!
+                violated_files = changed_files
+            else:
                 for f in changed_files:
-                    if f in pre_changed_files:
+                    # Check blocked_files patterns
+                    if blocked_files and any(fnmatch.fnmatch(f, pat) for pat in blocked_files):
+                        violated_files.append(f)
                         continue
+                    # Check allowed_files patterns
+                    if allowed_files and "*" not in allowed_files and "Any" not in allowed_files:
+                        if not any(fnmatch.fnmatch(f, pat) for pat in allowed_files):
+                            violated_files.append(f)
+                            continue
+                    # Check global policies
                     if deny_patterns and any(fnmatch.fnmatch(f, pat) for pat in deny_patterns):
                         violated_files.append(f)
-                    elif allow_patterns and not any(fnmatch.fnmatch(f, pat) for pat in allow_patterns):
+                        continue
+                    if allow_patterns and not any(fnmatch.fnmatch(f, pat) for pat in allow_patterns):
                         violated_files.append(f)
+                        continue
 
-                if violated_files:
-                    with _print_lock:
-                        console.print(f"[{task_id}] [bold red]❌ Write restriction violation detected![/]")
-                        for f in violated_files:
-                            console.print(f"  - Reverting unauthorized change to: [red]{f}[/]")
+        if violated_files:
+            with _print_lock:
+                console.print(f"[{task_id}] [bold red]❌ Write restriction/boundary violation detected![/]")
+                for f in violated_files:
+                    console.print(f"  - Reverting unauthorized change to: [red]{f}[/]")
 
-                    for f in violated_files:
-                        subprocess.run(["git", "checkout", "--", f], cwd=task_cwd)
-                        full_p = task_cwd / f
-                        if full_p.exists() and not full_p.is_dir():
-                            try:
-                                full_p.unlink()
-                            except Exception:
-                                pass
+            if is_git:
+                for f in violated_files:
+                    subprocess.run(["git", "checkout", "--", f], cwd=task_cwd, capture_output=True)
+                    full_p = task_cwd / f
+                    if full_p.exists() and not full_p.is_dir():
+                        try:
+                            full_p.unlink()
+                        except Exception:
+                            pass
+            else:
+                for f in violated_files:
+                    restore_non_git_file(f, backup_dir, task_cwd)
 
-                    log_policy_event(
-                        run_dir=run_dir,
-                        sutra_dir=sutra_dir,
-                        event_type="WRITE_VIOLATION",
-                        details=f"Task {task_id} attempted unauthorized modifications to: {', '.join(violated_files)}"
-                    )
-                    success = False
-            except Exception as e:
-                with _print_lock:
-                    console.print(f"[{task_id}] [yellow]Warning during write guard check:[/] {e}")
-                    
-    # Validation
+            log_policy_event(
+                run_dir=run_dir,
+                sutra_dir=sutra_dir,
+                event_type="WRITE_VIOLATION",
+                details=f"Task {task_id} attempted unauthorized modifications to: {', '.join(violated_files)}"
+            )
+            success = False
+
+    # Clean up non-git backup if it was created
+    if not is_git and backup_dir.exists():
+        try:
+            shutil.rmtree(backup_dir)
+        except Exception:
+            pass
+
+    # Validation Matrix Execution
     if success and project_config and project_config.validation:
         v_cmds = project_config.validation
-        test_cmd = v_cmds.test or v_cmds.build
-        if test_cmd:
-            success = run_validation_command(test_cmd, run_dir, task_cwd, console)
-            if not success:
-                with _print_lock:
-                    console.print(f"[{task_id}] [bold red]❌ Validation failed! Check validation-results.md[/]")
-                log_execution_event(run_dir, "TASK_FAILED", task_id, "Task validation failed.")
-                
+        # stable order of validation
+        checks = [
+            ("format", v_cmds.format),
+            ("lint", v_cmds.lint),
+            ("typecheck", v_cmds.typecheck),
+            ("build", v_cmds.build),
+            ("test", v_cmds.test),
+        ]
+        
+        # Load validation commands from task
+        task_validation = task.get("validation", {})
+        task_cmds = []
+        if isinstance(task_validation, dict):
+            task_cmds = task_validation.get("commands", [])
+        elif hasattr(task_validation, "commands"):
+            task_cmds = task_validation.commands
+        
+        # Run standard checks
+        for name, cmd in checks:
+            if cmd:
+                cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
+                if not cmd_success:
+                    success = False
+                    with _print_lock:
+                        console.print(f"[{task_id}] [bold red]❌ Validation check '{name}' failed![/]")
+            else:
+                # Log explicitly skipped
+                val_path = run_dir / "validation-results.md"
+                timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                with _validation_lock:
+                    mode = "a" if val_path.exists() else "w"
+                    with open(val_path, mode, encoding="utf-8") as f:
+                        f.write(f"\n## Validation Check - {name} - {timestamp}\n")
+                        f.write(f"**Status:** ℹ SKIPPED — Not configured\n\n")
+
+        # Run task-specific checks
+        if task_cmds:
+            for i, cmd in enumerate(task_cmds, start=1):
+                cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
+                if not cmd_success:
+                    success = False
+                    with _print_lock:
+                        console.print(f"[{task_id}] [bold red]❌ Task validation command {i} failed![/]")
+
     # Record token usage in the ledger
     try:
         # Estimate input tokens
@@ -749,6 +883,7 @@ Do not perform destructive operations.
         mission_meta = plan_data.get("mission", {})
         orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
 
+        # Label token ledger entry as estimated
         update_token_ledger(
             run_dir=run_dir,
             task_id=task_id,
@@ -758,6 +893,21 @@ Do not perform destructive operations.
             output_tokens=output_tokens,
             baseline_multiplier=baseline_multiplier,
         )
+        
+        # Add 'estimated: true' label to ledger event for token governance
+        ledger_path = run_dir / "token-ledger.json"
+        if ledger_path.exists():
+            try:
+                with open(ledger_path, encoding="utf-8") as f:
+                    ledger = json.load(f)
+                for event in ledger.get("events", []):
+                    if event.get("task_id") == task_id:
+                        event["estimated"] = True
+                with open(ledger_path, "w", encoding="utf-8") as f:
+                    json.dump(ledger, f, indent=2)
+            except Exception:
+                pass
+
     except Exception as e:
         with _print_lock:
             console.print(f"[{task_id}] [yellow]Warning: Failed to update token ledger:[/] {e}")
@@ -766,6 +916,17 @@ Do not perform destructive operations.
     if success and use_worktree and worktree_path:
         try:
             commit_worktree_changes(worktree_path, task_id, console)
+            # Retrieve and record commit SHA of this task
+            res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=worktree_path, capture_output=True, text=True)
+            if res.returncode == 0:
+                task_commit_sha = res.stdout.strip()
+                # Update task-list.yaml and mission-plan.yaml in execution flow
+                with _plan_lock:
+                    plan_data = load_plan(run_dir)
+                    for t in plan_data.get("tasks", []):
+                        if t["id"] == task_id:
+                            t["commit_sha"] = task_commit_sha
+                    save_plan(run_dir, plan_data)
         except Exception as e:
             with _print_lock:
                 console.print(f"[{task_id}] [bold red]Failed to commit changes:[/] {e}")
@@ -778,6 +939,7 @@ Do not perform destructive operations.
     return success
 
 
+
 # ── Public Entry Points ───────────────────────────────────────────────
 
 def run_mission_start(
@@ -787,7 +949,12 @@ def run_mission_start(
     non_interactive: bool = False,
 ) -> None:
     """Start or resume the latest approved mission."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     mission_id = get_latest_mission_id(sutra_dir)
@@ -885,8 +1052,13 @@ def run_mission_start(
     plan_data["mission"]["parallel"] = parallel_limit
     plan_data["mission"]["worktree"] = use_worktree
     plan_data["mission"]["status"] = "running"
+    if is_git and git_has_commits(repo_root) and not plan_data["mission"].get("base_sha"):
+        res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True)
+        if res.returncode == 0:
+            plan_data["mission"]["base_sha"] = res.stdout.strip()
     save_plan(run_dir, plan_data)
     log_execution_event(run_dir, "MISSION_STARTED", "", f"Mission execution started (parallel={parallel_limit}, worktree={use_worktree}).")
+
 
     # Read project.yaml validation commands
     project_config = None
@@ -1033,7 +1205,12 @@ def run_mission_start(
 
 def run_mission_pause(console: Console) -> None:
     """Pause the currently running mission."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     mission_id = get_latest_mission_id(sutra_dir)
@@ -1062,7 +1239,12 @@ def run_mission_resume(
     non_interactive: bool = False,
 ) -> None:
     """Resume a paused mission."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     mission_id = get_latest_mission_id(sutra_dir)

@@ -41,7 +41,7 @@ def git_repo_with_commit(tmp_repo: Path) -> Path:
 def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     """Should execute independent tasks in parallel with worktree isolation."""
     os.chdir(git_repo_with_commit)
-    console = Console(quiet=True)
+    console = Console(quiet=False)
 
     # 1. Create requirements
     req_file = git_repo_with_commit / "requirements.md"

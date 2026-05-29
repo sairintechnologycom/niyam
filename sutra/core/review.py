@@ -13,33 +13,81 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 REVIEWS_DIR = TEMPLATES_DIR / "reviews"
 
 
-def get_git_diff() -> str:
-    """Fetch the current git diff of tracked and untracked changes."""
+def is_binary_file(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(1024)
+            return b"\x00" in chunk
+    except Exception:
+        return True
+
+
+def redact_secrets(content: str) -> str:
+    import re
+    # AWS access key ID
+    content = re.sub(r"AKIA[A-Z0-9]{16}", "[REDACTED_AWS_KEY]", content)
+    # Generic secret pattern
+    secret_pattern = re.compile(
+        r"(?i)(api[_-]?key|secret|password|passwd|token|private[_-]?key)\s*[:=]\s*([\"'])([a-zA-Z0-9_\-\.\:\/\+]{12,})(\2)",
+        re.IGNORECASE
+    )
+    content = secret_pattern.sub(r"\1 = \2[REDACTED_SECRET]\4", content)
+    return content
+
+
+def get_git_diff(repo_root: Path | None = None) -> str:
+    """Fetch the current git diff of tracked and untracked changes with safety caps."""
+    if repo_root is None:
+        from sutra.core.config import find_sutra_root
+        repo_root = find_sutra_root() or Path.cwd()
+
     try:
         # Get diff of tracked files
-        res = subprocess.run(["git", "diff"], capture_output=True, text=True)
+        res = subprocess.run(["git", "diff"], cwd=repo_root, capture_output=True, text=True)
         tracked = res.stdout if res.returncode == 0 else ""
 
         # Get diff of staged files
-        res_staged = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True)
+        res_staged = subprocess.run(["git", "diff", "--cached"], cwd=repo_root, capture_output=True, text=True)
         staged = res_staged.stdout if res_staged.returncode == 0 else ""
 
         # Get untracked files
-        res_untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True)
+        res_untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"], cwd=repo_root, capture_output=True, text=True)
         untracked_files = res_untracked.stdout.splitlines() if res_untracked.returncode == 0 else []
+
+        MAX_UNTRACKED_FILE_SIZE = 50 * 1024  # 50 KB
+        MAX_UNTRACKED_BUDGET = 200 * 1024   # 200 KB
+        total_budget_used = 0
 
         untracked = ""
         for f in untracked_files:
-            if Path(f).is_file():
+            file_path = repo_root / f
+            if file_path.is_file():
+                if is_binary_file(file_path):
+                    continue
+
+                file_size = file_path.stat().st_size
+                if file_size > MAX_UNTRACKED_FILE_SIZE:
+                     untracked += f"\n\n--- Untracked File: {f} (Skipped: exceeds 50 KB size limit) ---\n"
+                     continue
+
+                if total_budget_used + file_size > MAX_UNTRACKED_BUDGET:
+                     untracked += f"\n\n--- Untracked File: {f} (Skipped: exceeds total prompt budget limit) ---\n"
+                     continue
+
                 try:
-                    content = Path(f).read_text(encoding="utf-8")
+                    content = file_path.read_text(encoding="utf-8")
+                    content = redact_secrets(content)
                     untracked += f"\n\n--- Untracked File: {f} ---\n{content}"
+                    total_budget_used += file_size
                 except Exception:
                     pass
 
-        return (staged + "\n" + tracked + "\n" + untracked).strip()
+        # Also redact secrets from tracked and staged diffs
+        combined_diff = (staged + "\n" + tracked + "\n" + untracked).strip()
+        return redact_secrets(combined_diff)
     except Exception:
         return ""
+
 
 
 def run_review(
@@ -49,8 +97,15 @@ def run_review(
     console: Console,
 ) -> None:
     """Run code review with the specified lens, runtime, and mode."""
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+
     # 1. Fetch git diff
-    diff = get_git_diff()
+    diff = get_git_diff(repo_root)
     if not diff:
         console.print("[yellow]No local changes detected to review. Try making some changes first.[/]")
         return
@@ -86,7 +141,7 @@ def run_review(
     ))
 
     # Save to a temporary prompt file for reference
-    temp_dir = Path.cwd() / ".sutra" / "runs"
+    temp_dir = repo_root / ".sutra" / "runs"
     temp_dir.mkdir(parents=True, exist_ok=True)
     prompt_file = temp_dir / f"review-{lens}-{mode}-prompt.md"
     prompt_file.write_text(compiled_prompt, encoding="utf-8")

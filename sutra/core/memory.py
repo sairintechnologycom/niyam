@@ -41,7 +41,12 @@ def get_memory_file(repo_root: Path, name: str) -> Path:
 
 def run_memory_show(console: Console) -> None:
     """Display all memory files and their content."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     mem_dir = get_memory_dir(repo_root)
 
     if not mem_dir.exists():
@@ -61,7 +66,12 @@ def run_memory_show(console: Console) -> None:
 
 def run_memory_add(file: str, note: str, console: Console) -> None:
     """Append a note to a memory file."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     try:
         filepath = get_memory_file(repo_root, file)
     except FileNotFoundError as e:
@@ -79,7 +89,12 @@ def run_memory_add(file: str, note: str, console: Console) -> None:
 
 def run_memory_clear(file: str, console: Console) -> None:
     """Clear a memory file, resetting it to its title/headers."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     try:
         filepath = get_memory_file(repo_root, file)
     except FileNotFoundError as e:

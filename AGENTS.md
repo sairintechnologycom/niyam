@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [sutra] recent context, 2026-05-29 12:15pm GMT+5:30
+# [sutra] recent context, 2026-05-29 12:47pm GMT+5:30
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 10 obs (4,992t read) | 566,201t work | 99% savings
+Stats: 11 obs (5,425t read) | 574,210t work | 99% savings
 
 ### May 29, 2026
 2554 12:05p 🔵 Sutra Project — Full Architecture and File Inventory
@@ -20,6 +20,7 @@ Stats: 10 obs (4,992t read) | 566,201t work | 99% savings
 2561 " 🔵 Sutra Second Smoke Test Clean — All Fixes Verified End-to-End in Fresh Workspace
 2568 " 🔵 Smoke Test Reveals Remaining ruff Format Issue — Generated Hook File Needs Formatting
 2569 12:08p 🔴 Security Fix Confirmed — bash Exploit Blocked, validation-bypass File Not Created
+2571 12:15p 🔴 Sutra — Claude Runtime Pre-Tool Hook Script Ruff Format Compliance Fixed
 
-Access 566k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 574k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

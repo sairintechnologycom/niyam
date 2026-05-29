@@ -411,8 +411,14 @@ def pack_list() -> None:
     """Show available and installed packs."""
     from sutra.core.packs import list_packs
     from rich.table import Table
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
 
-    packs = list_packs(Path.cwd())
+    root = find_sutra_root()
+    if not root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+
+    packs = list_packs(root)
     if not packs:
         console.print("[yellow]No packs found.[/]")
         return
@@ -438,9 +444,14 @@ def pack_add(
     """Install a pack into the workspace."""
     from sutra.core.packs import add_pack
     from sutra.core.sync import run_sync
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
 
     try:
-        add_pack(Path.cwd(), name, force=force, console=console)
+        root = find_sutra_root()
+        if not root:
+            raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+        add_pack(root, name, force=force, console=console)
         console.print(f"[bold green]✓[/] Pack '[cyan]{name}[/]' successfully installed.")
         # Trigger run_sync to sync config/runtimes
         run_sync(runtime=None, console=console)
@@ -456,9 +467,14 @@ def pack_remove(
     """Remove an installed pack from the workspace."""
     from sutra.core.packs import remove_pack
     from sutra.core.sync import run_sync
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
 
     try:
-        remove_pack(Path.cwd(), name, console=console)
+        root = find_sutra_root()
+        if not root:
+            raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+        remove_pack(root, name, console=console)
         console.print(f"[bold green]✓[/] Pack '[cyan]{name}[/]' successfully removed.")
         run_sync(runtime=None, console=console)
     except Exception as e:
@@ -471,9 +487,14 @@ def pack_sync() -> None:
     """Re-sync all installed packs."""
     from sutra.core.packs import sync_packs
     from sutra.core.sync import run_sync
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
 
     try:
-        sync_packs(Path.cwd(), console=console)
+        root = find_sutra_root()
+        if not root:
+            raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+        sync_packs(root, console=console)
         console.print("[bold green]✓[/] Packs successfully synced.")
         run_sync(runtime=None, console=console)
     except Exception as e:
@@ -555,6 +576,39 @@ def mission_dashboard(
         raise typer.Exit(1)
 
 
+@mission_app.command("validate-plan")
+def mission_validate_plan() -> None:
+    """Validate the latest planned mission plan."""
+    from sutra.mission.validator import validate_mission_plan, PlanValidationError
+    from sutra.mission.planner import get_latest_mission_id
+    from sutra.core.config import get_sutra_dir, find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+    mission_id = get_latest_mission_id(sutra_dir)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    run_dir = sutra_dir / "runs" / mission_id
+    plan_path = run_dir / "mission-plan.yaml"
+
+    try:
+        validate_mission_plan(plan_path, repo_root)
+        console.print(f"[bold green]✓[/] Mission plan '{mission_id}' is valid and ready for approval.")
+    except PlanValidationError as e:
+        console.print(f"[bold red]❌ Mission plan validation failed with {len(e.errors)} error(s):[/]")
+        for err in e.errors:
+            console.print(f"  • [red]{err}[/]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error during validation:[/] {e}")
+        raise typer.Exit(1)
+
+
 @mission_app.command("approve")
 def mission_approve() -> None:
     """Approve the latest planned mission."""
@@ -565,6 +619,7 @@ def mission_approve() -> None:
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
 
 
 @mission_app.command("start")

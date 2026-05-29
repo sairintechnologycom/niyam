@@ -170,7 +170,12 @@ def run_pr_review(
     console: Console,
 ) -> None:
     """Fetch PR diff, perform code review, and post comment back to PR."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     # 1. Fetch PR diff
@@ -252,7 +257,12 @@ def run_pr_create(
     console: Console,
 ) -> None:
     """Push branch, extract evidence report, and create GitHub PR."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
     # Get active branch name

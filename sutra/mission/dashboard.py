@@ -193,7 +193,12 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
 
 def run_mission_dashboard(watch: bool, console: Console) -> None:
     """Render the mission dashboard."""
-    repo_root = Path.cwd()
+    from sutra.core.config import find_sutra_root
+    from sutra.core.errors import SutraConfigError
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
     mission_id = get_latest_mission_id(sutra_dir)
     if not mission_id:
