@@ -36,6 +36,8 @@ def _get_jinja_env() -> Environment:
 
 def _get_profile_dir(profile: str) -> Path:
     """Get the profile template directory."""
+    if "/" in profile or "\\" in profile or ".." in profile:
+        raise ValueError("Invalid profile name (path traversal not allowed)")
     profile_dir = TEMPLATES_DIR / "profiles" / profile
     if not profile_dir.exists():
         raise ValueError(

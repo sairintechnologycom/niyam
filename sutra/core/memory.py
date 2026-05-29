@@ -18,9 +18,18 @@ def get_memory_dir(repo_root: Path) -> Path:
 
 def get_memory_file(repo_root: Path, name: str) -> Path:
     """Get a specific memory file, supporting with or without .md extension."""
+    from sutra.core.security import sanitize_filename
+
+    # Strip .md first, sanitize the base, then append .md back
+    if name.endswith(".md"):
+        base_name = name[:-3]
+    else:
+        base_name = name
+
+    sanitized_base = sanitize_filename(base_name)
+    name = f"{sanitized_base}.md"
+
     mem_dir = get_memory_dir(repo_root)
-    if not name.endswith(".md"):
-        name = f"{name}.md"
     filepath = mem_dir / name
     if not filepath.exists():
         raise FileNotFoundError(

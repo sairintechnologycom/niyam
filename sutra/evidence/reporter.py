@@ -72,6 +72,8 @@ def _get_validation_results(repo_root: Path) -> str:
     """Run validation commands and collect results."""
     import yaml
 
+    from sutra.core.security import CommandSecurityError, safe_run_command
+
     project_yaml = repo_root / ".sutra" / "project.yaml"
     if not project_yaml.exists():
         return "No project.yaml found — run `sutra context refresh` first."
@@ -88,12 +90,9 @@ def _get_validation_results(repo_root: Path) -> str:
         results.append(f"### {cmd_type.title()}")
         results.append(f"Command: `{cmd}`")
         try:
-            result = subprocess.run(
+            result = safe_run_command(
                 cmd,
-                shell=True,
                 cwd=repo_root,
-                capture_output=True,
-                text=True,
                 timeout=120,
             )
             status = "✓ Passed" if result.returncode == 0 else "✗ Failed"
@@ -109,6 +108,8 @@ def _get_validation_results(repo_root: Path) -> str:
                 if len(stderr) > 1000:
                     stderr = stderr[:1000] + "\n... (truncated)"
                 results.append(f"```\n{stderr}\n```")
+        except CommandSecurityError as e:
+            results.append(f"Status: 🛑 Blocked by security policy: {e}")
         except subprocess.TimeoutExpired:
             results.append("Status: ⚠ Timed out (120s)")
         except Exception as e:

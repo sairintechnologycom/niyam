@@ -98,8 +98,8 @@ def run_policy_validate(console: Console) -> None:
             continue
 
         try:
-            with open(fpath) as f:
-                data = yaml.safe_load(f) or {}
+            from sutra.core.security import safe_load_yaml
+            data = safe_load_yaml(fpath)
 
             if not isinstance(data, dict):
                 table.add_row(filename, "[bold red]✗[/]", "Expected a YAML mapping")
@@ -118,19 +118,19 @@ def run_policy_validate(console: Console) -> None:
             else:
                 table.add_row(filename, "[bold green]✓[/]", "Valid")
 
-        except yaml.YAMLError as e:
-            table.add_row(filename, "[bold red]✗[/]", f"YAML error: {e}")
+        except Exception as e:
+            table.add_row(filename, "[bold red]✗[/]", f"Load error: {e}")
             errors += 1
 
     # Check for extra policy files
     for fpath in policies_dir.glob("*.yaml"):
         if fpath.name not in KNOWN_POLICY_FILES:
             try:
-                with open(fpath) as f:
-                    yaml.safe_load(f)
+                from sutra.core.security import safe_load_yaml
+                safe_load_yaml(fpath)
                 table.add_row(fpath.name, "[bold cyan]ℹ[/]", "Custom policy (valid YAML)")
-            except yaml.YAMLError as e:
-                table.add_row(fpath.name, "[bold red]✗[/]", f"YAML error: {e}")
+            except Exception as e:
+                table.add_row(fpath.name, "[bold red]✗[/]", f"Load error: {e}")
                 errors += 1
 
     console.print(table)

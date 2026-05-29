@@ -689,7 +689,15 @@ def ci_verify(
 
 
 
-# ── Entry point ────────────────────────────────────────────────────────
+def main() -> None:
+    """CLI entry point catching SutraError exceptions."""
+    from sutra.core.errors import SutraError
+    try:
+        app()
+    except SutraError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(e.code)
+
 
 if __name__ == "__main__":
-    app()
+    main()

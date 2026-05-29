@@ -143,6 +143,8 @@ def run_ci_verify(target_branch: str = "main", strict: bool = True, console: Con
         pass
 
     if project_config and project_config.validation:
+        from sutra.core.security import CommandSecurityError, safe_run_command
+
         console.print("\n[cyan]Executing workspace validation checks...[/]")
         val_cmds = project_config.validation
         # We run test, lint, and build if configured
@@ -156,7 +158,14 @@ def run_ci_verify(target_branch: str = "main", strict: bool = True, console: Con
         for name, cmd in cmds_to_run.items():
             if cmd:
                 console.print(f"Running validation [cyan]{name}[/]: `{cmd}`...")
-                res = subprocess.run(cmd, shell=True, cwd=root, capture_output=True, text=True)
+                try:
+                    res = safe_run_command(cmd, cwd=root, timeout=120)
+                except CommandSecurityError as e:
+                    failures.append(f"Validation command '{name}' blocked by security policy: {e}")
+                    validation_status = "failed"
+                    console.print(f"[bold red]🛑 Validation '{name}' blocked:[/] {e}")
+                    continue
+
                 if res.returncode != 0:
                     failures.append(f"Validation command '{name}' failed with code {res.returncode}.")
                     validation_status = "failed"

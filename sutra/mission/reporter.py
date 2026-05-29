@@ -14,6 +14,8 @@ from sutra.core.config import get_sutra_dir
 from sutra.mission.planner import get_latest_mission_id
 from sutra.mission.executor import load_plan
 import hashlib
+import hmac
+import os
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -28,6 +30,26 @@ def compute_sha256(file_path: Path) -> str:
         return h.hexdigest()
     except Exception as e:
         return f"ERROR: {e}"
+
+
+def _get_signing_key() -> bytes | None:
+    """Get HMAC signing key from environment or .sutra/signing-key file."""
+    env_key = os.environ.get("SUTRA_SIGNING_KEY")
+    if env_key:
+        return env_key.encode("utf-8")
+    return None
+
+
+def compute_manifest_hmac(manifest_files: dict[str, str], signing_key: bytes) -> str:
+    """Compute HMAC-SHA256 over canonical manifest content.
+
+    Creates a deterministic string from sorted file paths and their hashes,
+    then signs it with the provided key.
+    """
+    canonical = "\n".join(
+        f"{k}:{v}" for k, v in sorted(manifest_files.items())
+    )
+    return hmac.new(signing_key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def get_changed_files(repo_root: Path) -> list[str]:
@@ -194,6 +216,14 @@ def run_mission_report(console: Console) -> None:
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "files": manifest_files,
     }
+
+    # Add HMAC signature if signing key is available
+    signing_key = _get_signing_key()
+    if signing_key:
+        manifest["hmac_sha256"] = compute_manifest_hmac(manifest_files, signing_key)
+        manifest["signed"] = True
+    else:
+        manifest["signed"] = False
     
     report_sections.append("## Cryptographic Integrity Manifest")
     report_sections.append("")
@@ -278,10 +308,25 @@ def run_verify_report(evidence_path: str, console: Console) -> None:
             console.print(f"  - [red]{rel_file}[/]: expected `{exp[:10]}...`, got `{act[:10]}...`")
         raise SystemExit(1)
 
+    # Verify HMAC signature if the manifest was signed
+    hmac_status = "not signed"
+    if manifest.get("signed"):
+        signing_key = _get_signing_key()
+        if signing_key:
+            expected_hmac = manifest.get("hmac_sha256", "")
+            actual_hmac = compute_manifest_hmac(manifest.get("files", {}), signing_key)
+            if not hmac.compare_digest(expected_hmac, actual_hmac):
+                console.print("[bold red]❌ HMAC signature verification FAILED.[/] The manifest may have been tampered with.")
+                raise SystemExit(1)
+            hmac_status = "[bold green]VERIFIED[/]"
+        else:
+            hmac_status = "[yellow]signed but SUTRA_SIGNING_KEY not set — cannot verify[/]"
+
     console.print(Panel(
         f"Mission ID: [bold cyan]{manifest.get('mission_id')}[/]\n"
         f"Signed On: [bold cyan]{manifest.get('timestamp')}[/]\n"
-        f"Verified Files: [bold green]{verified_count}[/]",
+        f"Verified Files: [bold green]{verified_count}[/]\n"
+        f"HMAC Signature: {hmac_status}",
         title="[bold green]✓ Evidence Report Verified Successfully[/]",
         border_style="green"
     ))

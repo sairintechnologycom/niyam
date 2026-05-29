@@ -73,7 +73,7 @@ def test_remote_policy_fetching(sutra_repo: Path) -> None:
         "project_name: sutra\n"
         "guard:\n"
         "  enabled: true\n"
-        "  remote_policy_url: 'http://mock-server.com/policies/'\n",
+        "  remote_policy_url: 'https://mock-server.com/policies/'\n",
         encoding="utf-8"
     )
 
@@ -92,7 +92,7 @@ def test_remote_policy_fetching(sutra_repo: Path) -> None:
         
         # Verify URL called
         mock_urlopen.assert_called_once()
-        assert "http://mock-server.com/policies/security.yaml" in mock_urlopen.call_args[0][0].full_url
+        assert "https://mock-server.com/policies/security.yaml" in mock_urlopen.call_args[0][0].full_url
         
         # Verify content parsed correctly
         assert policy.get("deny_write_patterns") == ["src/restricted/*"]
@@ -110,7 +110,7 @@ def test_remote_policy_fallback(sutra_repo: Path) -> None:
         "project_name: sutra\n"
         "guard:\n"
         "  enabled: true\n"
-        "  remote_policy_url: 'http://mock-server.com/policies/'\n",
+        "  remote_policy_url: 'https://mock-server.com/policies/'\n",
         encoding="utf-8"
     )
 

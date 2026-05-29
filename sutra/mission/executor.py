@@ -23,10 +23,14 @@ _validation_lock = threading.Lock()
 
 
 def load_plan(run_dir: Path) -> dict:
-    """Load mission plan YAML."""
+    """Load mission plan YAML and validate schema."""
+    from sutra.core.config import MissionPlan
+    from sutra.core.security import safe_load_yaml
+
     plan_path = run_dir / "mission-plan.yaml"
-    with open(plan_path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    data = safe_load_yaml(plan_path)
+    validated = MissionPlan(**data)
+    return validated.model_dump()
 
 
 def save_plan(run_dir: Path, plan_data: dict) -> None:
@@ -40,51 +44,58 @@ def save_plan(run_dir: Path, plan_data: dict) -> None:
         yaml.dump(plan_data.get("tasks", []), f, default_flow_style=False, sort_keys=False)
 
 
+def _lock_and_write_events(log_path: Path, new_event: dict) -> None:
+    """Read, modify, and write a JSON array in a thread-safe / process-safe way using file locking."""
+    import fcntl
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a+", encoding="utf-8") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.seek(0)
+            content = f.read().strip()
+            if content:
+                try:
+                    events = json.loads(content)
+                    if not isinstance(events, list):
+                        events = []
+                except Exception:
+                    events = []
+            else:
+                events = []
+
+            events.append(new_event)
+            f.seek(0)
+            f.truncate()
+            json.dump(events, f, indent=2)
+        finally:
+            try:
+                fcntl.flock(f, fcntl.LOCK_UN)
+            except Exception:
+                pass
+
+
 def log_execution_event(run_dir: Path, event_type: str, task_id: str, details: str) -> None:
     """Log execution events to execution-log.json."""
     log_path = run_dir / "execution-log.json"
-    events = []
-    if log_path.exists():
-        try:
-            with open(log_path, encoding="utf-8") as f:
-                events = json.load(f)
-        except Exception:
-            events = []
-
-    events.append({
+    event = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "event": event_type,
         "task_id": task_id,
         "details": details,
-    })
-
-    with open(log_path, "w", encoding="utf-8") as f:
-        json.dump(events, f, indent=2)
+    }
+    _lock_and_write_events(log_path, event)
 
 
 def log_policy_event(run_dir: Path, sutra_dir: Path, event_type: str, details: str) -> None:
     """Log policy guardrail violation to policy-events.json (both run-level and global)."""
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "type": event_type,
+        "details": details,
+    }
     for log_path in (run_dir / "policy-events.json", sutra_dir / "evidence" / "policy-events.json"):
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        events = []
-        if log_path.exists():
-            try:
-                with open(log_path, encoding="utf-8") as f:
-                    events = json.load(f)
-            except Exception:
-                events = []
-
-        events.append({
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "type": event_type,
-            "details": details,
-        })
-
-        try:
-            with open(log_path, "w", encoding="utf-8") as f:
-                json.dump(events, f, indent=2)
-        except Exception:
-            pass
+        _lock_and_write_events(log_path, event)
 
 
 def update_token_ledger(
@@ -171,10 +182,27 @@ def update_token_ledger(
 
 
 def run_validation_command(cmd: str, run_dir: Path, cwd: Path, console: Console) -> bool:
-    """Run a validation command and log the results."""
+    """Run a validation command safely and log the results."""
+    from sutra.core.security import CommandSecurityError, safe_run_command
+
     with _print_lock:
         console.print(f"[dim]Running validation command: {cmd} inside {cwd}[/]")
-    res = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+
+    try:
+        res = safe_run_command(cmd, cwd=cwd, timeout=120)
+    except CommandSecurityError as e:
+        with _print_lock:
+            console.print(f"[bold red]🛑 Validation command blocked by security policy:[/] {e}")
+        # Log the blocked command
+        val_path = run_dir / "validation-results.md"
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        with _validation_lock:
+            mode = "a" if val_path.exists() else "w"
+            with open(val_path, mode, encoding="utf-8") as f:
+                f.write(f"\n## Validation Run - {timestamp}\n")
+                f.write(f"**Command:** `{cmd}`\n")
+                f.write(f"**Status:** 🛑 BLOCKED — {e}\n\n")
+        return False
     
     # Save output to validation-results.md
     val_path = run_dir / "validation-results.md"
@@ -523,10 +551,11 @@ Do not perform destructive operations.
         if shutil.which(orchestrator):
             with _print_lock:
                 console.print(f"[{task_id}] [cyan]Invoking {orchestrator} CLI...[/]")
+            timeout = task.get("timeout_seconds") or 600
             try:
                 if parallel_limit == 1 and not non_interactive:
                     # Sequential: full interactive pass-through
-                    subprocess.run([orchestrator, str(prompt_path)], cwd=task_cwd, check=True)
+                    subprocess.run([orchestrator, str(prompt_path)], cwd=task_cwd, check=True, timeout=timeout)
                 else:
                     # Parallel or non-interactive: headless execution
                     task_log_path = (worktree_path if use_worktree else run_dir) / f"task-{task_id}-output.log"
@@ -538,7 +567,16 @@ Do not perform destructive operations.
                             stdout=log_f,
                             stderr=log_f,
                             check=True,
+                            timeout=timeout,
                         )
+            except subprocess.TimeoutExpired as e:
+                with _print_lock:
+                    console.print(f"[{task_id}] [bold red]Orchestrator timed out after {timeout} seconds: {e}[/]")
+                    if parallel_limit > 1 or non_interactive:
+                        console.print(f"[{task_id}] To complete this task manually, run:")
+                        console.print(f"  [bold]cat {prompt_path}[/]")
+                log_execution_event(run_dir, "TASK_TIMEOUT", task_id, f"Execution timed out after {timeout} seconds.")
+                success = False
             except subprocess.CalledProcessError as e:
                 if parallel_limit > 1 or non_interactive:
                     with _print_lock:
@@ -773,12 +811,32 @@ def run_mission_start(
 
     if not approved:
         if non_interactive and os.environ.get("SUTRA_CI_AUTO_APPROVE") == "1":
+            # Check if auto-approve is allowed by guard config
+            auto_approve_allowed = True
+            try:
+                config = load_sutra_config(repo_root)
+                if hasattr(config.guard, 'allow_ci_auto_approve'):
+                    auto_approve_allowed = config.guard.allow_ci_auto_approve
+            except Exception:
+                pass  # If config can't be loaded, allow (backward compat)
+
+            if not auto_approve_allowed:
+                console.print(
+                    "[bold red]Error:[/] SUTRA_CI_AUTO_APPROVE=1 is set but "
+                    "guard.allow_ci_auto_approve is disabled in sutra.yaml."
+                )
+                raise SystemExit(1)
+
             console.print("[cyan]Non-interactive mode & SUTRA_CI_AUTO_APPROVE=1: Auto-approving mission...[/]")
+            console.print("[yellow]⚠ Warning: Mission approval gate was bypassed via environment variable.[/]")
             approval_data = {
                 "approved": True,
+                "auto_approved": True,
                 "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
             approval_path.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+            # Log the auto-approve as a policy event for audit trail
+            log_execution_event(run_dir, "POLICY_WARNING", "", "Mission auto-approved via SUTRA_CI_AUTO_APPROVE=1 (approval gate bypassed).")
         else:
             console.print("[bold red]Error:[/] Mission has not been approved.")
             raise SystemExit(1)

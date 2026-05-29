@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -140,6 +140,49 @@ class EvidencePolicy(BaseModel):
     require_policy_events: bool = True
 
 
+# ── Task & Mission Plan schemas ───────────────────────────────────────
+
+
+class TaskContract(BaseModel):
+    """Pydantic model for task contracts to enforce schema and defaults."""
+
+    model_config = {"extra": "allow"}
+
+    id: str
+    title: str
+    type: Literal["discovery", "implementation", "review", "validation"]
+    status: Literal["pending", "running", "completed", "failed", "paused", "skipped"]
+    agent: str
+    runtime: Optional[str] = None
+    depends_on: list[str] = Field(default_factory=list)
+    files_allowed: list[str] = Field(default_factory=lambda: ["*"])
+    writes_files: bool = True
+    timeout_seconds: int = 600
+    risk: Literal["low", "medium", "high"] = "medium"
+
+
+class MissionMeta(BaseModel):
+    """Pydantic model for mission metadata."""
+
+    model_config = {"extra": "allow"}
+
+    id: str
+    requirement: str
+    created: str
+    status: str
+    orchestrator: str
+    parallel: int = 1
+
+
+class MissionPlan(BaseModel):
+    """Pydantic model for the complete mission-plan.yaml schema."""
+
+    model_config = {"extra": "allow"}
+
+    mission: MissionMeta
+    tasks: list[TaskContract]
+
+
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
@@ -160,16 +203,11 @@ def find_sutra_root(start: Path | None = None) -> Path | None:
 
 def load_sutra_config(repo_root: Path | None = None) -> SutraConfig:
     """Load and validate sutra.yaml."""
-    import yaml
+    from sutra.core.security import safe_load_yaml
 
     sutra_dir = get_sutra_dir(repo_root)
     config_path = sutra_dir / SUTRA_YAML
-    if not config_path.exists():
-        raise FileNotFoundError(f"Not a Sutra workspace: {config_path} not found")
-
-    with open(config_path) as f:
-        data = yaml.safe_load(f) or {}
-
+    data = safe_load_yaml(config_path)
     return SutraConfig(**data)
 
 
@@ -191,29 +229,19 @@ def save_sutra_config(config: SutraConfig, repo_root: Path | None = None) -> Non
 
 def load_project_config(repo_root: Path | None = None) -> ProjectConfig:
     """Load and validate project.yaml."""
-    import yaml
+    from sutra.core.security import safe_load_yaml
 
     sutra_dir = get_sutra_dir(repo_root)
     config_path = sutra_dir / PROJECT_YAML
-    if not config_path.exists():
-        raise FileNotFoundError(f"project.yaml not found: {config_path}")
-
-    with open(config_path) as f:
-        data = yaml.safe_load(f) or {}
-
+    data = safe_load_yaml(config_path)
     return ProjectConfig(**data)
 
 
 def load_runtimes_config(repo_root: Path | None = None) -> RuntimesConfig:
     """Load and validate runtimes.yaml."""
-    import yaml
+    from sutra.core.security import safe_load_yaml
 
     sutra_dir = get_sutra_dir(repo_root)
     config_path = sutra_dir / RUNTIMES_YAML
-    if not config_path.exists():
-        raise FileNotFoundError(f"runtimes.yaml not found: {config_path}")
-
-    with open(config_path) as f:
-        data = yaml.safe_load(f) or {}
-
+    data = safe_load_yaml(config_path)
     return RuntimesConfig(**data)
