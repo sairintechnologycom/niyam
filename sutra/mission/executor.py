@@ -127,6 +127,29 @@ def update_token_ledger(
         "gemini": {"input": 1.25, "output": 5.0},
         "default": {"input": 3.0, "output": 15.0},
     }
+    try:
+        from sutra.core.config import find_sutra_root
+        from sutra.core.security import safe_load_yaml
+        repo_root = find_sutra_root(run_dir)
+        if repo_root:
+            runtimes_yaml_path = repo_root / ".sutra" / "runtimes.yaml"
+            if runtimes_yaml_path.exists():
+                data = safe_load_yaml(runtimes_yaml_path)
+                if isinstance(data, dict):
+                    # Check global pricing block
+                    if "pricing" in data and isinstance(data["pricing"], dict):
+                        for k, v in data["pricing"].items():
+                            if isinstance(v, dict) and "input" in v and "output" in v:
+                                rates[k.lower()] = {"input": float(v["input"]), "output": float(v["output"])}
+                    # Check per-runtime pricing block
+                    for k, v in data.items():
+                        if isinstance(v, dict) and "pricing" in v:
+                            p = v["pricing"]
+                            if isinstance(p, dict) and "input" in p and "output" in p:
+                                rates[k.lower()] = {"input": float(p["input"]), "output": float(p["output"])}
+    except Exception:
+        pass
+
     r = rates.get(runtime.lower(), rates["default"])
     
     cost = (input_tokens * r["input"] + output_tokens * r["output"]) / 1_000_000.0
@@ -505,22 +528,60 @@ def merge_final_changes(repo_root: Path, mission_id: str, tasks: list[dict], con
     if not leaf_ids:
         console.print("[yellow]No completed leaf tasks to merge.[/]")
         return
-        
-    for leaf_id in leaf_ids:
-        branch_name = f"sutra-{mission_id}-{leaf_id}"
-        console.print(f"[cyan]Merging final branch {branch_name} into workspace...[/]")
-        
-        res = subprocess.run(
-            ["git", "merge", branch_name, "-m", f"Merge completed mission task {leaf_id}"],
+
+    # Check if working directory is dirty (including untracked files)
+    status_res = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    is_dirty = bool(status_res.stdout.strip())
+    stashed = False
+
+    if is_dirty:
+        console.print("[cyan]Working directory is dirty. Stashing changes...[/]")
+        stash_res = subprocess.run(
+            ["git", "stash", "push", "-u", "-m", f"Sutra auto-stash for merge {mission_id}"],
             cwd=repo_root,
             capture_output=True,
             text=True,
         )
-        if res.returncode != 0:
-            console.print(f"[bold red]Merge conflict during final integration:[/] Failed to merge {branch_name} back to main workspace.\n{res.stderr or res.stdout}")
-            raise RuntimeError(f"Merge conflict during final integration of {branch_name}")
+        if stash_res.returncode == 0:
+            stashed = True
+            console.print("[green]✓ Stashed successfully.[/]")
+        else:
+            console.print(f"[yellow]Warning: Failed to stash changes: {stash_res.stderr or stash_res.stdout}[/]")
+
+    try:
+        for leaf_id in leaf_ids:
+            branch_name = f"sutra-{mission_id}-{leaf_id}"
+            console.print(f"[cyan]Merging final branch {branch_name} into workspace...[/]")
             
-        console.print(f"[bold green]✓[/] Successfully integrated changes from branch [cyan]{branch_name}[/].")
+            res = subprocess.run(
+                ["git", "merge", branch_name, "-m", f"Merge completed mission task {leaf_id}"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                console.print(f"[bold red]Merge conflict during final integration:[/] Failed to merge {branch_name} back to main workspace.\n{res.stderr or res.stdout}")
+                raise RuntimeError(f"Merge conflict during final integration of {branch_name}")
+                
+            console.print(f"[bold green]✓[/] Successfully integrated changes from branch [cyan]{branch_name}[/].")
+    finally:
+        if stashed:
+            console.print("[cyan]Restoring stashed changes...[/]")
+            pop_res = subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if pop_res.returncode == 0:
+                console.print("[green]✓ Restored stashed changes successfully.[/]")
+            else:
+                console.print(f"[bold red]Warning: Failed to restore stashed changes: {pop_res.stderr or pop_res.stdout}[/]")
 
 
 def delete_mission_branches(repo_root: Path, mission_id: str, tasks: list[dict], console: Console) -> None:
@@ -700,7 +761,22 @@ Do not perform destructive operations.
             mock_rel_path = get_mock_change_path(allowed, task_id)
             dummy_file = worktree_path / mock_rel_path
             dummy_file.parent.mkdir(parents=True, exist_ok=True)
-            dummy_file.write_text(f"Changes by task {task_id}", encoding="utf-8")
+            
+            ext = dummy_file.suffix.lower()
+            if ext == ".py":
+                content = f"# Changes by task {task_id}\n"
+            elif ext == ".json":
+                content = f'{{"mock_change": "Changes by task {task_id}"}}'
+            elif ext in (".html", ".xml"):
+                content = f"<!-- Changes by task {task_id} -->"
+            elif ext in (".js", ".ts"):
+                content = f"// Changes by task {task_id}\n"
+            elif ext in (".yaml", ".yml"):
+                content = f"# Changes by task {task_id}\n"
+            else:
+                content = f"Changes by task {task_id}"
+                
+            dummy_file.write_text(content, encoding="utf-8")
     else:
         plan_data = load_plan(run_dir)
         mission_meta = plan_data.get("mission", {})

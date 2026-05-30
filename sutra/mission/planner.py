@@ -453,7 +453,7 @@ def run_mission_plan(
                 cmd.append("--skip-trust")
                 
             try:
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                res = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180)
                 raw_output = (res.stdout or "") + "\n" + (res.stderr or "")
                 (run_dir / "planner-output.raw.txt").write_text(raw_output, encoding="utf-8")
                 
