@@ -28,6 +28,38 @@ def test_parse_claude_cli_output() -> None:
     assert not parsed["estimated"]
 
 
+def test_parse_gemini_cli_output() -> None:
+    """Should correctly parse token counts and cost from Gemini CLI stdout."""
+    sample_stdout = """
+    Gemini tokens: 10,500 (prompt: 8,000 / candidates: 2,500)
+    Cost: $0.0225
+    """
+    parsed = parse_cli_token_usage(sample_stdout, runtime="gemini")
+    assert parsed is not None
+    assert parsed["runtime"] == "gemini"
+    assert parsed["total_tokens"] == 10500
+    assert parsed["input_tokens"] == 8000
+    assert parsed["output_tokens"] == 2500
+    assert parsed["cost_usd"] == 0.0225
+    assert not parsed["estimated"]
+
+
+def test_parse_codex_cli_output() -> None:
+    """Should correctly parse token counts and cost from Codex CLI stdout."""
+    sample_stdout = """
+    Codex tokens: 9,000 (input: 6,000 / output: 3,000)
+    Total cost: $0.0450
+    """
+    parsed = parse_cli_token_usage(sample_stdout, runtime="codex")
+    assert parsed is not None
+    assert parsed["runtime"] == "codex"
+    assert parsed["total_tokens"] == 9000
+    assert parsed["input_tokens"] == 6000
+    assert parsed["output_tokens"] == 3000
+    assert parsed["cost_usd"] == 0.0450
+    assert not parsed["estimated"]
+
+
 def test_parse_unknown_format_returns_none() -> None:
     """Should return None if output format is unknown or missing token info."""
     sample_stdout = "Doing task now...\nDone!"

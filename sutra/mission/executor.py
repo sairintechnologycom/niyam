@@ -203,18 +203,35 @@ def record_acceptance_criteria(
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def parse_cli_token_usage(output_text: str) -> dict | None:
+def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict | None:
     """Parse token usage from Claude/Gemini/Codex CLI output."""
     patterns = {
         "claude": {
             "tokens": r"Total tokens:\s*([\d,]+)",
-            "input": r"input:\s*([\d,]+)",
-            "output": r"output:\s*([\d,]+)",
+            "input": r"(?:input|prompt):\s*([\d,]+)",
+            "output": r"(?:output|completion):\s*([\d,]+)",
             "cost": r"Total cost:\s*\$([\d.]+)",
         },
+        "gemini": {
+            "tokens": r"(?:Gemini tokens|Total tokens):\s*([\d,]+)",
+            "input": r"(?:input|prompt):\s*([\d,]+)",
+            "output": r"(?:output|candidates):\s*([\d,]+)",
+            "cost": r"(?:Total cost|Cost):\s*\$([\d.]+)",
+        },
+        "codex": {
+            "tokens": r"(?:Codex tokens|Total tokens):\s*([\d,]+)",
+            "input": r"(?:input|prompt):\s*([\d,]+)",
+            "output": r"(?:output|completion):\s*([\d,]+)",
+            "cost": r"(?:Total cost|Cost):\s*\$([\d.]+)",
+        },
     }
+    
+    # Filter patterns by runtime if specified
+    runtimes_to_try = [runtime.lower()] if runtime and runtime.lower() in patterns else list(patterns.keys())
+
     # Try each pattern set...
-    for runtime, pats in patterns.items():
+    for rt in runtimes_to_try:
+        pats = patterns[rt]
         total_match = re.search(pats["tokens"], output_text)
         if total_match:
             try:
@@ -237,7 +254,7 @@ def parse_cli_token_usage(output_text: str) -> dict | None:
                     input_tokens = total_tokens
 
                 return {
-                    "runtime": runtime,
+                    "runtime": rt,
                     "total_tokens": total_tokens,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
@@ -274,6 +291,7 @@ def update_token_ledger(
     rates = {
         "claude": {"input": 3.0, "output": 15.0},
         "gemini": {"input": 1.25, "output": 5.0},
+        "codex": {"input": 2.5, "output": 10.0},
         "default": {"input": 3.0, "output": 15.0},
     }
 
@@ -636,12 +654,18 @@ def copy_sutra_to_worktree(repo_root: Path, worktree_path: Path) -> None:
 
 
 def create_worktree(
-    repo_root: Path, run_dir: Path, mission_id: str, task: dict, console: Console
+    repo_root: Path,
+    run_dir: Path,
+    mission_id: str,
+    task: dict,
+    console: Console,
+    branch_name: str | None = None,
 ) -> Path:
     """Create a git worktree for a task, branching and merging dependencies."""
     task_id = task["id"]
     worktree_path = run_dir / "worktrees" / task_id
-    branch_name = f"sutra-{mission_id}-{task_id}"
+    if branch_name is None:
+        branch_name = f"sutra-{mission_id}-{task_id}"
 
     cleanup_worktree(repo_root, worktree_path, branch_name, console)
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
@@ -963,18 +987,20 @@ def execute_single_task(
     project_config: any,
     console: Console,
     non_interactive: bool = False,
+    branch_name: str | None = None,
 ) -> bool:
     """Execute a single task, isolating in worktree if enabled."""
     task_id = task["id"]
     task_cwd = repo_root
     worktree_path = None
-    branch_name = f"sutra-{mission_id}-{task_id}"
+    if branch_name is None:
+        branch_name = f"sutra-{mission_id}-{task_id}"
     run_hooks("pre_task", {"mission_id": mission_id, "task": task}, sutra_dir, console)
 
     if use_worktree:
         try:
             worktree_path = create_worktree(
-                repo_root, run_dir, mission_id, task, console
+                repo_root, run_dir, mission_id, task, console, branch_name=branch_name
             )
             task_cwd = worktree_path
         except Exception as e:
@@ -1388,7 +1414,14 @@ Do not perform destructive operations.
         if task_log_path.exists():
             try:
                 log_content = task_log_path.read_text(encoding="utf-8")
-                parsed_usage = parse_cli_token_usage(log_content)
+                task_runtime = task.get("runtime")
+                if not task_runtime:
+                    try:
+                        plan_data = load_plan(run_dir)
+                        task_runtime = plan_data.get("mission", {}).get("orchestrator", "claude")
+                    except Exception:
+                        task_runtime = "claude"
+                parsed_usage = parse_cli_token_usage(log_content, runtime=task_runtime)
             except Exception:
                 pass
 

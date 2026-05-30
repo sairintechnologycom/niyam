@@ -277,3 +277,28 @@ def plan(
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
+
+@app.command()
+def compare(
+    task_id: Annotated[
+        str,
+        typer.Argument(help="Task ID to run comparison for (e.g., T1, TASK-001)."),
+    ],
+    executors: Annotated[
+        str,
+        typer.Option(
+            "--executors",
+            "-e",
+            help="Comma-separated list of executors to compare (e.g., claude,gemini,codex).",
+        ),
+    ] = "claude,gemini,codex",
+) -> None:
+    """Compare performance, cost, and validation status of multiple runtimes on a task."""
+    from sutra.core.compare import run_comparison
+
+    try:
+        run_comparison(task_id=task_id, executors_str=executors, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
