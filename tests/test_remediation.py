@@ -53,7 +53,9 @@ def test_report_fails_on_validation_failure(sutra_repo: Path) -> None:
     assert excinfo.value.code == 1
 
 
-def test_context_diff_ignores_manual_sections(sutra_repo: Path, capsys: pytest.CaptureFixture) -> None:
+def test_context_diff_ignores_manual_sections(
+    sutra_repo: Path, capsys: pytest.CaptureFixture
+) -> None:
     """context diff should ignore changes in manual sections of architecture.md."""
     os.chdir(sutra_repo)
     console = Console()
@@ -70,7 +72,9 @@ def test_context_diff_ignores_manual_sections(sutra_repo: Path, capsys: pytest.C
     newline_idx = content[idx:].index("\n")
     marker_line_end = idx + newline_idx + 1
 
-    modified_content = content[:marker_line_end] + "\nThis is a manual architecture note.\n"
+    modified_content = (
+        content[:marker_line_end] + "\nThis is a manual architecture note.\n"
+    )
     arch_path.write_text(modified_content, encoding="utf-8")
 
     # Clear prior output
@@ -96,7 +100,7 @@ def test_claude_hook_script_formatting_and_imports(tmp_path: Path) -> None:
         allow_write_patterns=[],
         frozen_paths=[],
         guard_enabled=False,
-        remote_policy_url=None
+        remote_policy_url=None,
     )
     assert "import os" not in script
 
@@ -104,8 +108,12 @@ def test_claude_hook_script_formatting_and_imports(tmp_path: Path) -> None:
     hook_file = tmp_path / "pre_tool_guard.py"
     hook_file.write_text(script, encoding="utf-8")
 
-    res = subprocess.run(["ruff", "format", "--check", str(hook_file)], capture_output=True, text=True)
-    assert res.returncode == 0, f"Ruff format check failed on generated hook: {res.stdout}\n{res.stderr}"
+    res = subprocess.run(
+        ["ruff", "format", "--check", str(hook_file)], capture_output=True, text=True
+    )
+    assert res.returncode == 0, (
+        f"Ruff format check failed on generated hook: {res.stdout}\n{res.stderr}"
+    )
 
 
 def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
@@ -128,7 +136,7 @@ def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
             "orchestrator": "claude",
             "parallel": 1,
             "worktree": True,
-            "created": "2026-05-29T12:00:00Z"
+            "created": "2026-05-29T12:00:00Z",
         },
         "tasks": [
             {
@@ -138,7 +146,7 @@ def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
                 "status": "pending",
                 "agent": "mock-agent",
                 "writes_files": False,
-                "depends_on": ["T2"]
+                "depends_on": ["T2"],
             },
             {
                 "id": "T2",
@@ -147,9 +155,9 @@ def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
                 "status": "pending",
                 "agent": "mock-agent",
                 "writes_files": True,
-                "depends_on": ["T1"]
-            }
-        ]
+                "depends_on": ["T1"],
+            },
+        ],
     }
     with open(plan_path, "w", encoding="utf-8") as f:
         yaml.dump(plan_data, f)
@@ -178,7 +186,7 @@ def test_validate_mission_plan_unknown_dependency(tmp_path: Path) -> None:
             "orchestrator": "claude",
             "parallel": 1,
             "worktree": True,
-            "created": "2026-05-29T12:00:00Z"
+            "created": "2026-05-29T12:00:00Z",
         },
         "tasks": [
             {
@@ -188,9 +196,9 @@ def test_validate_mission_plan_unknown_dependency(tmp_path: Path) -> None:
                 "status": "pending",
                 "agent": "mock-agent",
                 "writes_files": False,
-                "depends_on": ["T99"]
+                "depends_on": ["T99"],
             }
-        ]
+        ],
     }
     with open(plan_path, "w", encoding="utf-8") as f:
         yaml.dump(plan_data, f)
@@ -235,13 +243,14 @@ def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
 
     # Patch execution to write a file during execution
     import subprocess as sp
+
     real_run = sp.run
 
     def mock_subprocess_run(args, **kwargs):
         if args and args[0] == "git":
             return real_run(args, **kwargs)
         cwd = kwargs.get("cwd", sutra_repo)
-        
+
         # Modify an existing file or write an unauthorized file
         modified_file = Path(cwd) / "src" / "changed.py"
         modified_file.parent.mkdir(parents=True, exist_ok=True)
@@ -252,8 +261,10 @@ def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
         res.returncode = 0
         return res
 
-    with patch("shutil.which", return_value="/usr/local/bin/claude"), \
-         patch("subprocess.run", side_effect=mock_subprocess_run):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/claude"),
+        patch("subprocess.run", side_effect=mock_subprocess_run),
+    ):
         try:
             with pytest.raises(SystemExit) as excinfo:
                 run_mission_start(console=console, worktree=False)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 from datetime import datetime, timezone
@@ -20,6 +19,7 @@ from sutra.mission.planner import get_latest_mission_id
 def load_plan(run_dir: Path) -> dict:
     """Load mission plan YAML."""
     import yaml
+
     plan_path = run_dir / "mission-plan.yaml"
     with open(plan_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
@@ -69,12 +69,17 @@ def get_task_durations(run_dir: Path) -> dict[str, float]:
     return durations
 
 
-def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: str) -> Panel:
+def generate_dashboard_renderable(
+    run_dir: Path, sutra_dir: Path, mission_id: str
+) -> Panel:
     """Construct a beautiful dashboard layout."""
     try:
         plan_data = load_plan(run_dir)
     except Exception as e:
-        return Panel(f"[bold yellow]Refreshing dashboard...[/]\n[dim]({e})[/]", title="[bold cyan]Sutra Dashboard[/]")
+        return Panel(
+            f"[bold yellow]Refreshing dashboard...[/]\n[dim]({e})[/]",
+            title="[bold cyan]Sutra Dashboard[/]",
+        )
 
     mission_meta = plan_data.get("mission", {})
     status = mission_meta.get("status", "planned")
@@ -111,7 +116,9 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
 
     # Build tasks table
     tasks = plan_data.get("tasks", [])
-    tasks_table = Table(title="[bold cyan]Mission Tasks[/]", show_header=True, expand=True)
+    tasks_table = Table(
+        title="[bold cyan]Mission Tasks[/]", show_header=True, expand=True
+    )
     tasks_table.add_column("ID", width=6, style="bold magenta", justify="center")
     tasks_table.add_column("Title", style="white")
     tasks_table.add_column("Agent", style="yellow")
@@ -153,7 +160,9 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
 
     summary = ledger.get("summary", {})
 
-    ledger_table = Table(title="[bold green]Token & Cost Ledger[/]", show_header=False, expand=True)
+    ledger_table = Table(
+        title="[bold green]Token & Cost Ledger[/]", show_header=False, expand=True
+    )
     ledger_table.add_column(style="bold yellow")
     ledger_table.add_column(justify="right")
 
@@ -175,7 +184,9 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
 
     # Layout assembly
     meta_panel = Panel(meta_table, title="[bold]Mission Config[/]", border_style="cyan")
-    ledger_panel = Panel(ledger_table, title="[bold]Resource Metrics[/]", border_style="green")
+    ledger_panel = Panel(
+        ledger_table, title="[bold]Resource Metrics[/]", border_style="green"
+    )
 
     header_cols = Columns([meta_panel, ledger_panel], expand=True)
 
@@ -191,7 +202,10 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
                 with open(log_path, encoding="utf-8") as lf:
                     lines = lf.readlines()
                     last_lines = [line.rstrip() for line in lines[-12:]]
-                    log_contents.append(f"[bold cyan]Task {r_id} Log Output:[/]\n" + "\n".join(last_lines))
+                    log_contents.append(
+                        f"[bold cyan]Task {r_id} Log Output:[/]\n"
+                        + "\n".join(last_lines)
+                    )
             except Exception:
                 pass
 
@@ -199,8 +213,10 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
         log_disp = "[dim]No active task logs. Execution is either paused, completed, or waiting...[/]"
     else:
         log_disp = "\n\n".join(log_contents)
-        
-    log_panel = Panel(log_disp, title="[bold]Active Task Logs[/]", border_style="magenta", expand=True)
+
+    log_panel = Panel(
+        log_disp, title="[bold]Active Task Logs[/]", border_style="magenta", expand=True
+    )
 
     # Validation results tail
     val_path = run_dir / "validation-results.md"
@@ -213,22 +229,27 @@ def generate_dashboard_renderable(run_dir: Path, sutra_dir: Path, mission_id: st
                 val_disp = "\n".join(last_val_lines)
         except Exception:
             pass
-            
-    val_panel = Panel(val_disp, title="[bold]Validation Suite Output[/]", border_style="blue", expand=True)
+
+    val_panel = Panel(
+        val_disp,
+        title="[bold]Validation Suite Output[/]",
+        border_style="blue",
+        expand=True,
+    )
 
     main_group = Table.grid(expand=True)
     main_group.add_row(header_cols)
     main_group.add_row("")
     main_group.add_row(tasks_table)
     main_group.add_row("")
-    
+
     lower_cols = Columns([log_panel, val_panel], expand=True)
     main_group.add_row(lower_cols)
 
     return Panel(
         main_group,
         title="[bold magenta]SUTRA[/] [bold cyan]MISSION DASHBOARD[/]",
-        border_style="cyan"
+        border_style="cyan",
     )
 
 
@@ -252,12 +273,21 @@ def run_mission_dashboard(watch: bool, console: Console) -> None:
         raise SystemExit(1)
 
     if watch:
-        console.print("[dim]Starting dashboard in live-monitoring mode. Press Ctrl+C to exit.[/]")
-        with Live(generate_dashboard_renderable(run_dir, sutra_dir, mission_id), console=console, auto_refresh=True, refresh_per_second=2) as live:
+        console.print(
+            "[dim]Starting dashboard in live-monitoring mode. Press Ctrl+C to exit.[/]"
+        )
+        with Live(
+            generate_dashboard_renderable(run_dir, sutra_dir, mission_id),
+            console=console,
+            auto_refresh=True,
+            refresh_per_second=2,
+        ) as live:
             try:
                 while True:
                     time.sleep(0.5)
-                    live.update(generate_dashboard_renderable(run_dir, sutra_dir, mission_id))
+                    live.update(
+                        generate_dashboard_renderable(run_dir, sutra_dir, mission_id)
+                    )
             except KeyboardInterrupt:
                 pass
     else:

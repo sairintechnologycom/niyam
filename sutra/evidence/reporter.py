@@ -58,7 +58,9 @@ def _get_diff_summary(repo_root: Path) -> str:
         if staged.stdout.strip():
             sections.append(f"## Staged Changes\n\n```\n{staged.stdout.strip()}\n```")
         if unstaged.stdout.strip():
-            sections.append(f"## Unstaged Changes\n\n```\n{unstaged.stdout.strip()}\n```")
+            sections.append(
+                f"## Unstaged Changes\n\n```\n{unstaged.stdout.strip()}\n```"
+            )
         if log.stdout.strip():
             sections.append(f"## Recent Commits\n\n```\n{log.stdout.strip()}\n```")
 
@@ -156,7 +158,7 @@ def _generate_evidence_markdown(
         "",
         f"**Branch:** `{branch}`",
         f"**Generated:** {now}",
-        f"**Generator:** Sutra v0.1.0",
+        "**Generator:** Sutra v0.1.0",
         "",
         "---",
         "",
@@ -197,7 +199,9 @@ def run_report(format: str, console: Console) -> None:
     """Generate evidence report for the current branch."""
     root = find_sutra_root()
     if root is None:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first."
+        )
         raise SystemExit(1)
 
     config = load_sutra_config(root)
@@ -228,9 +232,13 @@ def run_report(format: str, console: Console) -> None:
         json_path = evidence_dir / "evidence.json"
         json_path.write_text(json.dumps(evidence_data, indent=2), encoding="utf-8")
         if has_failures:
-            console.print(f"[yellow]⚠[/] Evidence exported with validation failures: [cyan]{json_path.relative_to(root)}[/]")
+            console.print(
+                f"[yellow]⚠[/] Evidence exported with validation failures: [cyan]{json_path.relative_to(root)}[/]"
+            )
         else:
-            console.print(f"[green]✓[/] Evidence exported: [cyan]{json_path.relative_to(root)}[/]")
+            console.print(
+                f"[green]✓[/] Evidence exported: [cyan]{json_path.relative_to(root)}[/]"
+            )
 
     else:
         # Markdown report

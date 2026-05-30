@@ -10,7 +10,7 @@ from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
 from sutra.mission.planner import run_mission_plan
-from sutra.mission.executor import run_mission_start, run_mission_resume, load_plan
+from sutra.mission.executor import run_mission_start, load_plan
 
 
 def test_non_interactive_fails_unapproved(sutra_repo: Path) -> None:
@@ -74,26 +74,29 @@ def test_remote_policy_fetching(sutra_repo: Path) -> None:
         "guard:\n"
         "  enabled: true\n"
         "  remote_policy_url: 'https://mock-server.com/policies/'\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     mock_yaml_content = b"deny_write_patterns:\n  - 'src/restricted/*'\nallow_write_patterns:\n  - 'src/*'\n"
-    
+
     from unittest.mock import patch, MagicMock
-    import urllib.request
-    
+
     mock_response = MagicMock()
     mock_response.__enter__.return_value = mock_response
     mock_response.read.return_value = mock_yaml_content
-    
+
     with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
         from sutra.policies.guard import load_security_policy
+
         policy = load_security_policy(sutra_repo)
-        
+
         # Verify URL called
         mock_urlopen.assert_called_once()
-        assert "https://mock-server.com/policies/security.yaml" in mock_urlopen.call_args[0][0].full_url
-        
+        assert (
+            "https://mock-server.com/policies/security.yaml"
+            in mock_urlopen.call_args[0][0].full_url
+        )
+
         # Verify content parsed correctly
         assert policy.get("deny_write_patterns") == ["src/restricted/*"]
 
@@ -111,23 +114,22 @@ def test_remote_policy_fallback(sutra_repo: Path) -> None:
         "guard:\n"
         "  enabled: true\n"
         "  remote_policy_url: 'https://mock-server.com/policies/'\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Write local security.yaml file
     local_security_path = sutra_dir / "policies" / "security.yaml"
     local_security_path.write_text(
-        "deny_write_patterns:\n  - 'local/restricted/*'\n",
-        encoding="utf-8"
+        "deny_write_patterns:\n  - 'local/restricted/*'\n", encoding="utf-8"
     )
 
     from unittest.mock import patch
-    import urllib.error
 
     with patch("urllib.request.urlopen", side_effect=Exception("Connection refused")):
         from sutra.policies.guard import load_security_policy
+
         policy = load_security_policy(sutra_repo)
-        
+
         # Verify fallback content loaded
         assert policy.get("deny_write_patterns") == ["local/restricted/*"]
 
@@ -138,6 +140,7 @@ def test_ci_verify_strict_missing_evidence(sutra_repo: Path) -> None:
     console = Console(quiet=True)
 
     from sutra.core.ci import run_ci_verify
+
     with pytest.raises(SystemExit) as excinfo:
         run_ci_verify(target_branch="main", strict=True, console=console)
     assert excinfo.value.code == 1
@@ -149,9 +152,10 @@ def test_ci_verify_non_strict_missing_evidence(sutra_repo: Path) -> None:
     console = Console(quiet=True)
 
     from sutra.core.ci import run_ci_verify
+
     # Mocks to bypass other checks
     from unittest.mock import patch, MagicMock
-    
+
     mock_run = MagicMock()
     mock_run.returncode = 0
     mock_run.stdout = ""
@@ -171,12 +175,12 @@ def test_ci_verify_write_violation(sutra_repo: Path) -> None:
     mission_id = "test-mission-123"
     run_dir = sutra_dir / "runs" / mission_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Save a plan
     plan_path = run_dir / "mission-plan.yaml"
     plan_path.write_text(
         "mission:\n  id: test-mission-123\n  status: completed\n  orchestrator: claude\ntasks: []\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     evidence_md = run_dir / "evidence.md"
@@ -189,18 +193,17 @@ def test_ci_verify_write_violation(sutra_repo: Path) -> None:
         '  "files": {}\n'
         "}\n"
         "SUTRA_SIGNATURE_END -->\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Write write restriction policy locally
     local_security_path = sutra_dir / "policies" / "security.yaml"
     local_security_path.write_text(
-        "deny_write_patterns:\n  - 'protected/*'\n",
-        encoding="utf-8"
+        "deny_write_patterns:\n  - 'protected/*'\n", encoding="utf-8"
     )
 
     from unittest.mock import patch, MagicMock
-    
+
     # Mock git status to return the mission ID
     def mock_git(cmd, **kwargs):
         res = MagicMock()
@@ -214,9 +217,11 @@ def test_ci_verify_write_violation(sutra_repo: Path) -> None:
         return res
 
     from sutra.core.ci import run_ci_verify
-    with patch("subprocess.run", side_effect=mock_git), \
-         patch("sutra.mission.reporter.run_verify_report"): # Bypass integrity check details
-        
+
+    with (
+        patch("subprocess.run", side_effect=mock_git),
+        patch("sutra.mission.reporter.run_verify_report"),
+    ):  # Bypass integrity check details
         with pytest.raises(SystemExit) as excinfo:
             run_ci_verify(target_branch="main", strict=True, console=console)
         assert excinfo.value.code == 1
@@ -227,5 +232,6 @@ def test_ci_verify_write_violation(sutra_repo: Path) -> None:
         with open(report_path, encoding="utf-8") as f:
             report = json.load(f)
         assert report["policy_status"] == "failed"
-        assert any("protected/secrets.json" in failure for failure in report["failures"])
-
+        assert any(
+            "protected/secrets.json" in failure for failure in report["failures"]
+        )

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import pytest
-import yaml
 from rich.console import Console
 
 from sutra.core.config import load_sutra_config
@@ -59,11 +58,15 @@ class TestPacks:
         conflict_file.write_text("User custom command content", encoding="utf-8")
 
         with pytest.raises(ValueError, match="Conflict detected"):
-            add_pack(sutra_repo, "superpowers-methodology", force=False, console=console)
+            add_pack(
+                sutra_repo, "superpowers-methodology", force=False, console=console
+            )
 
         # Overwrite with --force should succeed
         add_pack(sutra_repo, "superpowers-methodology", force=True, console=console)
-        assert conflict_file.read_text(encoding="utf-8").startswith("<!-- pack: superpowers-methodology -->")
+        assert conflict_file.read_text(encoding="utf-8").startswith(
+            "<!-- pack: superpowers-methodology -->"
+        )
 
     def test_remove_pack(self, sutra_repo: Path) -> None:
         """remove_pack should delete pack files and update config."""
@@ -92,6 +95,7 @@ class TestPacks:
         config = load_sutra_config(sutra_repo)
         config.packs.append("superpowers-methodology")
         from sutra.core.config import save_sutra_config
+
         save_sutra_config(config, sutra_repo)
 
         # Skill file should not exist yet

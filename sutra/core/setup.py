@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from rich.console import Console
@@ -36,14 +35,25 @@ def run_setup(console: Console) -> None:
 
     # 1. Initialize if not exists
     if not sutra_dir.exists():
-        console.print("[yellow]No .sutra/ directory detected. Let's initialize your workspace![/]")
+        console.print(
+            "[yellow]No .sutra/ directory detected. Let's initialize your workspace![/]"
+        )
         profile = Prompt.ask(
             "Which project profile fits your stack?",
-            choices=["fullstack", "backend", "frontend", "startup-saas", "platform-engineering", "governed-enterprise"],
+            choices=[
+                "fullstack",
+                "backend",
+                "frontend",
+                "startup-saas",
+                "platform-engineering",
+                "governed-enterprise",
+            ],
             default="fullstack",
         )
         console.print(f"[cyan]Initializing Sutra with profile: {profile}...[/]")
-        run_init(profile=profile, runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile=profile, runtime=None, dry_run=False, force=False, console=console
+        )
         # Refresh root
         repo_root = find_sutra_root() or repo_root
         sutra_dir = get_sutra_dir(repo_root)
@@ -66,7 +76,9 @@ def run_setup(console: Console) -> None:
 
     runtimes_to_enable = []
     if not detected_runtimes:
-        console.print("\n[yellow]⚠️ No AI runtimes (claude, gemini, codex) were detected in your PATH.[/]")
+        console.print(
+            "\n[yellow]⚠️ No AI runtimes (claude, gemini, codex) were detected in your PATH.[/]"
+        )
         console.print("Please install them or specify the one you plan to use.")
         chosen_rt = Prompt.ask(
             "Which runtime would you like to configure anyway?",
@@ -77,7 +89,10 @@ def run_setup(console: Console) -> None:
             runtimes_to_enable.append(chosen_rt)
     else:
         for rt in detected_runtimes:
-            enable = Confirm.ask(f"Would you like to enable the [bold cyan]{rt}[/] runtime?", default=True)
+            enable = Confirm.ask(
+                f"Would you like to enable the [bold cyan]{rt}[/] runtime?",
+                default=True,
+            )
             if enable:
                 runtimes_to_enable.append(rt)
 
@@ -91,12 +106,19 @@ def run_setup(console: Console) -> None:
     if agents_dir.is_dir():
         agents = [f.stem for f in agents_dir.glob("*.md")]
         console.print(f"Detected agents in .sutra/agents/: {', '.join(agents)}")
-        console.print("You can customize these markdown files to adjust agent personas and expertise.")
+        console.print(
+            "You can customize these markdown files to adjust agent personas and expertise."
+        )
 
     # 5. Policies & Guardrails
     console.print("\n[cyan]Configuring Guardrails & Security Policies[/]")
-    guard_enabled = Confirm.ask("Would you like to enable safety guardrails?", default=True)
-    careful_mode = Confirm.ask("Would you like careful mode enabled (warnings before executing risky commands)?", default=True)
+    guard_enabled = Confirm.ask(
+        "Would you like to enable safety guardrails?", default=True
+    )
+    careful_mode = Confirm.ask(
+        "Would you like careful mode enabled (warnings before executing risky commands)?",
+        default=True,
+    )
 
     config = load_sutra_config(repo_root)
     config.guard.enabled = guard_enabled
@@ -108,7 +130,7 @@ def run_setup(console: Console) -> None:
         Panel(
             "[bold green]✓ Sutra Setup Completed Successfully![/]\n\n"
             "Try planning and executing your first mission:\n"
-            "  [bold cyan]sutra run \"implement a simple hello world test case\"[/]",
+            '  [bold cyan]sutra run "implement a simple hello world test case"[/]',
             title="[bold green]Success[/]",
             border_style="green",
         )

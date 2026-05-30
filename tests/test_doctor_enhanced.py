@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
-from rich.console import Console
+from unittest.mock import patch
 
 from sutra.core.doctor import (
-    run_doctor,
     _check_runtimes_in_path,
     _check_agents_validity,
     _check_validation_commands_in_path,
@@ -30,13 +27,13 @@ def test_doctor_runtimes_in_path(sutra_repo: Path) -> None:
 
     with patch("shutil.which", side_effect=mock_which):
         results = _check_runtimes_in_path(sutra_repo, config)
-        
+
     assert len(results) == 2
-    
+
     # claude is present
     assert results[0].name == "Runtime in PATH: claude"
     assert results[0].passed is True
-    
+
     # gemini is missing
     assert results[1].name == "Runtime in PATH: gemini"
     assert results[1].passed is False
@@ -50,7 +47,7 @@ def test_doctor_agents_validity(sutra_repo: Path) -> None:
     empty_agent.write_text("   \n  ", encoding="utf-8")
 
     results = _check_agents_validity(sutra_repo)
-    
+
     # Verify warning generated for empty-agent
     empty_agent_results = [r for r in results if "empty-agent" in r.name]
     assert len(empty_agent_results) == 1
@@ -64,12 +61,10 @@ def test_doctor_validation_commands(sutra_repo: Path) -> None:
     project_yaml = sutra_repo / ".sutra" / "project.yaml"
     project_data = {
         "name": "test-project",
-        "validation": {
-            "test": "pytest",
-            "lint": "nonexistent-linter --verbose"
-        }
+        "validation": {"test": "pytest", "lint": "nonexistent-linter --verbose"},
     }
     import yaml
+
     with open(project_yaml, "w", encoding="utf-8") as f:
         yaml.safe_dump(project_data, f)
 
@@ -104,7 +99,7 @@ def test_doctor_git_status_dirty(sutra_repo: Path) -> None:
     dirty_file.write_text("dirty content", encoding="utf-8")
 
     results = _check_git_status(sutra_repo)
-    
+
     # Verify Git Status check fails or warns
     git_status_results = [r for r in results if "Git Status" in r.name]
     assert len(git_status_results) == 1

@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typer.testing import CliRunner
-import pytest
-import yaml
 
 from sutra.cli import app
 from sutra.core.config import get_sutra_dir
@@ -43,7 +41,7 @@ def test_run_composite_command_file(sutra_repo: Path) -> None:
     assert runs_dir.is_dir()
     runs = list(runs_dir.iterdir())
     assert len(runs) == 1
-    
+
     plan = load_plan(runs[0])
     assert plan["mission"]["status"] == "completed"
     assert plan["mission"]["requirement"] == str(req_file)
@@ -54,10 +52,12 @@ def test_run_composite_command_inline_string(sutra_repo: Path) -> None:
     os.chdir(sutra_repo)
 
     inline_req = "implement a simple helper function"
-    
+
     os.environ["SUTRA_TEST"] = "1"
     try:
-        result = runner.invoke(app, ["run", inline_req, "--auto-approve", "--runtime", "claude"])
+        result = runner.invoke(
+            app, ["run", inline_req, "--auto-approve", "--runtime", "claude"]
+        )
         assert result.exit_code == 0
     finally:
         del os.environ["SUTRA_TEST"]
@@ -66,16 +66,16 @@ def test_run_composite_command_inline_string(sutra_repo: Path) -> None:
     runs_dir = sutra_dir / "runs"
     runs = [d for d in runs_dir.iterdir() if d.is_dir()]
     assert len(runs) > 0
-    
+
     # Sort runs by name/creation to get the latest
     runs.sort(key=lambda d: d.name)
     latest_run = runs[-1]
-    
+
     plan = load_plan(latest_run)
     assert plan["mission"]["status"] == "completed"
     assert plan["mission"]["requirement"] == inline_req
     assert plan["mission"]["orchestrator"] == "claude"
-    
+
     # Requirement file should contain the inline requirements
     req_file_on_disk = latest_run / "requirement.md"
     assert req_file_on_disk.exists()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import pytest
 from rich.console import Console
 
 from sutra.core.review import run_review, get_git_diff
@@ -37,10 +36,19 @@ class TestReview:
         os.environ["SUTRA_TEST"] = "1"
         try:
             # Run engineering collaborative review
-            run_review(lens="engineering", runtime="claude", mode="collaborative", console=console)
-            
+            run_review(
+                lens="engineering",
+                runtime="claude",
+                mode="collaborative",
+                console=console,
+            )
+
             # Check prompt was saved to runs directory
-            prompt_files = list((sutra_repo / ".sutra" / "runs").glob("review-engineering-collaborative-prompt.md"))
+            prompt_files = list(
+                (sutra_repo / ".sutra" / "runs").glob(
+                    "review-engineering-collaborative-prompt.md"
+                )
+            )
             assert len(prompt_files) == 1
             content = prompt_files[0].read_text(encoding="utf-8")
             assert "# Engineering Quality & Architecture Review" in content
@@ -58,9 +66,15 @@ class TestReview:
 
         os.environ["SUTRA_TEST"] = "1"
         try:
-            run_review(lens="security", runtime="claude", mode="adversarial", console=console)
-            
-            prompt_files = list((sutra_repo / ".sutra" / "runs").glob("review-security-adversarial-prompt.md"))
+            run_review(
+                lens="security", runtime="claude", mode="adversarial", console=console
+            )
+
+            prompt_files = list(
+                (sutra_repo / ".sutra" / "runs").glob(
+                    "review-security-adversarial-prompt.md"
+                )
+            )
             assert len(prompt_files) == 1
             content = prompt_files[0].read_text(encoding="utf-8")
             assert "ADVERSARIAL MODE ENABLED" in content
@@ -109,9 +123,8 @@ class TestReview:
 
         secret_file = sutra_repo / "secret.py"
         secret_file.write_text(
-            "aws_key = 'AKIA1234567890123456'\n"
-            "token = 'my-super-secret-token'\n",
-            encoding="utf-8"
+            "aws_key = 'AKIA1234567890123456'\ntoken = 'my-super-secret-token'\n",
+            encoding="utf-8",
         )
 
         diff = get_git_diff(sutra_repo)

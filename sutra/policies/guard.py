@@ -19,7 +19,9 @@ def _ensure_root(console: Console) -> Path:
     """Find sutra root or exit."""
     root = find_sutra_root()
     if root is None:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first."
+        )
         raise SystemExit(1)
     return root
 
@@ -74,7 +76,9 @@ def run_guard_disable(console: Console) -> None:
 
     _resync_hooks(root, console)
 
-    console.print("[yellow]⚠ Guard mode [bold]disabled[/]. AI agents can execute freely.[/]")
+    console.print(
+        "[yellow]⚠ Guard mode [bold]disabled[/]. AI agents can execute freely.[/]"
+    )
 
 
 def run_guard_careful(console: Console) -> None:
@@ -194,10 +198,7 @@ def _fetch_remote_policy_raw(url: str, filename: str) -> dict:
         # Strict SSL context — verifies certificates
         ssl_ctx = ssl.create_default_context()
 
-        req = urllib.request.Request(
-            target_url,
-            headers={"User-Agent": "Sutra-CLI"}
-        )
+        req = urllib.request.Request(target_url, headers={"User-Agent": "Sutra-CLI"})
         with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as response:
             content = response.read(MAX_RESPONSE_SIZE + 1)
             if len(content) > MAX_RESPONSE_SIZE:
@@ -210,6 +211,7 @@ def _fetch_remote_policy_raw(url: str, filename: str) -> dict:
 
             # Validate against schema
             from sutra.policies.validator import KNOWN_POLICY_FILES
+
             if filename in KNOWN_POLICY_FILES:
                 schema = KNOWN_POLICY_FILES[filename]
                 all_known = set(schema["required_keys"]) | set(schema["optional_keys"])
@@ -278,6 +280,7 @@ def _fetch_remote_policy(url: str, filename: str) -> dict | None:
             if isinstance(cached_val, list) and len(cached_val) == 2:
                 _, data = cached_val
                 import logging
+
                 logging.getLogger("sutra.guard").warning(
                     "Remote policy fetch failed (%s). Using cached version.", e
                 )
@@ -305,13 +308,16 @@ def load_security_policy(root: Path) -> dict:
             if remote_data is not None:
                 return remote_data
         except Exception as e:
-            logger.warning("Failed to fetch remote security policy: %s. Falling back to local.", e)
+            logger.warning(
+                "Failed to fetch remote security policy: %s. Falling back to local.", e
+            )
 
     # Fallback to local
     local_path = root / ".sutra" / "policies" / "security.yaml"
     if local_path.exists():
         try:
             from sutra.core.security import safe_load_yaml
+
             return safe_load_yaml(local_path)
         except Exception:
             pass
@@ -336,13 +342,16 @@ def load_commands_policy(root: Path) -> dict:
             if remote_data is not None:
                 return remote_data
         except Exception as e:
-            logger.warning("Failed to fetch remote commands policy: %s. Falling back to local.", e)
+            logger.warning(
+                "Failed to fetch remote commands policy: %s. Falling back to local.", e
+            )
 
     # Fallback to local
     local_path = root / ".sutra" / "policies" / "commands.yaml"
     if local_path.exists():
         try:
             from sutra.core.security import safe_load_yaml
+
             return safe_load_yaml(local_path)
         except Exception:
             pass

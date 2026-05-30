@@ -147,7 +147,6 @@ class TestGeminiSync:
         assert "Policies" in content or "Denied" in content
 
 
-
 class TestRuntimeAdd:
     """Tests for runtime add command."""
 

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 import yaml
 from rich.console import Console
 
 from sutra.core.config import (
-    SUTRA_DIR,
     get_sutra_dir,
     load_sutra_config,
     save_sutra_config,
@@ -50,25 +48,31 @@ def list_packs(repo_root: Path) -> list[dict]:
             if d.is_dir() and (d / "pack.yaml").exists():
                 try:
                     manifest = load_pack_manifest(d.name)
-                    packs.append({
-                        "name": d.name,
-                        "version": manifest.get("version", "0.1.0"),
-                        "description": manifest.get("description", ""),
-                        "installed": d.name in installed_packs,
-                    })
+                    packs.append(
+                        {
+                            "name": d.name,
+                            "version": manifest.get("version", "0.1.0"),
+                            "description": manifest.get("description", ""),
+                            "installed": d.name in installed_packs,
+                        }
+                    )
                 except Exception:
                     pass
     return packs
 
 
-def add_pack(repo_root: Path, name: str, force: bool = False, console: Console | None = None) -> None:
+def add_pack(
+    repo_root: Path, name: str, force: bool = False, console: Console | None = None
+) -> None:
     """Install a pack into the .sutra/ directory."""
     pack_dir = get_pack_dir(name)
-    manifest = load_pack_manifest(name)
+    load_pack_manifest(name)
     sutra_dir = get_sutra_dir(repo_root)
 
     if not sutra_dir.exists():
-        raise FileNotFoundError("Sutra workspace is not initialized. Run `sutra init` first.")
+        raise FileNotFoundError(
+            "Sutra workspace is not initialized. Run `sutra init` first."
+        )
 
     config = load_sutra_config(repo_root)
 
@@ -93,7 +97,11 @@ def add_pack(repo_root: Path, name: str, force: bool = False, console: Console |
                     # Read target content
                     content = src.read_text(encoding="utf-8")
                     # Construct expected content with header
-                    header = f"<!-- pack: {name} -->\n\n" if dst.suffix == ".md" else f"# pack: {name}\n\n"
+                    header = (
+                        f"<!-- pack: {name} -->\n\n"
+                        if dst.suffix == ".md"
+                        else f"# pack: {name}\n\n"
+                    )
                     expected_content = header + content
                     if existing_content != expected_content:
                         conflicts.append(str(rel))
@@ -102,7 +110,7 @@ def add_pack(repo_root: Path, name: str, force: bool = False, console: Console |
 
         if conflicts:
             raise ValueError(
-                f"Conflict detected! The following files already exist in .sutra/:\n"
+                "Conflict detected! The following files already exist in .sutra/:\n"
                 + "\n".join(f"  - {c}" for c in conflicts)
                 + "\nUse --force to overwrite them."
             )

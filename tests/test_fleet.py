@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import os
-import json
 from pathlib import Path
 import subprocess
 import pytest
-import yaml
 from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
@@ -21,20 +19,34 @@ def git_repo_with_commit(tmp_repo: Path) -> Path:
     # Write a dummy file and commit it so HEAD exists
     dummy_file = tmp_repo / "dummy.txt"
     dummy_file.write_text("initial content", encoding="utf-8")
-    
-    subprocess.run(["git", "add", "dummy.txt"], cwd=tmp_repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmp_repo, check=True, capture_output=True)
-    
+
+    subprocess.run(
+        ["git", "add", "dummy.txt"], cwd=tmp_repo, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial commit"],
+        cwd=tmp_repo,
+        check=True,
+        capture_output=True,
+    )
+
     from sutra.core.init import run_init
+
     console = Console(quiet=True)
-    
+
     original_dir = os.getcwd()
     os.chdir(tmp_repo)
     try:
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
     finally:
         os.chdir(original_dir)
-        
+
     return tmp_repo
 
 
@@ -91,7 +103,7 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
             "status": "pending",
             "agent": "qa-reviewer",
             "depends_on": ["T2", "T3"],
-        }
+        },
     ]
     save_plan(run_dir, plan_data)
 
@@ -105,7 +117,7 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     # 4. Verify completion
     updated_plan = load_plan(run_dir)
     assert updated_plan["mission"]["status"] == "completed"
-    
+
     # Check all tasks ran and completed
     for task in updated_plan["tasks"]:
         assert task["status"] == "completed"
@@ -116,7 +128,9 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     assert (git_repo_with_commit / "change-T3.txt").exists()
 
     # Check branches were cleaned up
-    res = subprocess.run(["git", "branch"], cwd=git_repo_with_commit, capture_output=True, text=True)
+    res = subprocess.run(
+        ["git", "branch"], cwd=git_repo_with_commit, capture_output=True, text=True
+    )
     assert f"sutra-{mission_id}-T1" not in res.stdout
     assert f"sutra-{mission_id}-T4" not in res.stdout
 
@@ -148,7 +162,7 @@ def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
             "id": "T2",
             "title": "Failing Task",
             "type": "implementation",
-            "status": "failed", # Pre-failed to trigger scheduler logic
+            "status": "failed",  # Pre-failed to trigger scheduler logic
             "agent": "backend-specialist",
             "depends_on": ["T1"],
         },
@@ -159,7 +173,7 @@ def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
             "status": "pending",
             "agent": "backend-specialist",
             "depends_on": ["T2"],
-        }
+        },
     ]
     save_plan(run_dir, plan_data)
 
@@ -182,16 +196,23 @@ def test_fleet_worktree_fallback_when_no_git(tmp_path: Path) -> None:
     """Should execute sequentially without worktrees if directory is not a Git repo."""
     # Note: tmp_path is a plain directory (NOT a git repo)
     from sutra.core.init import run_init
+
     console = Console(quiet=True)
 
     original_dir = os.getcwd()
     os.chdir(tmp_path)
     try:
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
-        
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
+
         req_file = tmp_path / "requirements.md"
         req_file.write_text("# Test No Git\n", encoding="utf-8")
-        
+
         mission_id = run_mission_plan(str(req_file), console=console)
         run_mission_approve(console=console)
 

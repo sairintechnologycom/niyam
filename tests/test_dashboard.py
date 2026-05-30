@@ -5,13 +5,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import pytest
 from rich.console import Console
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from sutra.core.config import get_sutra_dir
 from sutra.mission.planner import run_mission_plan, run_mission_approve
-from sutra.mission.executor import run_mission_start, load_plan
+from sutra.mission.executor import run_mission_start
 from sutra.mission.dashboard import run_mission_dashboard, generate_dashboard_renderable
 
 
@@ -29,8 +28,20 @@ def test_dashboard_rendering(sutra_repo: Path) -> None:
     run_dir = get_sutra_dir(sutra_repo) / "runs" / mission_id
 
     # 2. Render dashboard when no token ledger exists (should not raise error)
-    renderable = generate_dashboard_renderable(run_dir, get_sutra_dir(sutra_repo), mission_id)
+    renderable = generate_dashboard_renderable(
+        run_dir, get_sutra_dir(sutra_repo), mission_id
+    )
     assert renderable is not None
+
+    # Enable marketing metrics so savings are calculated
+    import yaml
+
+    sutra_config_path = get_sutra_dir(sutra_repo) / "sutra.yaml"
+    with open(sutra_config_path, "r", encoding="utf-8") as f:
+        sutra_data = yaml.safe_load(f) or {}
+    sutra_data["show_marketing_metrics"] = True
+    with open(sutra_config_path, "w", encoding="utf-8") as f:
+        yaml.dump(sutra_data, f)
 
     # Run start in test mode (this will populate the token ledger)
     os.environ["SUTRA_TEST"] = "1"
@@ -44,7 +55,7 @@ def test_dashboard_rendering(sutra_repo: Path) -> None:
     assert ledger_path.exists()
     with open(ledger_path, encoding="utf-8") as f:
         ledger = json.load(f)
-    
+
     assert "summary" in ledger
     assert "events" in ledger
     assert ledger["summary"]["total_tokens"] > 0
@@ -52,7 +63,9 @@ def test_dashboard_rendering(sutra_repo: Path) -> None:
     assert ledger["summary"]["total_savings_usd"] > 0.0
 
     # 4. Render dashboard with token ledger (should contain token and cost details)
-    renderable_with_ledger = generate_dashboard_renderable(run_dir, get_sutra_dir(sutra_repo), mission_id)
+    renderable_with_ledger = generate_dashboard_renderable(
+        run_dir, get_sutra_dir(sutra_repo), mission_id
+    )
     assert renderable_with_ledger is not None
 
     # Call run_mission_dashboard (non-watch mode)
@@ -69,11 +82,13 @@ def test_dashboard_watch_mode(sutra_repo: Path) -> None:
 
     req_file = sutra_repo / "requirements.md"
     req_file.write_text("# Test Requirements\n", encoding="utf-8")
-    mission_id = run_mission_plan(str(req_file), console=console)
+    run_mission_plan(str(req_file), console=console)
     run_mission_approve(console=console)
 
     # Mock time.sleep to raise KeyboardInterrupt to exit loop immediately
-    with patch("time.sleep", side_effect=KeyboardInterrupt), \
-         patch("rich.live.Live.update") as mock_update:
+    with (
+        patch("time.sleep", side_effect=KeyboardInterrupt),
+        patch("rich.live.Live.update"),
+    ):
         run_mission_dashboard(watch=True, console=console)
         # Should not raise exception (handled KeyboardInterrupt gracefully)

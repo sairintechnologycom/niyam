@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-import json
 from pathlib import Path
-import pytest
 import yaml
 from rich.console import Console
 
@@ -24,7 +22,7 @@ def test_builtin_template_planning(sutra_repo: Path) -> None:
         requirements_path="api-endpoint-test",
         console=console,
         template="api-endpoint",
-        runtime_override="claude"
+        runtime_override="claude",
     )
     assert mission_id is not None
 
@@ -37,13 +35,19 @@ def test_builtin_template_planning(sutra_repo: Path) -> None:
     assert plan["mission"]["id"] == mission_id
     assert plan["mission"]["status"] == "planned"
     assert plan["mission"]["orchestrator"] == "claude"
-    
+
     # Verify variable interpolation (using defaults in non-interactive SUTRA_TEST mode)
     # T2 should be: "TDD: Write endpoint contract test case for GET /api/v1/resource"
     tasks = plan["tasks"]
     assert len(tasks) == 5
-    assert tasks[1]["title"] == "TDD: Write endpoint contract test case for GET /api/v1/resource"
-    assert tasks[2]["title"] == "Implementation: implement the GET /api/v1/resource controller and router"
+    assert (
+        tasks[1]["title"]
+        == "TDD: Write endpoint contract test case for GET /api/v1/resource"
+    )
+    assert (
+        tasks[2]["title"]
+        == "Implementation: implement the GET /api/v1/resource controller and router"
+    )
 
 
 def test_custom_template_planning(sutra_repo: Path) -> None:
@@ -60,7 +64,11 @@ def test_custom_template_planning(sutra_repo: Path) -> None:
         "name": "custom-tmpl",
         "description": "My custom development flow",
         "variables": [
-            {"name": "feature_name", "prompt": "Name of the feature", "default": "AwesomeFeature"},
+            {
+                "name": "feature_name",
+                "prompt": "Name of the feature",
+                "default": "AwesomeFeature",
+            },
         ],
         "tasks": [
             {
@@ -76,8 +84,8 @@ def test_custom_template_planning(sutra_repo: Path) -> None:
                 "type": "implementation",
                 "agent": "qa-reviewer",
                 "depends_on": ["T1"],
-            }
-        ]
+            },
+        ],
     }
 
     custom_tmpl_file = custom_tmpl_dir / "my-custom.yaml"
@@ -89,7 +97,7 @@ def test_custom_template_planning(sutra_repo: Path) -> None:
         requirements_path="custom-test",
         console=console,
         template="my-custom",
-        runtime_override="codex"
+        runtime_override="codex",
     )
 
     run_dir = sutra_dir / "runs" / mission_id

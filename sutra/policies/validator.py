@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
-import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -39,7 +37,9 @@ def run_policy_validate(console: Console) -> None:
     """Validate all policy YAML files."""
     root = find_sutra_root()
     if root is None:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first."
+        )
         raise SystemExit(1)
 
     policies_dir = root / ".sutra" / "policies"
@@ -56,6 +56,7 @@ def run_policy_validate(console: Console) -> None:
 
     # Validate remote policies if remote_policy_url is set
     from sutra.core.config import load_sutra_config
+
     try:
         config = load_sutra_config(root)
         remote_url = config.guard.remote_policy_url
@@ -64,17 +65,24 @@ def run_policy_validate(console: Console) -> None:
 
     if remote_url:
         from sutra.policies.guard import _fetch_remote_policy
+
         for filename, schema in KNOWN_POLICY_FILES.items():
             if filename not in ("security.yaml", "commands.yaml"):
                 continue
             remote_data = _fetch_remote_policy(remote_url, filename)
             if remote_data is None:
-                table.add_row(f"[Remote] {filename}", "[bold red]✗[/]", f"Failed to fetch from {remote_url}")
+                table.add_row(
+                    f"[Remote] {filename}",
+                    "[bold red]✗[/]",
+                    f"Failed to fetch from {remote_url}",
+                )
                 errors += 1
                 continue
 
             if not isinstance(remote_data, dict):
-                table.add_row(f"[Remote] {filename}", "[bold red]✗[/]", "Expected a YAML mapping")
+                table.add_row(
+                    f"[Remote] {filename}", "[bold red]✗[/]", "Expected a YAML mapping"
+                )
                 errors += 1
                 continue
 
@@ -99,6 +107,7 @@ def run_policy_validate(console: Console) -> None:
 
         try:
             from sutra.core.security import safe_load_yaml
+
             data = safe_load_yaml(fpath)
 
             if not isinstance(data, dict):
@@ -127,8 +136,11 @@ def run_policy_validate(console: Console) -> None:
         if fpath.name not in KNOWN_POLICY_FILES:
             try:
                 from sutra.core.security import safe_load_yaml
+
                 safe_load_yaml(fpath)
-                table.add_row(fpath.name, "[bold cyan]ℹ[/]", "Custom policy (valid YAML)")
+                table.add_row(
+                    fpath.name, "[bold cyan]ℹ[/]", "Custom policy (valid YAML)"
+                )
             except Exception as e:
                 table.add_row(fpath.name, "[bold red]✗[/]", f"Load error: {e}")
                 errors += 1

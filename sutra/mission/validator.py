@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
-import yaml
 from pydantic import ValidationError
 
 from sutra.core.config import MissionPlan, get_sutra_dir, load_project_config
@@ -14,6 +12,7 @@ from sutra.core.security import validate_command, CommandSecurityError, safe_loa
 
 class PlanValidationError(Exception):
     """Raised when mission plan validation fails."""
+
     def __init__(self, errors: list[str]):
         super().__init__("\n".join(errors))
         self.errors = errors
@@ -40,14 +39,14 @@ def validate_mission_plan(plan_path: Path, repo_root: Path) -> None:
         plan = MissionPlan(**data)
     except ValidationError as e:
         for err in e.errors():
-            loc_str = " -> ".join(str(l) for l in err["loc"])
+            loc_str = " -> ".join(str(part) for part in err["loc"])
             errors.append(f"Schema violation at {loc_str}: {err['msg']}")
         raise PlanValidationError(errors)
 
     # 3. DAG Validation (Cycle and Unknown Dependency checks)
     tasks = plan.tasks
     task_ids = {t.id for t in tasks}
-    
+
     # Check for duplicate task IDs
     seen_ids = set()
     for t in tasks:
@@ -91,22 +90,34 @@ def validate_mission_plan(plan_path: Path, repo_root: Path) -> None:
         # Check Agent existence
         agent_file = agents_dir / f"{t.agent}.md"
         if not agent_file.exists():
-            errors.append(f"Task '{t.id}' assigns unknown agent '{t.agent}' (missing {agent_file.relative_to(repo_root) if repo_root in agent_file.parents else agent_file})")
+            errors.append(
+                f"Task '{t.id}' assigns unknown agent '{t.agent}' (missing {agent_file.relative_to(repo_root) if repo_root in agent_file.parents else agent_file})"
+            )
 
         # Check Runtime existence
         if t.runtime:
-            if not shutil.which(t.runtime) and t.runtime not in ("claude", "gemini", "codex"):
-                errors.append(f"Task '{t.id}' specifies runtime '{t.runtime}' which is not executable or found in PATH")
+            if not shutil.which(t.runtime) and t.runtime not in (
+                "claude",
+                "gemini",
+                "codex",
+            ):
+                errors.append(
+                    f"Task '{t.id}' specifies runtime '{t.runtime}' which is not executable or found in PATH"
+                )
 
     # 5. Path Policy Validation (allowed_files, blocked_files)
     for t in tasks:
         # Prevent absolute or directory traversal in allowed/blocked files
         for pat in t.allowed_files:
             if pat.startswith("/") or ".." in pat:
-                errors.append(f"Task '{t.id}' allowed_files pattern '{pat}' is invalid. Path traversal or absolute paths are forbidden.")
+                errors.append(
+                    f"Task '{t.id}' allowed_files pattern '{pat}' is invalid. Path traversal or absolute paths are forbidden."
+                )
         for pat in t.blocked_files:
             if pat.startswith("/") or ".." in pat:
-                errors.append(f"Task '{t.id}' blocked_files pattern '{pat}' is invalid. Path traversal or absolute paths are forbidden.")
+                errors.append(
+                    f"Task '{t.id}' blocked_files pattern '{pat}' is invalid. Path traversal or absolute paths are forbidden."
+                )
 
     # 6. Validation Command Security Checks
     # Check task-specific validation commands
@@ -116,19 +127,29 @@ def validate_mission_plan(plan_path: Path, repo_root: Path) -> None:
                 try:
                     validate_command(cmd)
                 except CommandSecurityError as e:
-                    errors.append(f"Task '{t.id}' validation command '{cmd}' blocked by security: {e}")
+                    errors.append(
+                        f"Task '{t.id}' validation command '{cmd}' blocked by security: {e}"
+                    )
 
     # Check project-level validation commands
     try:
         proj_config = load_project_config(repo_root)
         if proj_config and proj_config.validation:
             v_cmds = proj_config.validation
-            for name, cmd in [("build", v_cmds.build), ("test", v_cmds.test), ("lint", v_cmds.lint), ("format", v_cmds.format), ("typecheck", v_cmds.typecheck)]:
+            for name, cmd in [
+                ("build", v_cmds.build),
+                ("test", v_cmds.test),
+                ("lint", v_cmds.lint),
+                ("format", v_cmds.format),
+                ("typecheck", v_cmds.typecheck),
+            ]:
                 if cmd:
                     try:
                         validate_command(cmd)
                     except CommandSecurityError as e:
-                        errors.append(f"Project configuration validation '{name}' command '{cmd}' blocked by security: {e}")
+                        errors.append(
+                            f"Project configuration validation '{name}' command '{cmd}' blocked by security: {e}"
+                        )
     except Exception:
         pass  # project.yaml might not exist yet during init/planning, which is fine
 

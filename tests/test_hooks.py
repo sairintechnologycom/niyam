@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
 import yaml
 from rich.console import Console
 
@@ -30,19 +28,19 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
             "pre_task": [
                 {
                     "run": "echo 'Pre-task {{task.id}} with agent {{task.agent}}' > pre_task_{{task.id}}.txt",
-                    "when": "task.type == 'implementation'"
+                    "when": "task.type == 'implementation'",
                 },
                 {
                     "run": "echo 'This should not run' > should_not_run.txt",
-                    "when": "task.type == 'nonexistent'"
-                }
+                    "when": "task.type == 'nonexistent'",
+                },
             ],
             "post_task": [
                 "echo 'Post-task {{task.id}} status: {{task.status}}' > post_task_{{task.id}}.txt"
             ],
             "post_mission": [
                 "echo 'Post-mission {{mission_id}} status: {{mission_status}}' > post_mission.txt"
-            ]
+            ],
         }
     }
 
@@ -60,19 +58,21 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
         "id": "T2",
         "type": "implementation",
         "agent": "coder-agent",
-        "title": "Impl task"
+        "title": "Impl task",
     }
     run_hooks("pre_task", {"mission_id": "m1", "task": impl_task}, sutra_dir, console)
     impl_hook_file = sutra_repo / "pre_task_T2.txt"
     assert impl_hook_file.exists()
-    assert "Pre-task T2 with agent coder-agent" in impl_hook_file.read_text(encoding="utf-8")
+    assert "Pre-task T2 with agent coder-agent" in impl_hook_file.read_text(
+        encoding="utf-8"
+    )
 
     # 3. Run pre_task hook for discovery task (should NOT run because of when conditional)
     disc_task = {
         "id": "T1",
         "type": "discovery",
         "agent": "scanner-agent",
-        "title": "Disc task"
+        "title": "Disc task",
     }
     run_hooks("pre_task", {"mission_id": "m1", "task": disc_task}, sutra_dir, console)
     should_not_run_file = sutra_repo / "should_not_run.txt"
@@ -83,10 +83,19 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
     run_hooks("post_task", {"mission_id": "m1", "task": impl_task}, sutra_dir, console)
     post_task_file = sutra_repo / "post_task_T2.txt"
     assert post_task_file.exists()
-    assert "Post-task T2 status: completed" in post_task_file.read_text(encoding="utf-8")
+    assert "Post-task T2 status: completed" in post_task_file.read_text(
+        encoding="utf-8"
+    )
 
     # 5. Run post_mission hook
-    run_hooks("post_mission", {"mission_id": "m1", "mission_status": "success"}, sutra_dir, console)
+    run_hooks(
+        "post_mission",
+        {"mission_id": "m1", "mission_status": "success"},
+        sutra_dir,
+        console,
+    )
     post_mission_file = sutra_repo / "post_mission.txt"
     assert post_mission_file.exists()
-    assert "Post-mission m1 status: success" in post_mission_file.read_text(encoding="utf-8")
+    assert "Post-mission m1 status: success" in post_mission_file.read_text(
+        encoding="utf-8"
+    )

@@ -51,7 +51,9 @@ def fetch_pr_diff_api(owner: str, repo: str, pr_id: str, token: str) -> str:
         with urllib.request.urlopen(req) as response:
             return response.read().decode("utf-8")
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"GitHub API returned HTTP {e.code}: {e.read().decode('utf-8')}")
+        raise RuntimeError(
+            f"GitHub API returned HTTP {e.code}: {e.read().decode('utf-8')}"
+        )
     except urllib.error.URLError as e:
         raise RuntimeError(f"Failed to fetch PR diff from GitHub API: {e}")
 
@@ -59,10 +61,16 @@ def fetch_pr_diff_api(owner: str, repo: str, pr_id: str, token: str) -> str:
 def fetch_pr_diff_gh(pr_id: str, repo_root: Path) -> str:
     """Fetch PR diff using gh CLI."""
     if not shutil.which("gh"):
-        raise RuntimeError("GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set.")
-    res = subprocess.run(["gh", "pr", "diff", pr_id], cwd=repo_root, capture_output=True, text=True)
+        raise RuntimeError(
+            "GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set."
+        )
+    res = subprocess.run(
+        ["gh", "pr", "diff", pr_id], cwd=repo_root, capture_output=True, text=True
+    )
     if res.returncode != 0:
-        raise RuntimeError(f"GitHub CLI failed to fetch PR diff:\n{res.stderr or res.stdout}")
+        raise RuntimeError(
+            f"GitHub CLI failed to fetch PR diff:\n{res.stderr or res.stdout}"
+        )
     return res.stdout
 
 
@@ -83,7 +91,9 @@ def get_pr_diff(pr_id: str, token: str | None, repo_root: Path) -> str:
         return fetch_pr_diff_gh(pr_id, repo_root)
 
 
-def post_pr_comment_api(owner: str, repo: str, pr_id: str, token: str, body: str) -> None:
+def post_pr_comment_api(
+    owner: str, repo: str, pr_id: str, token: str, body: str
+) -> None:
     """Post comment to PR using raw GitHub REST API."""
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_id}/comments"
     data = json.dumps({"body": body}).encode("utf-8")
@@ -102,10 +112,19 @@ def post_pr_comment_api(owner: str, repo: str, pr_id: str, token: str, body: str
 def post_pr_comment_gh(pr_id: str, body: str, repo_root: Path) -> None:
     """Post comment to PR using gh CLI."""
     if not shutil.which("gh"):
-        raise RuntimeError("GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set.")
-    res = subprocess.run(["gh", "pr", "comment", pr_id, "--body", body], cwd=repo_root, capture_output=True, text=True)
+        raise RuntimeError(
+            "GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set."
+        )
+    res = subprocess.run(
+        ["gh", "pr", "comment", pr_id, "--body", body],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
     if res.returncode != 0:
-        raise RuntimeError(f"GitHub CLI failed to post comment:\n{res.stderr or res.stdout}")
+        raise RuntimeError(
+            f"GitHub CLI failed to post comment:\n{res.stderr or res.stdout}"
+        )
 
 
 def post_pr_comment(pr_id: str, body: str, token: str | None, repo_root: Path) -> None:
@@ -125,15 +144,14 @@ def post_pr_comment(pr_id: str, body: str, token: str | None, repo_root: Path) -
         post_pr_comment_gh(pr_id, body, repo_root)
 
 
-def create_pr_api(owner: str, repo: str, title: str, body: str, head: str, base: str, token: str) -> str:
+def create_pr_api(
+    owner: str, repo: str, title: str, body: str, head: str, base: str, token: str
+) -> str:
     """Create a pull request via raw GitHub REST API."""
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-    data = json.dumps({
-        "title": title,
-        "body": body,
-        "head": head,
-        "base": base
-    }).encode("utf-8")
+    data = json.dumps(
+        {"title": title, "body": body, "head": head, "base": base}
+    ).encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST")
     req.add_header("Authorization", f"token {token}")
     req.add_header("Content-Type", "application/json")
@@ -149,7 +167,9 @@ def create_pr_api(owner: str, repo: str, title: str, body: str, head: str, base:
 def create_pr_gh(title: str, body: str, base: str, repo_root: Path) -> str:
     """Create a pull request using gh CLI."""
     if not shutil.which("gh"):
-        raise RuntimeError("GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set.")
+        raise RuntimeError(
+            "GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set."
+        )
     res = subprocess.run(
         ["gh", "pr", "create", "--title", title, "--body", body, "--base", base],
         cwd=repo_root,
@@ -157,7 +177,9 @@ def create_pr_gh(title: str, body: str, base: str, repo_root: Path) -> str:
         text=True,
     )
     if res.returncode != 0:
-        raise RuntimeError(f"GitHub CLI failed to create PR:\n{res.stderr or res.stdout}")
+        raise RuntimeError(
+            f"GitHub CLI failed to create PR:\n{res.stderr or res.stdout}"
+        )
     return res.stdout.strip()
 
 
@@ -192,7 +214,7 @@ def run_pr_review(
         raise FileNotFoundError(f"Review template for lens '{lens}' not found.")
 
     template_content = template_path.read_text(encoding="utf-8")
-    
+
     # Apply mode modifications
     prefix = ""
     if mode == "adversarial":
@@ -203,7 +225,7 @@ def run_pr_review(
             "Aggressively seek out bugs, race conditions, design flaws, styling inconsistencies, and security issues. "
             "Do not accept compromises. Critique every line of the changes below.\n\n"
         )
-    
+
     compiled_prompt = prefix + template_content.replace("{{git_diff}}", diff)
 
     # 3. Save to a temporary prompt file for runtime reference
@@ -217,7 +239,9 @@ def run_pr_review(
 
     if is_test:
         console.print("[dim]Mocking review execution...[/]")
-        review_output = f"Mocked structured code review for PR #{pr_id} using {lens} lens."
+        review_output = (
+            f"Mocked structured code review for PR #{pr_id} using {lens} lens."
+        )
     else:
         if shutil.which(runtime):
             console.print(f"[cyan]Invoking {runtime} CLI for PR review...[/]")
@@ -246,7 +270,9 @@ def run_pr_review(
     # 4. Post comment
     console.print(f"[cyan]Posting review comment to Pull Request #{pr_id}...[/]")
     post_pr_comment(pr_id, review_output, token, repo_root)
-    console.print(f"[bold green]✓[/] Code review comment successfully posted to PR #{pr_id}.")
+    console.print(
+        f"[bold green]✓[/] Code review comment successfully posted to PR #{pr_id}."
+    )
 
 
 def run_pr_create(
@@ -281,7 +307,12 @@ def run_pr_create(
     console.print(f"[cyan]Pushing branch '{branch_name}' to remote origin...[/]")
     is_test = os.environ.get("SUTRA_TEST") == "1"
     if not is_test:
-        res_push = subprocess.run(["git", "push", "-u", "origin", branch_name], cwd=repo_root, capture_output=True, text=True)
+        res_push = subprocess.run(
+            ["git", "push", "-u", "origin", branch_name],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
         if res_push.returncode != 0:
             raise RuntimeError(f"Failed to push branch to remote:\n{res_push.stderr}")
 
@@ -292,8 +323,11 @@ def run_pr_create(
         run_dir = sutra_dir / "runs" / mission_id
         evidence_path = run_dir / "evidence.md"
         if not evidence_path.exists():
-            console.print("[yellow]Evidence report not found. Generating it automatically...[/]")
+            console.print(
+                "[yellow]Evidence report not found. Generating it automatically...[/]"
+            )
             from sutra.mission.reporter import run_mission_report
+
             run_mission_report(console=console)
         if evidence_path.exists():
             evidence_content = evidence_path.read_text(encoding="utf-8")
@@ -304,18 +338,22 @@ def run_pr_create(
         pr_body += f"\n\n## Sutra Mission Evidence\n\n{evidence_content}"
 
     # 3. Create PR
-    console.print(f"[cyan]Creating Pull Request for branch '{branch_name}' targeting '{base}'...[/]")
+    console.print(
+        f"[cyan]Creating Pull Request for branch '{branch_name}' targeting '{base}'...[/]"
+    )
     pr_url = ""
     if is_test:
         console.print("[dim]Mocking PR creation...[/]")
-        pr_url = f"https://github.com/mock/repo/pull/42"
+        pr_url = "https://github.com/mock/repo/pull/42"
     else:
         token = token or os.environ.get("GITHUB_TOKEN")
         owner_repo = get_github_repo_owner_name(repo_root)
         if token and owner_repo:
             owner, repo = owner_repo
             try:
-                pr_url = create_pr_api(owner, repo, title, pr_body, branch_name, base, token)
+                pr_url = create_pr_api(
+                    owner, repo, title, pr_body, branch_name, base, token
+                )
             except Exception as e:
                 try:
                     pr_url = create_pr_gh(title, pr_body, base, repo_root)
@@ -324,8 +362,10 @@ def run_pr_create(
         else:
             pr_url = create_pr_gh(title, pr_body, base, repo_root)
 
-    console.print(Panel(
-        f"[bold green]✓ Pull Request Created Successfully![/]\n[cyan]{pr_url}[/]",
-        title="[bold green]PR Created[/]",
-        border_style="green"
-    ))
+    console.print(
+        Panel(
+            f"[bold green]✓ Pull Request Created Successfully![/]\n[cyan]{pr_url}[/]",
+            title="[bold green]PR Created[/]",
+            border_style="green",
+        )
+    )

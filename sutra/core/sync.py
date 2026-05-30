@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 from rich.console import Console
-from rich.panel import Panel
 
 from sutra.core.config import (
     find_sutra_root,
@@ -37,7 +36,9 @@ def run_sync(
     runtimes_to_sync = [runtime] if runtime else config.runtimes
 
     if not runtimes_to_sync:
-        console.print("[yellow]No runtimes configured. Use [bold]sutra runtime add <runtime>[/] first.[/]")
+        console.print(
+            "[yellow]No runtimes configured. Use [bold]sutra runtime add <runtime>[/] first.[/]"
+        )
         return
 
     for rt in runtimes_to_sync:

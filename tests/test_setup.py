@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 from rich.console import Console
 
 from sutra.core.config import load_sutra_config, get_sutra_dir
@@ -50,10 +49,11 @@ def test_setup_wizard_fresh_initialization(tmp_repo: Path) -> None:
             return f"/usr/local/bin/{cmd}"
         return None
 
-    with patch("rich.prompt.Prompt.ask", side_effect=mock_ask), \
-         patch("rich.prompt.Confirm.ask", side_effect=mock_confirm), \
-         patch("shutil.which", side_effect=mock_which):
-        
+    with (
+        patch("rich.prompt.Prompt.ask", side_effect=mock_ask),
+        patch("rich.prompt.Confirm.ask", side_effect=mock_confirm),
+        patch("shutil.which", side_effect=mock_which),
+    ):
         run_setup(console=console)
 
     # 3. Verify .sutra/ is initialized
@@ -65,7 +65,7 @@ def test_setup_wizard_fresh_initialization(tmp_repo: Path) -> None:
     # Runtimes list should have claude, but not gemini or codex
     assert "claude" in config.runtimes
     assert "gemini" not in config.runtimes
-    
+
     # Verify guards
     assert config.guard.enabled is True
     assert config.guard.careful is True

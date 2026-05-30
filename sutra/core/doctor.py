@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from sutra.core.config import (
@@ -22,6 +21,7 @@ from sutra.core.config import (
     RUNTIMES_YAML,
     find_sutra_root,
     load_sutra_config,
+    SutraConfig,
 )
 
 
@@ -45,35 +45,50 @@ def _check_sutra_structure(repo_root: Path) -> list[DiagnosticResult]:
     for fname in required_files:
         fpath = sutra_dir / fname
         if fpath.exists():
-            results.append(DiagnosticResult(
-                f".sutra/{fname}",
-                True,
-                "Present",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{fname}",
+                    True,
+                    "Present",
+                )
+            )
         else:
-            results.append(DiagnosticResult(
-                f".sutra/{fname}",
-                False,
-                "Missing",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{fname}",
+                    False,
+                    "Missing",
+                )
+            )
 
     # Required directories
-    required_dirs = [CONTEXT_DIR, AGENTS_DIR, SKILLS_DIR, COMMANDS_DIR, POLICIES_DIR, EVIDENCE_DIR]
+    required_dirs = [
+        CONTEXT_DIR,
+        AGENTS_DIR,
+        SKILLS_DIR,
+        COMMANDS_DIR,
+        POLICIES_DIR,
+        EVIDENCE_DIR,
+    ]
     for dname in required_dirs:
         dpath = sutra_dir / dname
         if dpath.is_dir():
             children = list(dpath.iterdir())
-            results.append(DiagnosticResult(
-                f".sutra/{dname}/",
-                True,
-                f"{len(children)} items",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{dname}/",
+                    True,
+                    f"{len(children)} items",
+                )
+            )
         else:
-            results.append(DiagnosticResult(
-                f".sutra/{dname}/",
-                False,
-                "Missing directory",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{dname}/",
+                    False,
+                    "Missing directory",
+                )
+            )
 
     return results
 
@@ -88,18 +103,22 @@ def _check_yaml_validity(repo_root: Path) -> list[DiagnosticResult]:
         try:
             with open(yaml_file) as f:
                 yaml.safe_load(f)
-            results.append(DiagnosticResult(
-                f".sutra/{rel}",
-                True,
-                "Valid YAML",
-                severity="info",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{rel}",
+                    True,
+                    "Valid YAML",
+                    severity="info",
+                )
+            )
         except yaml.YAMLError as e:
-            results.append(DiagnosticResult(
-                f".sutra/{rel}",
-                False,
-                f"Invalid YAML: {e}",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".sutra/{rel}",
+                    False,
+                    f"Invalid YAML: {e}",
+                )
+            )
 
     return results
 
@@ -116,32 +135,40 @@ def _check_config_schema(repo_root: Path) -> list[DiagnosticResult]:
         known_runtimes = {"claude", "codex", "gemini"}
         for rt in config.runtimes:
             if rt in known_runtimes:
-                results.append(DiagnosticResult(
-                    f"Runtime: {rt}",
-                    True,
-                    "Known runtime",
-                    severity="info",
-                ))
+                results.append(
+                    DiagnosticResult(
+                        f"Runtime: {rt}",
+                        True,
+                        "Known runtime",
+                        severity="info",
+                    )
+                )
             else:
-                results.append(DiagnosticResult(
-                    f"Runtime: {rt}",
-                    False,
-                    f"Unknown runtime '{rt}'",
-                    severity="warning",
-                ))
+                results.append(
+                    DiagnosticResult(
+                        f"Runtime: {rt}",
+                        False,
+                        f"Unknown runtime '{rt}'",
+                        severity="warning",
+                    )
+                )
 
     except FileNotFoundError:
-        results.append(DiagnosticResult(
-            "sutra.yaml schema",
-            False,
-            "File not found",
-        ))
+        results.append(
+            DiagnosticResult(
+                "sutra.yaml schema",
+                False,
+                "File not found",
+            )
+        )
     except Exception as e:
-        results.append(DiagnosticResult(
-            "sutra.yaml schema",
-            False,
-            f"Validation error: {e}",
-        ))
+        results.append(
+            DiagnosticResult(
+                "sutra.yaml schema",
+                False,
+                f"Validation error: {e}",
+            )
+        )
 
     return results
 
@@ -162,28 +189,34 @@ def _check_claude_runtime(repo_root: Path) -> list[DiagnosticResult]:
     for dname in expected_dirs:
         dpath = claude_dir / dname
         if dpath.is_dir():
-            results.append(DiagnosticResult(
-                f".claude/{dname}/",
-                True,
-                f"{len(list(dpath.iterdir()))} items",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".claude/{dname}/",
+                    True,
+                    f"{len(list(dpath.iterdir()))} items",
+                )
+            )
         else:
-            results.append(DiagnosticResult(
-                f".claude/{dname}/",
-                False,
-                "Missing — run sutra sync",
-            ))
+            results.append(
+                DiagnosticResult(
+                    f".claude/{dname}/",
+                    False,
+                    "Missing — run sutra sync",
+                )
+            )
 
     settings = claude_dir / "settings.json"
     if settings.exists():
         results.append(DiagnosticResult(".claude/settings.json", True, "Present"))
     else:
-        results.append(DiagnosticResult(
-            ".claude/settings.json",
-            False,
-            "Missing — run sutra sync",
-            severity="warning",
-        ))
+        results.append(
+            DiagnosticResult(
+                ".claude/settings.json",
+                False,
+                "Missing — run sutra sync",
+                severity="warning",
+            )
+        )
 
     return results
 
@@ -217,30 +250,46 @@ def _check_gemini_runtime(repo_root: Path) -> list[DiagnosticResult]:
     if style_md.exists():
         results.append(DiagnosticResult(".gemini/STYLE.md", True, "Present"))
     else:
-        results.append(DiagnosticResult(".gemini/STYLE.md", False, "Missing — run sutra sync"))
+        results.append(
+            DiagnosticResult(".gemini/STYLE.md", False, "Missing — run sutra sync")
+        )
 
     settings = gemini_dir / "settings.json"
     if settings.exists():
         results.append(DiagnosticResult(".gemini/settings.json", True, "Present"))
     else:
-        results.append(DiagnosticResult(
-            ".gemini/settings.json",
-            False,
-            "Missing — run sutra sync",
-            severity="warning",
-        ))
+        results.append(
+            DiagnosticResult(
+                ".gemini/settings.json",
+                False,
+                "Missing — run sutra sync",
+                severity="warning",
+            )
+        )
 
     return results
 
 
-def _check_runtimes_in_path(repo_root: Path, config: SutraConfig) -> list[DiagnosticResult]:
+def _check_runtimes_in_path(
+    repo_root: Path, config: SutraConfig
+) -> list[DiagnosticResult]:
     import shutil
+
     results = []
     for rt in config.runtimes:
         if shutil.which(rt):
-            results.append(DiagnosticResult(f"Runtime in PATH: {rt}", True, "Found in PATH"))
+            results.append(
+                DiagnosticResult(f"Runtime in PATH: {rt}", True, "Found in PATH")
+            )
         else:
-            results.append(DiagnosticResult(f"Runtime in PATH: {rt}", False, f"Binary '{rt}' not found in PATH", severity="warning"))
+            results.append(
+                DiagnosticResult(
+                    f"Runtime in PATH: {rt}",
+                    False,
+                    f"Binary '{rt}' not found in PATH",
+                    severity="warning",
+                )
+            )
     return results
 
 
@@ -252,17 +301,39 @@ def _check_agents_validity(repo_root: Path) -> list[DiagnosticResult]:
             try:
                 content = agent_file.read_text(encoding="utf-8").strip()
                 if not content:
-                    results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", False, "File is empty", severity="warning"))
+                    results.append(
+                        DiagnosticResult(
+                            f"Agent persona: {agent_file.name}",
+                            False,
+                            "File is empty",
+                            severity="warning",
+                        )
+                    )
                 else:
-                    results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", True, "Valid and non-empty", severity="info"))
+                    results.append(
+                        DiagnosticResult(
+                            f"Agent persona: {agent_file.name}",
+                            True,
+                            "Valid and non-empty",
+                            severity="info",
+                        )
+                    )
             except Exception as e:
-                results.append(DiagnosticResult(f"Agent persona: {agent_file.name}", False, f"Failed to read: {e}", severity="warning"))
+                results.append(
+                    DiagnosticResult(
+                        f"Agent persona: {agent_file.name}",
+                        False,
+                        f"Failed to read: {e}",
+                        severity="warning",
+                    )
+                )
     return results
 
 
 def _check_validation_commands_in_path(repo_root: Path) -> list[DiagnosticResult]:
     import shutil
     from sutra.core.config import load_project_config
+
     results = []
     try:
         project_config = load_project_config(repo_root)
@@ -279,9 +350,22 @@ def _check_validation_commands_in_path(repo_root: Path) -> list[DiagnosticResult
                 if cmd:
                     binary = cmd.split()[0]
                     if shutil.which(binary):
-                        results.append(DiagnosticResult(f"Validation: {name} command", True, f"Binary '{binary}' found"))
+                        results.append(
+                            DiagnosticResult(
+                                f"Validation: {name} command",
+                                True,
+                                f"Binary '{binary}' found",
+                            )
+                        )
                     else:
-                        results.append(DiagnosticResult(f"Validation: {name} command", False, f"Binary '{binary}' (from '{cmd}') not found in PATH", severity="warning"))
+                        results.append(
+                            DiagnosticResult(
+                                f"Validation: {name} command",
+                                False,
+                                f"Binary '{binary}' (from '{cmd}') not found in PATH",
+                                severity="warning",
+                            )
+                        )
     except Exception:
         pass
     return results
@@ -289,31 +373,58 @@ def _check_validation_commands_in_path(repo_root: Path) -> list[DiagnosticResult
 
 def _check_git_status(repo_root: Path) -> list[DiagnosticResult]:
     import subprocess
+
     results = []
     git_dir = repo_root / ".git"
     if not git_dir.exists():
-        results.append(DiagnosticResult("Git Repository", False, "Not a Git repository", severity="warning"))
+        results.append(
+            DiagnosticResult(
+                "Git Repository", False, "Not a Git repository", severity="warning"
+            )
+        )
         return results
 
     results.append(DiagnosticResult("Git Repository", True, "Detected"))
 
     # Check commits
-    res = subprocess.run(["git", "rev-parse", "--verify", "HEAD"], cwd=repo_root, capture_output=True)
+    res = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"], cwd=repo_root, capture_output=True
+    )
     if res.returncode != 0:
-        results.append(DiagnosticResult("Git Commits", False, "No commits found in repository", severity="warning"))
+        results.append(
+            DiagnosticResult(
+                "Git Commits",
+                False,
+                "No commits found in repository",
+                severity="warning",
+            )
+        )
         return results
     else:
         results.append(DiagnosticResult("Git Commits", True, "Commits found"))
 
     # Check clean
-    res = subprocess.run(["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True)
+    res = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True
+    )
     if res.returncode == 0:
         clean = not res.stdout.strip()
         if clean:
-            results.append(DiagnosticResult("Git Status", True, "Working directory clean", severity="info"))
+            results.append(
+                DiagnosticResult(
+                    "Git Status", True, "Working directory clean", severity="info"
+                )
+            )
         else:
-            results.append(DiagnosticResult("Git Status", False, "Uncommitted changes present (may conflict with worktree isolation)", severity="warning"))
-            
+            results.append(
+                DiagnosticResult(
+                    "Git Status",
+                    False,
+                    "Uncommitted changes present (may conflict with worktree isolation)",
+                    severity="warning",
+                )
+            )
+
     return results
 
 
@@ -332,7 +443,6 @@ def run_doctor(
     all_results: list[DiagnosticResult] = []
 
     # core load config
-    from sutra.core.config import SutraConfig
     config = load_sutra_config(root)
 
     # Core checks

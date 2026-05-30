@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import json
 from pathlib import Path
 import pytest
 from rich.console import Console
@@ -25,7 +24,7 @@ def test_verification_lifecycle(sutra_repo: Path) -> None:
 
     req_file = sutra_repo / "requirements.md"
     req_file.write_text("# Test requirement\n", encoding="utf-8")
-    
+
     # 2. Plan, Approve, Run, Report
     mission_id = run_mission_plan(str(req_file), console=console)
     run_mission_approve(console=console)

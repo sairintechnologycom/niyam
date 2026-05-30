@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import os
-import json
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-import pytest
-import yaml
 from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
 from sutra.mission.planner import run_mission_plan, run_mission_approve
 from sutra.mission.executor import (
-    run_mission_start,
     run_mission_retry,
     run_mission_skip,
     run_mission_rollback,
@@ -61,7 +57,9 @@ def test_mission_skip_unblocks_downstream(sutra_repo: Path) -> None:
     assert plan["tasks"][2]["status"] == "completed"
     assert plan["tasks"][3]["status"] == "completed"
     assert plan["tasks"][4]["status"] == "completed"
-    assert plan["mission"]["status"] == "failed"  # Failed is expected because a task was skipped
+    assert (
+        plan["mission"]["status"] == "failed"
+    )  # Failed is expected because a task was skipped
 
 
 def test_mission_retry_requeues_tasks(sutra_repo: Path) -> None:
@@ -121,9 +119,14 @@ def test_mission_rollback_git_checkout(sutra_repo: Path) -> None:
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
         run_mission_rollback(console=console)
-        
+
         # Verify git checkout base_sha command is executed
-        mock_run.assert_any_call(["git", "checkout", base_sha, "--", "."], cwd=sutra_repo, capture_output=True, text=True)
+        mock_run.assert_any_call(
+            ["git", "checkout", base_sha, "--", "."],
+            cwd=sutra_repo,
+            capture_output=True,
+            text=True,
+        )
 
     plan = load_plan(run_dir)
     assert plan["mission"]["status"] == "failed"

@@ -27,7 +27,7 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
         "block_secrets_in_code": True,
         "require_auth_review": True,
         "require_input_validation": True,
-        "deny_write_patterns": ["src/secure/*.py"]
+        "deny_write_patterns": ["src/secure/*.py"],
     }
     with open(security_yaml, "w", encoding="utf-8") as f:
         yaml.dump(policy_data, f)
@@ -47,19 +47,20 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
     # 3. Patch shutil.which to find 'claude' CLI, and patch subprocess.run
     # When claude CLI is executed, we write a denied file and return success.
     import subprocess as sp
+
     real_run = sp.run
 
     def mock_subprocess_run(args, **kwargs):
         if args and args[0] == "git":
             return real_run(args, **kwargs)
-            
+
         cwd = kwargs.get("cwd", sutra_repo)
-        
+
         # Write the unauthorized file to the correct cwd
         unauthorized_file = Path(cwd) / "src" / "secure" / "secret.py"
         unauthorized_file.parent.mkdir(parents=True, exist_ok=True)
         unauthorized_file.write_text("unauthorized changes", encoding="utf-8")
-        
+
         # Also add it to git so status --porcelain sees it
         real_run(["git", "add", "src/secure/secret.py"], cwd=cwd)
 
@@ -67,9 +68,10 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
         res.returncode = 0
         return res
 
-    with patch("shutil.which", return_value="/usr/local/bin/claude"), \
-         patch("subprocess.run", side_effect=mock_subprocess_run):
-
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/claude"),
+        patch("subprocess.run", side_effect=mock_subprocess_run),
+    ):
         # We do NOT run in test mode (SUTRA_TEST) because we want orchestrator execution path
         # But wait, run_mission_start will run.
         # Let's make sure it doesn't fail on validation test commands (no validation set in fullstack by default)
@@ -79,14 +81,14 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
             with pytest.raises(SystemExit) as excinfo:
                 run_mission_start(console=console, worktree=False)
             assert excinfo.value.code == 1
-        except Exception as e:
+        except Exception:
             # Let it fail with SystemExit as expected
             pass
 
     # 4. Assert task T1 failed due to violation, and unauthorized file was deleted/reverted
     run_dir = sutra_dir / "runs" / mission_id
     plan = load_plan(run_dir)
-    
+
     # The first task executed (T1) should be failed
     assert plan["tasks"][0]["status"] == "failed"
     assert plan["mission"]["status"] == "failed"

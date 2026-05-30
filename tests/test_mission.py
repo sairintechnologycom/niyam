@@ -10,8 +10,13 @@ import yaml
 from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan, run_mission_approve, get_latest_mission_id
-from sutra.mission.executor import run_mission_start, run_mission_pause, run_mission_resume, load_plan
+from sutra.mission.planner import run_mission_plan, run_mission_approve
+from sutra.mission.executor import (
+    run_mission_start,
+    run_mission_pause,
+    run_mission_resume,
+    load_plan,
+)
 from sutra.mission.status import run_mission_status
 from sutra.mission.reporter import run_mission_report
 
@@ -26,7 +31,9 @@ class TestMission:
 
         # Create requirements file
         req_file = sutra_repo / "requirements.md"
-        req_file.write_text("# Implement Authentication\n\nRequire login validation.", encoding="utf-8")
+        req_file.write_text(
+            "# Implement Authentication\n\nRequire login validation.", encoding="utf-8"
+        )
 
         mission_id = run_mission_plan(str(req_file), console=console)
         assert mission_id is not None
@@ -37,7 +44,9 @@ class TestMission:
 
         # Check copied requirement
         assert (run_dir / "requirement.md").exists()
-        assert (run_dir / "requirement.md").read_text(encoding="utf-8") == req_file.read_text(encoding="utf-8")
+        assert (run_dir / "requirement.md").read_text(
+            encoding="utf-8"
+        ) == req_file.read_text(encoding="utf-8")
 
         # Check plan
         plan_path = run_dir / "mission-plan.yaml"
@@ -137,6 +146,7 @@ class TestMission:
         plan = load_plan(run_dir)
         plan["mission"]["status"] = "running"
         from sutra.mission.executor import save_plan
+
         save_plan(run_dir, plan)
 
         # Pause

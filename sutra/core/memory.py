@@ -50,7 +50,9 @@ def run_memory_show(console: Console) -> None:
     mem_dir = get_memory_dir(repo_root)
 
     if not mem_dir.exists():
-        console.print("[yellow]No memory directory found. Initialize workspace first.[/]")
+        console.print(
+            "[yellow]No memory directory found. Initialize workspace first.[/]"
+        )
         return
 
     files = sorted(mem_dir.glob("*.md"))
@@ -61,7 +63,9 @@ def run_memory_show(console: Console) -> None:
     for filepath in files:
         title = filepath.stem.replace("-", " ").title()
         content = filepath.read_text(encoding="utf-8")
-        console.print(Panel(content, title=f"[bold cyan]{title}[/]", border_style="cyan"))
+        console.print(
+            Panel(content, title=f"[bold cyan]{title}[/]", border_style="cyan")
+        )
 
 
 def run_memory_add(file: str, note: str, console: Console) -> None:
@@ -81,7 +85,7 @@ def run_memory_add(file: str, note: str, console: Console) -> None:
     # Check if we need a leading newline
     content = filepath.read_text(encoding="utf-8")
     suffix = "\n" if not content.endswith("\n") else ""
-    
+
     # Append the note as a bullet point
     filepath.write_text(content + suffix + f"- {note}\n", encoding="utf-8")
     console.print(f"[bold green]✓[/] Added note to memory '[cyan]{filepath.name}[/]'.")
@@ -114,6 +118,8 @@ def run_memory_clear(file: str, console: Console) -> None:
         # Fallback to file name
         title_line = f"# {filepath.stem.replace('-', ' ').title()}"
 
-    initial_content = f"{title_line}\n\n<!-- Cleared memory. Add new entries below. -->\n"
+    initial_content = (
+        f"{title_line}\n\n<!-- Cleared memory. Add new entries below. -->\n"
+    )
     filepath.write_text(initial_content, encoding="utf-8")
     console.print(f"[bold green]✓[/] Cleared memory '[cyan]{filepath.name}[/]'.")

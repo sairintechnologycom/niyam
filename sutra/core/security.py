@@ -16,20 +16,52 @@ import yaml
 # Only the first token of the command is checked against this set.
 ALLOWED_VALIDATION_EXECUTABLES: set[str] = {
     # Python
-    "pytest", "python", "python3", "mypy", "ruff", "black", "isort", "flake8",
-    "pylint", "pyright", "bandit", "safety", "pip-audit",
+    "pytest",
+    "python",
+    "python3",
+    "mypy",
+    "ruff",
+    "black",
+    "isort",
+    "flake8",
+    "pylint",
+    "pyright",
+    "bandit",
+    "safety",
+    "pip-audit",
     # Node / JS
-    "npm", "npx", "yarn", "pnpm", "bun", "node", "tsc", "eslint", "prettier",
+    "npm",
+    "npx",
+    "yarn",
+    "pnpm",
+    "bun",
+    "node",
+    "tsc",
+    "eslint",
+    "prettier",
     # Rust
-    "cargo", "clippy",
+    "cargo",
+    "clippy",
     # Go
     "go",
     # General build
-    "make", "cmake", "gradle", "mvn",
+    "make",
+    "cmake",
+    "gradle",
+    "mvn",
     # Security scanners
-    "semgrep", "gitleaks", "detect-secrets", "trivy", "grype",
+    "semgrep",
+    "gitleaks",
+    "detect-secrets",
+    "trivy",
+    "grype",
     # Shell utilities commonly used in validation
-    "echo", "cat", "grep", "wc", "diff", "test",
+    "echo",
+    "cat",
+    "grep",
+    "wc",
+    "diff",
+    "test",
 }
 
 
@@ -55,7 +87,9 @@ def validate_command(cmd: str) -> list[str]:
     if not parts:
         raise CommandSecurityError("Empty command after parsing")
 
-    executable = Path(parts[0]).name  # Strip any path prefix (e.g. /usr/bin/pytest → pytest)
+    executable = Path(
+        parts[0]
+    ).name  # Strip any path prefix (e.g. /usr/bin/pytest → pytest)
 
     if executable not in ALLOWED_VALIDATION_EXECUTABLES:
         raise CommandSecurityError(

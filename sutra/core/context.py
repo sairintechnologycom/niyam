@@ -81,15 +81,34 @@ VALIDATION_RULES: dict[str, dict] = {
 }
 
 SOURCE_DIR_CANDIDATES = [
-    "src", "lib", "app", "apps", "packages",
-    "services", "server", "client", "api",
-    "components", "pages", "views", "controllers",
-    "models", "utils", "helpers", "core",
+    "src",
+    "lib",
+    "app",
+    "apps",
+    "packages",
+    "services",
+    "server",
+    "client",
+    "api",
+    "components",
+    "pages",
+    "views",
+    "controllers",
+    "models",
+    "utils",
+    "helpers",
+    "core",
 ]
 
 TEST_DIR_CANDIDATES = [
-    "tests", "test", "__tests__", "spec", "specs",
-    "e2e", "integration", "cypress",
+    "tests",
+    "test",
+    "__tests__",
+    "spec",
+    "specs",
+    "e2e",
+    "integration",
+    "cypress",
 ]
 
 CI_FILES = [
@@ -129,7 +148,9 @@ def _extract_dependency_versions(repo_root: Path) -> list[str]:
             try:
                 with open(pyproject, "rb") as f:
                     data = tomllib.load(f)
-                poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+                poetry_deps = (
+                    data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+                )
                 project_deps = data.get("project", {}).get("dependencies", [])
                 for name, ver in sorted(poetry_deps.items()):
                     if name != "python":
@@ -199,13 +220,15 @@ def _extract_db_schema(repo_root: Path) -> list[str]:
         if mig_path.is_dir():
             files = sorted([f.name for f in mig_path.glob("**/*") if f.is_file()])
             if files:
-                info.append(f"Database migrations found in {m_dir}/ ({len(files)} files)")
+                info.append(
+                    f"Database migrations found in {m_dir}/ ({len(files)} files)"
+                )
 
     for sql_name in ["schema.sql", "db.sql", "init.sql"]:
         sql_path = repo_root / sql_name
         if sql_path.exists():
             info.append(f"SQL Schema file found: {sql_name}")
-            
+
     return info
 
 
@@ -214,9 +237,16 @@ def _extract_api_routes(repo_root: Path) -> list[str]:
     for r_dir in ["api", "routes", "controllers"]:
         dir_path = repo_root / r_dir
         if dir_path.is_dir():
-            files = [str(f.relative_to(repo_root)) for f in dir_path.glob("**/*") if f.is_file() and f.suffix in (".py", ".js", ".ts", ".go", ".rs")]
+            files = [
+                str(f.relative_to(repo_root))
+                for f in dir_path.glob("**/*")
+                if f.is_file() and f.suffix in (".py", ".js", ".ts", ".go", ".rs")
+            ]
             if files:
-                routes.append(f"Routes / controllers in {r_dir}/: {', '.join(files[:10])}" + ("..." if len(files) > 10 else ""))
+                routes.append(
+                    f"Routes / controllers in {r_dir}/: {', '.join(files[:10])}"
+                    + ("..." if len(files) > 10 else "")
+                )
     return routes
 
 
@@ -386,12 +416,14 @@ def _generate_architecture_md(scan_result: dict, project_name: str) -> str:
             lines.append(f"- `{ci}`")
         lines.append("")
 
-    lines.extend([
-        "---",
-        "",
-        "<!-- MANUAL SECTION: Add your own architecture notes below this line -->",
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "<!-- MANUAL SECTION: Add your own architecture notes below this line -->",
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -408,20 +440,22 @@ def _generate_validation_md(scan_result: dict) -> str:
     if scan_result["validation"]:
         for cmd_type, cmd in scan_result["validation"].items():
             lines.append(f"## {cmd_type.title()}")
-            lines.append(f"```bash")
+            lines.append("```bash")
             lines.append(f"{cmd}")
-            lines.append(f"```")
+            lines.append("```")
             lines.append("")
     else:
         lines.append("No validation commands detected. Add them manually.")
         lines.append("")
 
-    lines.extend([
-        "---",
-        "",
-        "<!-- MANUAL SECTION: Add your own validation commands below this line -->",
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "<!-- MANUAL SECTION: Add your own validation commands below this line -->",
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -437,7 +471,9 @@ def _preserve_manual_section(existing_content: str, new_content: str) -> str:
         # Get everything after the marker line
         after_marker = existing_content[idx:]
         # Find the end of the marker line
-        newline_idx = after_marker.index("\n") if "\n" in after_marker else len(after_marker)
+        newline_idx = (
+            after_marker.index("\n") if "\n" in after_marker else len(after_marker)
+        )
         manual_section = after_marker[newline_idx:].strip()
 
     # If there's manual content, append it to the new content
@@ -445,7 +481,9 @@ def _preserve_manual_section(existing_content: str, new_content: str) -> str:
         if manual_marker in new_content:
             idx = new_content.index(manual_marker)
             after_marker = new_content[idx:]
-            newline_idx = after_marker.index("\n") if "\n" in after_marker else len(after_marker)
+            newline_idx = (
+                after_marker.index("\n") if "\n" in after_marker else len(after_marker)
+            )
             marker_line = after_marker[: newline_idx + 1]
             return new_content[:idx] + marker_line + "\n" + manual_section + "\n"
 
@@ -456,7 +494,9 @@ def run_context_refresh(console: Console) -> None:
     """Scan the repo and update context files."""
     root = find_sutra_root()
     if root is None:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first."
+        )
         raise SystemExit(1)
 
     config = load_sutra_config(root)
@@ -533,16 +573,20 @@ def run_context_show(console: Console) -> None:
 
     context_dir = root / ".sutra" / "context"
     if not context_dir.is_dir():
-        console.print("[yellow]No context files found. Run [bold]sutra context refresh[/] first.[/]")
+        console.print(
+            "[yellow]No context files found. Run [bold]sutra context refresh[/] first.[/]"
+        )
         return
 
     for md_file in sorted(context_dir.glob("*.md")):
         content = md_file.read_text(encoding="utf-8")
-        console.print(Panel(
-            Syntax(content, "markdown", theme="monokai"),
-            title=f"[bold cyan]{md_file.name}[/]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                Syntax(content, "markdown", theme="monokai"),
+                title=f"[bold cyan]{md_file.name}[/]",
+                border_style="cyan",
+            )
+        )
 
 
 def run_context_diff(console: Console) -> None:
@@ -557,7 +601,9 @@ def run_context_diff(console: Console) -> None:
     context_dir = root / ".sutra" / "context"
 
     if not context_dir.is_dir():
-        console.print("[yellow]No existing context. Run [bold]sutra context refresh[/] to create it.[/]")
+        console.print(
+            "[yellow]No existing context. Run [bold]sutra context refresh[/] to create it.[/]"
+        )
         return
 
     # Compare architecture

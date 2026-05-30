@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import pytest
 from rich.console import Console
 
 from sutra.core.memory import (
@@ -60,6 +59,7 @@ class TestMemory:
 
         # Configure runtimes
         from sutra.core.config import load_sutra_config, save_sutra_config
+
         config = load_sutra_config(sutra_repo)
         config.runtimes = ["claude", "codex"]
         save_sutra_config(config, sutra_repo)

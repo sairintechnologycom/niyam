@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AliasChoices
 
 
 # ── Constants ──────────────────────────────────────────────────────────
@@ -140,8 +140,6 @@ class EvidencePolicy(BaseModel):
     require_policy_events: bool = True
 
 
-from pydantic import BaseModel, Field, AliasChoices
-
 class TaskValidationConfig(BaseModel):
     """Validation commands configuration for a task."""
 
@@ -162,13 +160,12 @@ class TaskContract(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     allowed_files: list[str] = Field(
         default_factory=lambda: ["*"],
-        validation_alias=AliasChoices("allowed_files", "files_allowed")
+        validation_alias=AliasChoices("allowed_files", "files_allowed"),
     )
     blocked_files: list[str] = Field(default_factory=list)
     writes_files: bool = True
     timeout_seconds: int = Field(
-        default=600,
-        validation_alias=AliasChoices("timeout_seconds", "timeout")
+        default=600, validation_alias=AliasChoices("timeout_seconds", "timeout")
     )
     risk: Literal["low", "medium", "high"] = "medium"
     objective: str = ""
@@ -177,9 +174,6 @@ class TaskContract(BaseModel):
     approval_required: bool = False
     tdd_required: Optional[bool] = None
     commit_sha: Optional[str] = None
-
-
-
 
 
 class MissionMeta(BaseModel):
@@ -195,8 +189,6 @@ class MissionMeta(BaseModel):
     parallel: int = 1
     worktree: bool = True
     base_sha: Optional[str] = None
-
-
 
 
 class MissionPlan(BaseModel):

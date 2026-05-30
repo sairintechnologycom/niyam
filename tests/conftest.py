@@ -12,7 +12,9 @@ import pytest
 def tmp_repo(tmp_path: Path) -> Path:
     """Create a temporary directory simulating a git repo."""
     # Initialize a minimal git repo
-    os.system(f"cd {tmp_path} && git init -q && git config user.email 'test@test.com' && git config user.name 'Test'")
+    os.system(
+        f"cd {tmp_path} && git init -q && git config user.email 'test@test.com' && git config user.name 'Test'"
+    )
     return tmp_path
 
 
@@ -26,7 +28,13 @@ def sutra_repo(tmp_repo: Path) -> Path:
     original_dir = os.getcwd()
     os.chdir(tmp_repo)
     try:
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
     finally:
         os.chdir(original_dir)
     return tmp_repo

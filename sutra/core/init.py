@@ -152,7 +152,9 @@ def run_init(
         )
         tree = _build_file_tree(files, repo_root)
         console.print(tree)
-        console.print(f"\n[dim]{len([f for f in files if f[1] is not None])} files would be created.[/]")
+        console.print(
+            f"\n[dim]{len([f for f in files if f[1] is not None])} files would be created.[/]"
+        )
         return
 
     # Remove existing if --force
@@ -193,6 +195,7 @@ def run_init(
     # Write default mission templates
     (sutra_dir / "templates" / "missions").mkdir(parents=True, exist_ok=True)
     from sutra.mission.planner import DEFAULT_TEMPLATES
+
     for name, template_data in DEFAULT_TEMPLATES.items():
         template_file = sutra_dir / "templates" / "missions" / f"{name}.yaml"
         with open(template_file, "w", encoding="utf-8") as f:
@@ -209,7 +212,11 @@ def run_init(
         Panel(
             f"[bold green]✓[/] Created Sutra workspace with [cyan]{profile}[/] profile\n"
             f"  [dim]•[/] {created_count} files written to .sutra/\n"
-            + (f"  [dim]•[/] Runtime [cyan]{runtime}[/] configured\n" if runtime else "")
+            + (
+                f"  [dim]•[/] Runtime [cyan]{runtime}[/] configured\n"
+                if runtime
+                else ""
+            )
             + f"  [dim]•[/] Project: [bold]{project_name}[/]\n"
             "\n"
             "[dim]Next steps:[/]\n"

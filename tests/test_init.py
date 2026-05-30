@@ -19,7 +19,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         assert (tmp_repo / ".sutra").is_dir()
 
@@ -29,7 +35,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         for subdir in ["tasks", "runs", "templates", "worktrees", "evidence"]:
             assert (tmp_repo / ".sutra" / subdir).is_dir()
@@ -40,7 +52,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         sutra_yaml = tmp_repo / ".sutra" / "sutra.yaml"
         assert sutra_yaml.exists()
@@ -58,7 +76,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         agents_dir = tmp_repo / ".sutra" / "agents"
         assert agents_dir.is_dir()
@@ -71,7 +95,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         skills_dir = tmp_repo / ".sutra" / "skills"
         assert skills_dir.is_dir()
@@ -84,7 +114,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         commands_dir = tmp_repo / ".sutra" / "commands"
         assert commands_dir.is_dir()
@@ -97,7 +133,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         policies_dir = tmp_repo / ".sutra" / "policies"
         assert policies_dir.is_dir()
@@ -112,7 +154,13 @@ class TestInit:
         os.chdir(sutra_repo)
 
         with pytest.raises(SystemExit):
-            run_init(profile="fullstack", runtime=None, dry_run=False, force=False, console=console)
+            run_init(
+                profile="fullstack",
+                runtime=None,
+                dry_run=False,
+                force=False,
+                console=console,
+            )
 
     def test_init_force_overwrites(self, sutra_repo: Path) -> None:
         """sutra init --force should overwrite existing .sutra/."""
@@ -122,7 +170,13 @@ class TestInit:
         os.chdir(sutra_repo)
 
         # Should not raise
-        run_init(profile="fullstack", runtime=None, dry_run=False, force=True, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=True,
+            console=console,
+        )
 
         assert (sutra_repo / ".sutra" / "sutra.yaml").exists()
 
@@ -132,7 +186,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime=None, dry_run=True, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=True,
+            force=False,
+            console=console,
+        )
 
         assert not (tmp_repo / ".sutra").exists()
 
@@ -142,7 +202,13 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="fullstack", runtime="claude", dry_run=False, force=False, console=console)
+        run_init(
+            profile="fullstack",
+            runtime="claude",
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         assert (tmp_repo / ".sutra").is_dir()
         assert (tmp_repo / "CLAUDE.md").exists()
@@ -156,7 +222,13 @@ class TestInit:
         os.chdir(tmp_repo)
 
         with pytest.raises(SystemExit):
-            run_init(profile="nonexistent", runtime=None, dry_run=False, force=False, console=console)
+            run_init(
+                profile="nonexistent",
+                runtime=None,
+                dry_run=False,
+                force=False,
+                console=console,
+            )
 
     def test_init_backend_profile(self, tmp_repo: Path) -> None:
         """sutra init --profile backend should create only backend-related agents."""
@@ -164,12 +236,18 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="backend", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="backend", runtime=None, dry_run=False, force=False, console=console
+        )
 
         agents_dir = tmp_repo / ".sutra" / "agents"
         assert agents_dir.is_dir()
         agent_names = {f.name for f in agents_dir.glob("*.md")}
-        assert agent_names == {"backend-specialist.md", "security-reviewer.md", "qa-reviewer.md"}
+        assert agent_names == {
+            "backend-specialist.md",
+            "security-reviewer.md",
+            "qa-reviewer.md",
+        }
 
     def test_init_frontend_profile(self, tmp_repo: Path) -> None:
         """sutra init --profile frontend should create only frontend-related agents."""
@@ -177,10 +255,15 @@ class TestInit:
 
         console = Console(quiet=True)
         os.chdir(tmp_repo)
-        run_init(profile="frontend", runtime=None, dry_run=False, force=False, console=console)
+        run_init(
+            profile="frontend",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
 
         agents_dir = tmp_repo / ".sutra" / "agents"
         assert agents_dir.is_dir()
         agent_names = {f.name for f in agents_dir.glob("*.md")}
         assert agent_names == {"frontend-specialist.md", "qa-reviewer.md"}
-

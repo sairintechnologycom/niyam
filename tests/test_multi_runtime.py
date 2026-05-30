@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
-import yaml
 from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
@@ -23,7 +19,7 @@ def test_planner_prompt_contains_runtime() -> None:
     prompt = build_planner_prompt(
         requirement="Build a feature",
         repo_map="file.py",
-        available_agents=["backend-specialist", "qa-reviewer"]
+        available_agents=["backend-specialist", "qa-reviewer"],
     )
     assert "runtime" in prompt
     assert "gemini" in prompt
@@ -98,8 +94,10 @@ def test_executor_resolves_task_runtime(sutra_repo: Path) -> None:
 
     # Approve it
     approval_path = get_sutra_dir(sutra_repo) / "runs" / mission_id / "approval.json"
-    approval_path.write_text('{"approved": true, "timestamp": "2026-05-28T22:00:00Z"}', encoding="utf-8")
-    
+    approval_path.write_text(
+        '{"approved": true, "timestamp": "2026-05-28T22:00:00Z"}', encoding="utf-8"
+    )
+
     run_dir = get_sutra_dir(sutra_repo) / "runs" / mission_id
     plan_data = load_plan(run_dir)
     plan_data["mission"]["status"] = "approved"
@@ -130,7 +128,7 @@ def test_executor_resolves_task_runtime(sutra_repo: Path) -> None:
             "status": "pending",
             "agent": "qa-reviewer",
             "depends_on": ["T2"],
-        }
+        },
     ]
     save_plan(run_dir, plan_data)
 
@@ -141,9 +139,10 @@ def test_executor_resolves_task_runtime(sutra_repo: Path) -> None:
         return None
 
     # Patch subprocess.run to track invocations
-    with patch("shutil.which", side_effect=mock_which), \
-         patch("subprocess.run") as mock_run:
-        
+    with (
+        patch("shutil.which", side_effect=mock_which),
+        patch("subprocess.run") as mock_run,
+    ):
         # SUTRA_TEST=0 allows running subprocess block.
         # SUTRA_CI_AUTO_APPROVE=1 satisfies the approval check.
         os.environ["SUTRA_CI_AUTO_APPROVE"] = "1"
@@ -169,11 +168,13 @@ def test_executor_resolves_task_runtime(sutra_repo: Path) -> None:
         assert ledger_path.exists()
         with open(ledger_path, encoding="utf-8") as f:
             ledger = json.load(f)
-        
+
         events = ledger.get("events", [])
         assert len(events) >= 3
         # Map task ID to runtime used from ledger
-        task_runtimes = {entry["task_id"]: entry["runtime"] for entry in events if "task_id" in entry}
+        task_runtimes = {
+            entry["task_id"]: entry["runtime"] for entry in events if "task_id" in entry
+        }
         assert task_runtimes["T1"] == "gemini"
         assert task_runtimes["T2"] == "codex"
         assert task_runtimes["T3"] == "claude"
