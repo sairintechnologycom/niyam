@@ -40,13 +40,32 @@ Sutra turns any repository into a governed AI-development workspace with:
 - **Guardrails** — command deny lists, approval gates, path restrictions
 - **Evidence** — audit trails for every AI-assisted session
 
+## Installation
+
+You can install Sutra CLI globally using [pipx](https://github.com/pypa/pipx):
+
+```bash
+pipx install sutra-cli
+```
+
+Alternatively, you can run it on the fly without installing using `uvx`:
+
+```bash
+uvx --from sutra-cli sutra --help
+```
+
+For local development installation:
+
+```bash
+git clone https://github.com/aincloudtools/sutra.git
+cd sutra
+pip install -e .
+```
+
 ## Quick Start
 
 ```bash
-# Install
-pip install -e .
-
-# Initialize a workspace
+# Initialize a workspace in your target repository
 cd your-project
 sutra init --profile fullstack --runtime claude
 
@@ -55,25 +74,6 @@ sutra runtime add codex
 
 # Detect your stack
 sutra context refresh
-
-# Validate setup
-sutra policy validate
-sutra doctor
-
-# Sync changes to runtimes
-sutra sync
-```
-
-Then open Claude Code and use:
-```
-/implement add login validation
-/review
-/ship
-```
-
-## Commands
-
-| Command | Description |
 ```
 
 ## Source Directories

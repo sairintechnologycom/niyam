@@ -54,6 +54,12 @@ This project is managed by Sutra — a governed AI-development workspace.
 ## Languages
 - Python
 
+## Frameworks
+- Pydantic
+- Rich
+- Typer
+- pytest
+
 ## Dependency Versions
 - typer>=0.15.0,<1.0
 - rich>=13.0.0,<14.0
@@ -61,6 +67,9 @@ This project is managed by Sutra — a governed AI-development workspace.
 - pyyaml>=6.0,<7.0
 - jinja2>=3.1.0,<4.0
 - gitpython>=3.1.0,<4.0
+- pytest>=8.0.0
+- pytest-cov>=5.0.0
+- pytest-tmp-files>=0.0.2
 
 ## Project Readme Summary
 ```markdown
@@ -80,13 +89,32 @@ Sutra turns any repository into a governed AI-development workspace with:
 - **Guardrails** — command deny lists, approval gates, path restrictions
 - **Evidence** — audit trails for every AI-assisted session
 
+## Installation
+
+You can install Sutra CLI globally using [pipx](https://github.com/pypa/pipx):
+
+```bash
+pipx install sutra-cli
+```
+
+Alternatively, you can run it on the fly without installing using `uvx`:
+
+```bash
+uvx --from sutra-cli sutra --help
+```
+
+For local development installation:
+
+```bash
+git clone https://github.com/aincloudtools/sutra.git
+cd sutra
+pip install -e .
+```
+
 ## Quick Start
 
 ```bash
-# Install
-pip install -e .
-
-# Initialize a workspace
+# Initialize a workspace in your target repository
 cd your-project
 sutra init --profile fullstack --runtime claude
 
@@ -95,26 +123,10 @@ sutra runtime add codex
 
 # Detect your stack
 sutra context refresh
-
-# Validate setup
-sutra policy validate
-sutra doctor
-
-# Sync changes to runtimes
-sutra sync
 ```
 
-Then open Claude Code and use:
-```
-/implement add login validation
-/review
-/ship
-```
-
-## Commands
-
-| Command | Description |
-```
+## Source Directories
+- `sutra/`
 
 ## Test Directories
 - `tests/`
