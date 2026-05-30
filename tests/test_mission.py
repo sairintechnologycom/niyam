@@ -219,4 +219,6 @@ class TestMission:
         active_id = run_mission_plan(str(active_req), console=console)
 
         assert resolve_mission_id(get_sutra_dir(sutra_repo)) == active_id
-        assert resolve_mission_id(get_sutra_dir(sutra_repo), completed_id) == completed_id
+        assert (
+            resolve_mission_id(get_sutra_dir(sutra_repo), completed_id) == completed_id
+        )

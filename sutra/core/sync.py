@@ -28,6 +28,8 @@ def _ensure_sutra_root(console: Console) -> Path:
 def run_sync(
     runtime: str | None,
     console: Console,
+    verbose: bool = False,
+    dry_run: bool = False,
 ) -> None:
     """Sync .sutra/ to configured runtimes."""
     repo_root = _ensure_sutra_root(console)
@@ -45,17 +47,17 @@ def run_sync(
         if rt == "claude":
             from sutra.runtimes.claude import ClaudeAdapter
 
-            adapter = ClaudeAdapter(repo_root)
+            adapter = ClaudeAdapter(repo_root, verbose=verbose, dry_run=dry_run)
             adapter.sync(console)
         elif rt == "codex":
             from sutra.runtimes.codex import CodexAdapter
 
-            adapter = CodexAdapter(repo_root)
+            adapter = CodexAdapter(repo_root, verbose=verbose, dry_run=dry_run)
             adapter.sync(console)
         elif rt == "gemini":
             from sutra.runtimes.gemini import GeminiAdapter
 
-            adapter = GeminiAdapter(repo_root)
+            adapter = GeminiAdapter(repo_root, verbose=verbose, dry_run=dry_run)
             adapter.sync(console)
         else:
             console.print(f"[yellow]Unknown runtime: {rt}[/]")
@@ -64,6 +66,7 @@ def run_sync(
 def run_runtime_add(
     runtime: str,
     console: Console,
+    dry_run: bool = False,
 ) -> None:
     """Add a runtime to the workspace and sync it."""
     repo_root = _ensure_sutra_root(console)
@@ -71,6 +74,12 @@ def run_runtime_add(
 
     if runtime in config.runtimes:
         console.print(f"[yellow]Runtime [cyan]{runtime}[/] is already configured.[/]")
+        return
+
+    if dry_run:
+        console.print(f"[yellow]Dry Run: Would add runtime [bold cyan]{runtime}[/] to sutra.yaml and runtimes.yaml[/]")
+        # Preview sync
+        run_sync(runtime=runtime, console=console, verbose=True, dry_run=True)
         return
 
     # Add runtime to config

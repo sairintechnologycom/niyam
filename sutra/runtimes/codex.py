@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-
+import json
+import shutil
 import yaml
 from rich.console import Console
 
@@ -19,13 +20,18 @@ class CodexAdapter(RuntimeAdapter):
     def sync(self, console: Console) -> None:
         """Generate Codex CLI files from .sutra/ source of truth."""
         self._generate_agents_md(console)
+        self._generate_hooks(console)
+        self._generate_settings(console)
         console.print("[green]✓[/] Codex CLI runtime synced")
 
     def clean(self, console: Console) -> None:
         """Remove all Codex-generated files."""
         agents_md = self.repo_root / "AGENTS.md"
+        codex_dir = self.repo_root / ".codex"
         if agents_md.exists():
             agents_md.unlink()
+        if codex_dir.exists():
+            shutil.rmtree(codex_dir)
         console.print("[yellow]♻ Removed Codex CLI files[/]")
 
     # ── Private generators ─────────────────────────────────────────────
@@ -83,7 +89,42 @@ class CodexAdapter(RuntimeAdapter):
 
         # Write AGENTS.md
         agents_md = self.repo_root / "AGENTS.md"
-        agents_md.write_text("\n".join(sections), encoding="utf-8")
+        self._write_file(agents_md, "\n".join(sections), console)
+
+    def _generate_settings(self, console: Console) -> None:
+        """Generate .codex/settings.json."""
+        settings_dir = self.repo_root / ".codex"
+
+        tool_names = [
+            "bash",
+            "shell",
+            "terminal",
+            "run_command",
+            "write_file",
+            "edit_file",
+            "replace_file_content",
+            "multi_replace_file_content",
+        ]
+        pre_tool_use_hooks = []
+        for tool in tool_names:
+            pre_tool_use_hooks.append(
+                {
+                    "matcher": {"tool_name": tool},
+                    "hook": {
+                        "type": "command",
+                        "command": "python .codex/hooks/pre_tool_guard.py",
+                    },
+                }
+            )
+
+        settings = {
+            "project": self.repo_root.name,
+            "runtime": "codex",
+            "hooks": {"pre_tool_use": pre_tool_use_hooks},
+        }
+
+        settings_path = settings_dir / "settings.json"
+        self._write_file(settings_path, json.dumps(settings, indent=2) + "\n", console)
 
     def _build_agents_section(self) -> str:
         """Build a section listing available agents."""

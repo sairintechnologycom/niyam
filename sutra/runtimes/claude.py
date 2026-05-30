@@ -92,7 +92,7 @@ class ClaudeAdapter(RuntimeAdapter):
 
         # Write CLAUDE.md
         claude_md = self.repo_root / "CLAUDE.md"
-        claude_md.write_text("\n".join(sections), encoding="utf-8")
+        self._write_file(claude_md, "\n".join(sections), console)
 
     def _build_policies_section(self) -> str:
         """Build a markdown summary of active policies."""
@@ -138,13 +138,13 @@ class ClaudeAdapter(RuntimeAdapter):
         """Copy .sutra/agents/ → .claude/agents/."""
         source_dir = self.sutra_dir / "agents"
         target_dir = self.repo_root / ".claude" / "agents"
-        self._mirror_directory(source_dir, target_dir)
+        self._mirror_directory(source_dir, target_dir, console)
 
     def _project_commands(self, console: Console) -> None:
         """Copy .sutra/commands/ → .claude/commands/."""
         source_dir = self.sutra_dir / "commands"
         target_dir = self.repo_root / ".claude" / "commands"
-        self._mirror_directory(source_dir, target_dir)
+        self._mirror_directory(source_dir, target_dir, console)
 
     def _project_skills(self, console: Console) -> None:
         """Copy .sutra/skills/ → .claude/skills/."""
@@ -154,303 +154,18 @@ class ClaudeAdapter(RuntimeAdapter):
         if not source_dir.is_dir():
             return
 
-        target_dir.mkdir(parents=True, exist_ok=True)
+        if not self.dry_run:
+            target_dir.mkdir(parents=True, exist_ok=True)
 
         # Skills are directories, not files — copy recursively
         for skill_dir in source_dir.iterdir():
             if skill_dir.is_dir():
                 target_skill = target_dir / skill_dir.name
-                if target_skill.exists():
-                    shutil.rmtree(target_skill)
-                shutil.copytree(skill_dir, target_skill)
-
-    def _generate_hooks(self, console: Console) -> None:
-        """Generate .claude/hooks/pre_tool_guard.py from policies."""
-        hooks_dir = self.repo_root / ".claude" / "hooks"
-        hooks_dir.mkdir(parents=True, exist_ok=True)
-
-        # Load command policy
-        cmd_policy_content = self._read_sutra_file("policies/commands.yaml")
-        deny_list: list[str] = []
-        warn_list: list[str] = []
-
-        if cmd_policy_content:
-            data = yaml.safe_load(cmd_policy_content) or {}
-            deny_list = data.get("deny", [])
-            warn_list = data.get("warn", [])
-
-        # Load security policy
-        security_policy_content = self._read_sutra_file("policies/security.yaml")
-        deny_write_patterns: list[str] = []
-        allow_write_patterns: list[str] = []
-
-        if security_policy_content:
-            sec_data = yaml.safe_load(security_policy_content) or {}
-            deny_write_patterns = sec_data.get("deny_write_patterns", [])
-            allow_write_patterns = sec_data.get("allow_write_patterns", [])
-
-        # Load guard state
-        sutra_config_content = self._read_sutra_file("sutra.yaml")
-        frozen_paths: list[str] = []
-        guard_enabled = False
-        remote_policy_url: str | None = None
-
-        if sutra_config_content:
-            config_data = yaml.safe_load(sutra_config_content) or {}
-            guard = config_data.get("guard", {})
-            guard_enabled = guard.get("enabled", False)
-            frozen_paths = guard.get("frozen_paths", [])
-            remote_policy_url = guard.get("remote_policy_url")
-
-        hook_content = self._render_hook_script(
-            deny_list,
-            warn_list,
-            deny_write_patterns,
-            allow_write_patterns,
-            frozen_paths,
-            guard_enabled,
-            remote_policy_url,
-        )
-        hook_path = hooks_dir / "pre_tool_guard.py"
-        hook_path.write_text(hook_content, encoding="utf-8")
-
-    def _render_hook_script(
-        self,
-        deny_list: list[str],
-        warn_list: list[str],
-        deny_write_patterns: list[str],
-        allow_write_patterns: list[str],
-        frozen_paths: list[str],
-        guard_enabled: bool,
-        remote_policy_url: str | None,
-    ) -> str:
-        """Render the pre-tool guard hook script.
-
-        The generated hook loads its configuration from .sutra/hook-cache/
-        at runtime, avoiding embedding sensitive data (remote URLs, deny
-        lists) in the generated script file.
-        """
-        # Write a local policy cache that the hook reads at runtime.
-        sutra_dir = self.repo_root / ".sutra"
-        hook_config_dir = sutra_dir / "hook-cache"
-        hook_config_dir.mkdir(parents=True, exist_ok=True)
-
-        hook_config = {
-            "guard_enabled": guard_enabled,
-            "deny_patterns": deny_list,
-            "warn_patterns": warn_list,
-            "deny_write_patterns": deny_write_patterns,
-            "allow_write_patterns": allow_write_patterns,
-            "frozen_paths": frozen_paths,
-        }
-        hook_config_path = hook_config_dir / "guard-config.json"
-        hook_config_path.write_text(json.dumps(hook_config, indent=2), encoding="utf-8")
-
-        # The hook script itself is a static template — no embedded secrets.
-        return '''#!/usr/bin/env python3
-"""Sutra pre-tool guard hook for Claude Code.
-
-Generated by Sutra — do not edit directly. Run `sutra sync` to update.
-Configuration is loaded from .sutra/hook-cache/guard-config.json at runtime.
-"""
-
-import json
-import sys
-import fnmatch
-from datetime import datetime, timezone
-from pathlib import Path
-
-
-# ── Load configuration from .sutra/ at runtime ─────────────────────────
-
-
-def _find_sutra_root():
-    """Walk up from the hook file to find the .sutra directory."""
-    hook_dir = Path(__file__).resolve().parent
-    current = hook_dir.parent.parent  # .claude/hooks/ -> repo root
-    for _ in range(5):
-        if (current / ".sutra").is_dir():
-            return current
-        current = current.parent
-    return hook_dir.parent.parent
-
-
-_REPO_ROOT = _find_sutra_root()
-_CONFIG_PATH = _REPO_ROOT / ".sutra" / "hook-cache" / "guard-config.json"
-
-GUARD_ENABLED = False
-DENY_PATTERNS = []
-WARN_PATTERNS = []
-DENY_WRITE_PATTERNS = []
-ALLOW_WRITE_PATTERNS = []
-FROZEN_PATHS = []
-
-if _CONFIG_PATH.exists():
-    try:
-        with open(_CONFIG_PATH) as _f:
-            _cfg = json.load(_f)
-        GUARD_ENABLED = _cfg.get("guard_enabled", False)
-        DENY_PATTERNS = _cfg.get("deny_patterns", [])
-        WARN_PATTERNS = _cfg.get("warn_patterns", [])
-        DENY_WRITE_PATTERNS = _cfg.get("deny_write_patterns", [])
-        ALLOW_WRITE_PATTERNS = _cfg.get("allow_write_patterns", [])
-        FROZEN_PATHS = _cfg.get("frozen_paths", [])
-    except Exception:
-        pass
-
-
-def log_policy_event(event_type, details):
-    """Log a policy event for evidence."""
-    import fcntl
-
-    evidence_dir = _REPO_ROOT / ".sutra" / "evidence"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    log_file = evidence_dir / "policy-events.json"
-
-    event = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "type": event_type,
-        "details": details,
-    }
-
-    with open(log_file, "a+", encoding="utf-8") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            f.seek(0)
-            content = f.read().strip()
-            if content:
-                try:
-                    events = json.loads(content)
-                    if not isinstance(events, list):
-                        events = []
-                except Exception:
-                    events = []
-            else:
-                events = []
-
-            events.append(event)
-            f.seek(0)
-            f.truncate()
-            json.dump(events, f, indent=2)
-        finally:
-            try:
-                fcntl.flock(f, fcntl.LOCK_UN)
-            except Exception:
-                pass
-
-
-# ── Hook logic ─────────────────────────────────────────────────────────
-
-
-def _matches_pattern(command_lower, pattern):
-    """Token-prefix + glob matching for command patterns."""
-    cmd_tokens = command_lower.split()
-    pat_tokens = pattern.lower().split()
-    if cmd_tokens[: len(pat_tokens)] == pat_tokens:
-        return True
-    return fnmatch.fnmatch(command_lower, pattern.lower())
-
-
-def check_command(command):
-    """Check a command against policies."""
-    if not GUARD_ENABLED:
-        return {"allowed": True}
-
-    command_lower = command.lower().strip()
-
-    for pattern in DENY_PATTERNS:
-        if _matches_pattern(command_lower, pattern):
-            log_policy_event("BLOCKED", "Denied command: " + command)
-            return {
-                "allowed": False,
-                "reason": "Blocked by Sutra policy: '"
-                + pattern
-                + "' is in the deny list.",
-            }
-
-    for pattern in WARN_PATTERNS:
-        if _matches_pattern(command_lower, pattern):
-            log_policy_event("WARNING", "Cautioned command: " + command)
-            return {
-                "allowed": True,
-                "warning": "Sutra caution: '" + pattern + "' - proceed carefully.",
-            }
-
-    return {"allowed": True}
-
-
-def check_file_path(file_path):
-    """Check if a file path violates write restriction or frozen scope policies."""
-    if not GUARD_ENABLED:
-        return {"allowed": True}
-
-    if DENY_WRITE_PATTERNS and any(
-        fnmatch.fnmatch(file_path, pat) for pat in DENY_WRITE_PATTERNS
-    ):
-        log_policy_event(
-            "BLOCKED", "Write restriction violation (deny list): " + file_path
-        )
-        return {
-            "allowed": False,
-            "reason": "Blocked by Sutra security policy: file '"
-            + file_path
-            + "' matches deny_write_patterns.",
-        }
-    if ALLOW_WRITE_PATTERNS and not any(
-        fnmatch.fnmatch(file_path, pat) for pat in ALLOW_WRITE_PATTERNS
-    ):
-        log_policy_event(
-            "BLOCKED", "Write restriction violation (not in allow list): " + file_path
-        )
-        return {
-            "allowed": False,
-            "reason": "Blocked by Sutra security policy: file '"
-            + file_path
-            + "' does not match allow_write_patterns.",
-        }
-
-    if FROZEN_PATHS:
-        for allowed_path in FROZEN_PATHS:
-            if file_path.startswith(allowed_path):
-                return {"allowed": True}
-        log_policy_event("BLOCKED", "File outside frozen scope: " + file_path)
-        return {
-            "allowed": False,
-            "reason": "Blocked by Sutra guard: file '"
-            + file_path
-            + "' is outside the allowed scope: "
-            + str(FROZEN_PATHS),
-        }
-
-    return {"allowed": True}
-
-
-if __name__ == "__main__":
-    input_data = json.loads(sys.stdin.read())
-    tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
-
-    result = {"allowed": True}
-
-    if tool_name in ("bash", "shell", "terminal", "run_command"):
-        command = tool_input.get("command", "") or tool_input.get("CommandLine", "")
-        result = check_command(command)
-    elif tool_name in (
-        "write_file",
-        "edit_file",
-        "replace_file_content",
-        "multi_replace_file_content",
-    ):
-        file_path = tool_input.get("file_path", "") or tool_input.get("TargetFile", "")
-        result = check_file_path(file_path)
-
-    print(json.dumps(result))
-'''
+                self._mirror_directory(skill_dir, target_skill, console)
 
     def _generate_settings(self, console: Console) -> None:
         """Generate .claude/settings.json."""
         settings_dir = self.repo_root / ".claude"
-        settings_dir.mkdir(parents=True, exist_ok=True)
 
         tool_names = [
             "bash",
@@ -475,22 +190,5 @@ if __name__ == "__main__":
             )
 
         settings = {"hooks": {"pre_tool_use": pre_tool_use_hooks}}
-
         settings_path = settings_dir / "settings.json"
-        settings_path.write_text(
-            json.dumps(settings, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
-    def _mirror_directory(self, source: Path, target: Path) -> None:
-        """Mirror a source directory to a target, removing stale files."""
-        if not source.is_dir():
-            return
-
-        target.mkdir(parents=True, exist_ok=True)
-
-        # Copy source files
-        for src_file in source.iterdir():
-            if src_file.is_file():
-                dst_file = target / src_file.name
-                shutil.copy2(src_file, dst_file)
+        self._write_file(settings_path, json.dumps(settings, indent=2) + "\n", console)

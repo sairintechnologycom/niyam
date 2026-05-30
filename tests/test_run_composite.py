@@ -39,7 +39,7 @@ def test_run_composite_command_file(sutra_repo: Path) -> None:
     sutra_dir = get_sutra_dir(sutra_repo)
     runs_dir = sutra_dir / "runs"
     assert runs_dir.is_dir()
-    runs = list(runs_dir.iterdir())
+    runs = [d for d in runs_dir.iterdir() if d.name != "current"]
     assert len(runs) == 1
 
     plan = load_plan(runs[0])
@@ -64,7 +64,7 @@ def test_run_composite_command_inline_string(sutra_repo: Path) -> None:
 
     sutra_dir = get_sutra_dir(sutra_repo)
     runs_dir = sutra_dir / "runs"
-    runs = [d for d in runs_dir.iterdir() if d.is_dir()]
+    runs = [d for d in runs_dir.iterdir() if d.is_dir() and d.name != "current"]
     assert len(runs) > 0
 
     # Sort runs by name/creation to get the latest

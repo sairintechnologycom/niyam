@@ -108,6 +108,19 @@ class TestCodexSync:
         content = (sutra_repo / "AGENTS.md").read_text()
         assert "Policies" in content or "Denied" in content
 
+    def test_codex_sync_creates_hooks_and_settings(self, sutra_repo: Path) -> None:
+        """Sync should generate hooks/pre_tool_guard.py and settings.json for Codex."""
+        from sutra.core.sync import run_runtime_add
+
+        console = Console(quiet=True)
+        os.chdir(sutra_repo)
+        run_runtime_add(runtime="codex", console=console)
+
+        codex_dir = sutra_repo / ".codex"
+        assert codex_dir.is_dir()
+        assert (codex_dir / "hooks" / "pre_tool_guard.py").exists()
+        assert (codex_dir / "settings.json").exists()
+
 
 class TestGeminiSync:
     """Tests for Gemini runtime sync."""
@@ -145,6 +158,19 @@ class TestGeminiSync:
 
         content = (sutra_repo / "GEMINI.md").read_text()
         assert "Policies" in content or "Denied" in content
+
+    def test_gemini_sync_creates_hooks_and_settings(self, sutra_repo: Path) -> None:
+        """Sync should generate hooks/pre_tool_guard.py and settings.json for Gemini."""
+        from sutra.core.sync import run_runtime_add
+
+        console = Console(quiet=True)
+        os.chdir(sutra_repo)
+        run_runtime_add(runtime="gemini", console=console)
+
+        gemini_dir = sutra_repo / ".gemini"
+        assert gemini_dir.is_dir()
+        assert (gemini_dir / "hooks" / "pre_tool_guard.py").exists()
+        assert (gemini_dir / "settings.json").exists()
 
 
 class TestRuntimeAdd:

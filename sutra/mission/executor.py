@@ -67,9 +67,7 @@ def save_plan(run_dir: Path, plan_data: dict) -> None:
                     suffix=".tmp",
                     delete=False,
                 ) as f:
-                    yaml.dump(
-                        plan_data, f, default_flow_style=False, sort_keys=False
-                    )
+                    yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
                     plan_tmp = Path(f.name)
                 plan_tmp.replace(plan_path)
 
@@ -225,9 +223,13 @@ def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict 
             "cost": r"(?:Total cost|Cost):\s*\$([\d.]+)",
         },
     }
-    
+
     # Filter patterns by runtime if specified
-    runtimes_to_try = [runtime.lower()] if runtime and runtime.lower() in patterns else list(patterns.keys())
+    runtimes_to_try = (
+        [runtime.lower()]
+        if runtime and runtime.lower() in patterns
+        else list(patterns.keys())
+    )
 
     # Try each pattern set...
     for rt in runtimes_to_try:
@@ -1418,7 +1420,9 @@ Do not perform destructive operations.
                 if not task_runtime:
                     try:
                         plan_data = load_plan(run_dir)
-                        task_runtime = plan_data.get("mission", {}).get("orchestrator", "claude")
+                        task_runtime = plan_data.get("mission", {}).get(
+                            "orchestrator", "claude"
+                        )
                     except Exception:
                         task_runtime = "claude"
                 parsed_usage = parse_cli_token_usage(log_content, runtime=task_runtime)

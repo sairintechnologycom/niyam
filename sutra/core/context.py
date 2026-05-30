@@ -148,15 +148,18 @@ def _extract_dependency_versions(repo_root: Path) -> list[str]:
             try:
                 with open(pyproject, "rb") as f:
                     data = tomllib.load(f)
-                poetry_deps = (
-                    data.get("tool", {}).get("poetry", {}).get("dependencies", {})
-                )
                 project_deps = data.get("project", {}).get("dependencies", [])
+                opt_deps = data.get("project", {}).get("optional-dependencies", {}) or {}
+                poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {}) or {}
                 for name, ver in sorted(poetry_deps.items()):
                     if name != "python":
                         versions.append(f"{name} ({ver})")
                 for dep in project_deps:
                     versions.append(str(dep))
+                for group_deps in opt_deps.values():
+                    if isinstance(group_deps, list):
+                        for dep in group_deps:
+                            versions.append(str(dep))
             except Exception:
                 pass
         else:
@@ -302,6 +305,43 @@ def _scan_repo(repo_root: Path) -> dict:
         if (repo_root / filename).exists():
             frameworks.add(framework)
 
+    # Scan dependencies for framework indicators
+    dependency_frameworks = {
+        "typer": "Typer",
+        "rich": "Rich",
+        "pytest": "pytest",
+        "pydantic": "Pydantic",
+        "fastapi": "FastAPI",
+        "django": "Django",
+        "flask": "Flask",
+        "sqlalchemy": "SQLAlchemy",
+        "react": "React",
+        "express": "Express",
+        "jest": "Jest",
+        "next": "Next.js",
+        "vue": "Vue",
+        "angular": "Angular",
+        "svelte": "Svelte",
+    }
+    dep_versions = _extract_dependency_versions(repo_root)
+    # Also extract requirements.txt if present
+    req_txt = repo_root / "requirements.txt"
+    if req_txt.exists():
+        try:
+            for line in req_txt.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    dep_name = line.split("=")[0].split(">")[0].split("<")[0].split("[")[0].strip().lower()
+                    if dep_name in dependency_frameworks:
+                        frameworks.add(dependency_frameworks[dep_name])
+        except Exception:
+            pass
+
+    for dep_str in dep_versions:
+        dep_name = dep_str.split()[0].split(">")[0].split("<")[0].split("=")[0].split("[")[0].strip().lower()
+        if dep_name in dependency_frameworks:
+            frameworks.add(dependency_frameworks[dep_name])
+
     # Detect validation commands
     for manifest, commands in VALIDATION_RULES.items():
         if (repo_root / manifest).exists():
@@ -313,6 +353,15 @@ def _scan_repo(repo_root: Path) -> dict:
     for dirname in SOURCE_DIR_CANDIDATES:
         if (repo_root / dirname).is_dir():
             source_dirs.append(dirname)
+
+    # Detect project package directory as primary source root
+    try:
+        config = load_sutra_config(repo_root)
+        project_name = config.project_name
+        if project_name and (repo_root / project_name).is_dir() and project_name not in source_dirs:
+            source_dirs.append(project_name)
+    except Exception:
+        pass
 
     # Detect test directories
     for dirname in TEST_DIR_CANDIDATES:
@@ -332,7 +381,7 @@ def _scan_repo(repo_root: Path) -> dict:
         "source_dirs": source_dirs,
         "test_dirs": test_dirs,
         "ci": ci_detected,
-        "dependency_versions": _extract_dependency_versions(repo_root),
+        "dependency_versions": dep_versions,
         "db_schema": _extract_db_schema(repo_root),
         "api_routes": _extract_api_routes(repo_root),
         "env_vars": _extract_env_vars(repo_root),
@@ -490,6 +539,82 @@ def _preserve_manual_section(existing_content: str, new_content: str) -> str:
     return new_content
 
 
+def _boilerplate_cli_commands(root: Path, console: Console) -> None:
+    from sutra.cli import app
+    import typer.main
+    import typer.core
+
+    commands_dir = root / ".sutra" / "commands"
+    commands_dir.mkdir(exist_ok=True)
+
+    click_app = typer.main.get_command(app)
+
+    def traverse(cmd, parts: list[str]):
+        name_parts = parts + [cmd.name]
+        
+        # If it is a group (TyperGroup), traverse subcommands
+        if isinstance(cmd, typer.core.TyperGroup):
+            for sub_name in cmd.list_commands(None):
+                sub_cmd = cmd.get_command(None, sub_name)
+                if sub_cmd:
+                    traverse(sub_cmd, name_parts)
+        else:
+            # It's an executable command
+            cmd_full_name = "-".join(name_parts)
+            filename = f"{cmd_full_name}.md"
+            target_file = commands_dir / filename
+            
+            if not target_file.exists():
+                # Let's generate markdown content
+                help_text = cmd.help or "No description provided."
+                usage_parts = []
+                for p in cmd.params:
+                    if isinstance(p, typer.core.TyperOption):
+                        usage_parts.append("[OPTIONS]")
+                        break
+                
+                for p in cmd.params:
+                    if isinstance(p, typer.core.TyperArgument):
+                        usage_parts.append(p.name.upper())
+
+                usage_str = " ".join(name_parts) + (" " + " ".join(usage_parts) if usage_parts else "")
+                
+                md_lines = [
+                    f"# {cmd_full_name.replace('-', ' ')}",
+                    "",
+                    help_text.strip(),
+                    "",
+                    "## Usage",
+                    "",
+                    "```bash",
+                    f"{usage_str}",
+                    "```",
+                    "",
+                ]
+                
+                options_lines = []
+                arguments_lines = []
+                for p in cmd.params:
+                    p_help = getattr(p, "help", None) or "No description."
+                    default_str = f" (Default: {p.default})" if p.default is not None else ""
+                    if isinstance(p, typer.core.TyperOption):
+                        opt_names = ", ".join(p.opts)
+                        options_lines.append(f"* `{opt_names}`: {p_help}{default_str}")
+                    elif isinstance(p, typer.core.TyperArgument):
+                        arguments_lines.append(f"* `{p.name}`: {p_help}{default_str}")
+                
+                if arguments_lines:
+                    md_lines.extend(["## Arguments", "", "\n".join(arguments_lines), ""])
+                if options_lines:
+                    md_lines.extend(["## Options", "", "\n".join(options_lines), ""])
+                
+                target_file.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+                console.print(f"  [dim]•[/] Boilerplated missing command template: [cyan].sutra/commands/{filename}[/]")
+
+    # Start traversal
+    traverse(click_app, [])
+
+
 def run_context_refresh(console: Console) -> None:
     """Scan the repo and update context files."""
     root = find_sutra_root()
@@ -546,6 +671,12 @@ def run_context_refresh(console: Console) -> None:
 
     with open(project_yaml_path, "w") as f:
         yaml.dump(project_data, f, default_flow_style=False, sort_keys=False)
+
+    # Auto-boilerplate CLI commands under .sutra/commands/
+    try:
+        _boilerplate_cli_commands(root, console)
+    except Exception as e:
+        console.print(f"[yellow]Warning: failed to auto-boilerplate command templates: {e}[/]")
 
     # Summary
     console.print(

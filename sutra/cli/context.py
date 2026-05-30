@@ -6,11 +6,19 @@ from sutra.cli import console, context_app
 
 
 @context_app.command("refresh")
-def context_refresh() -> None:
+def context_refresh(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview changes without writing."),
+    ] = False,
+) -> None:
     """Scan the repo and update project context."""
-    from sutra.core.context import run_context_refresh
-
-    run_context_refresh(console=console)
+    if dry_run:
+        from sutra.core.context import run_context_diff
+        run_context_diff(console=console)
+    else:
+        from sutra.core.context import run_context_refresh
+        run_context_refresh(console=console)
 
 
 @context_app.command("show")

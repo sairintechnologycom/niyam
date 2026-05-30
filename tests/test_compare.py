@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
@@ -28,7 +26,7 @@ def test_comparison_runs_multiple_executors(sutra_repo: Path) -> None:
     # 1. Create a planned and approved mission
     req_file = sutra_repo / "requirements.md"
     req_file.write_text("# Test comparison\n", encoding="utf-8")
-    
+
     # Initialize / Mock a run config
     mission_id = run_mission_plan(str(req_file), console=console)
 
@@ -62,7 +60,7 @@ def test_comparison_runs_multiple_executors(sutra_repo: Path) -> None:
     # Patch execution to avoid calling real CLI commands
     with (
         patch("shutil.which", side_effect=mock_which),
-        patch("subprocess.run") as mock_run,
+        patch("subprocess.run"),
     ):
         os.environ["SUTRA_TEST"] = "1"
         try:
@@ -73,10 +71,10 @@ def test_comparison_runs_multiple_executors(sutra_repo: Path) -> None:
         # Verify the comparison folder was created with sub-runs for each executor
         comparison_dir = run_dir / "comparison" / "T1"
         assert comparison_dir.exists()
-        
+
         claude_run_dir = comparison_dir / "claude"
         gemini_run_dir = comparison_dir / "gemini"
-        
+
         assert claude_run_dir.exists()
         assert gemini_run_dir.exists()
 
@@ -92,15 +90,15 @@ def test_comparison_runs_multiple_executors(sutra_repo: Path) -> None:
 def test_compare_cli_command(sutra_repo: Path) -> None:
     """Should verify the CLI command `sutra compare` parses arguments correctly and invokes the compare function."""
     os.chdir(sutra_repo)
-    
+
     # We will mock run_comparison to verify it gets called
     with patch("sutra.core.compare.run_comparison") as mock_run_comparison:
         # Run command via Typer runner
         result = runner.invoke(app, ["compare", "T1", "--executors", "gemini,codex"])
-        
+
         # Check it completed successfully and called run_comparison with correct arguments
         assert result.exit_code == 0
         mock_run_comparison.assert_called_once()
-        args, kwargs = mock_run_comparison.call_args
+        _, kwargs = mock_run_comparison.call_args
         assert kwargs["task_id"] == "T1"
         assert kwargs["executors_str"] == "gemini,codex"

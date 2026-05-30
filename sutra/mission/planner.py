@@ -956,6 +956,18 @@ def run_mission_plan(
     (run_dir / "execution-log.json").write_text("[]", encoding="utf-8")
     (run_dir / "policy-events.json").write_text("[]", encoding="utf-8")
 
+    # Maintain current symlink
+    current_symlink = sutra_dir / "runs" / "current"
+    if current_symlink.exists() or current_symlink.is_symlink():
+        try:
+            current_symlink.unlink()
+        except Exception:
+            pass
+    try:
+        current_symlink.symlink_to(mission_id)
+    except Exception as e:
+        console.print(f"[yellow]Warning: failed to create symlink '.sutra/runs/current': {e}[/]")
+
     console.print(
         f"[bold green]✓[/] Created mission plan '[cyan]{mission_id}[/]' in .sutra/runs/{mission_id}/"
     )
@@ -967,7 +979,7 @@ def get_latest_mission_id(sutra_dir: Path) -> str | None:
     runs_dir = sutra_dir / "runs"
     if not runs_dir.exists():
         return None
-    runs = [d for d in runs_dir.iterdir() if d.is_dir()]
+    runs = [d for d in runs_dir.iterdir() if d.is_dir() and d.name != "current"]
     if not runs:
         return None
     # Sort by directory creation/modification time
@@ -985,7 +997,7 @@ def resolve_mission_id(sutra_dir: Path, mission_id: str | None = None) -> str | 
         run_dir = runs_dir / mission_id
         return mission_id if run_dir.is_dir() else None
 
-    runs = [d for d in runs_dir.iterdir() if d.is_dir()]
+    runs = [d for d in runs_dir.iterdir() if d.is_dir() and d.name != "current"]
     if not runs:
         return None
 
@@ -1012,6 +1024,300 @@ def resolve_mission_id(sutra_dir: Path, mission_id: str | None = None) -> str | 
 
     runs.sort(key=sort_key)
     return runs[0].name
+
+
+def _print_preview_table(console: Console, mission_id: str, plan_data: dict) -> None:
+    from rich.table import Table
+    from rich.panel import Panel
+
+    tasks = plan_data.get("tasks", [])
+    mission_meta = plan_data.get("mission", {})
+
+    table = Table(
+        title=f"Mission Plan preview: [cyan]{mission_id}[/]", expand=True
+    )
+    table.add_column("ID", style="bold magenta", justify="center", width=4)
+    table.add_column("Title")
+    table.add_column("Agent", style="yellow")
+    table.add_column("Runtime", style="cyan")
+    table.add_column("Depends On", style="dim white")
+    table.add_column("Writes", style="green")
+
+    for t in tasks:
+        t_id = t.get("id")
+        t_title = t.get("title")
+        t_agent = t.get("agent")
+        t_rt = t.get("runtime") or mission_meta.get("orchestrator", "claude")
+        t_deps = ", ".join(t.get("depends_on", [])) or "-"
+        t_writes = "Yes" if t.get("writes_files", True) else "No"
+        table.add_row(t_id, t_title, t_agent, t_rt, t_deps, t_writes)
+
+    console.print(Panel(table, border_style="magenta"))
+
+
+def _run_refiner_loop(
+    console: Console,
+    plan_path: Path,
+    repo_root: Path,
+    sutra_dir: Path,
+) -> None:
+    from sutra.mission.validator import validate_mission_plan, PlanValidationError
+    import yaml
+    import re
+
+    agents_dir = sutra_dir / "agents"
+    available_agents = []
+    if agents_dir.is_dir():
+        available_agents = [f.stem for f in agents_dir.glob("*.md")]
+    if not available_agents:
+        available_agents = ["default-agent"]
+
+    console.print("\n[bold cyan]=== Mission Plan Refinement CLI ===[/]")
+    console.print("Commands:")
+    console.print("  [bold]merge <t1> <t2>[/]      - Merge task t2 into t1")
+    console.print("  [bold]delete <t>[/]          - Delete task t")
+    console.print("  [bold]add <title>[/]         - Append a new task to the end")
+    console.print("  [bold]insert <after_t> <title>[/] - Insert a new task after after_t")
+    console.print("  [bold]edit <t> <f>=<v>[/]     - Edit field f (title, agent, runtime, depends_on, writes_files, files_allowed) of task t")
+    console.print("  [bold]show[/]                  - Show the current tasks table")
+    console.print("  [bold]done[/]                  - Finish refinement and return to approval menu")
+    console.print("")
+
+    while True:
+        try:
+            with open(plan_path, encoding="utf-8") as f:
+                plan_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            console.print(f"[red]Error loading plan: {e}[/]")
+            break
+
+        try:
+            cmd_input = input("refine> ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Exiting refinement mode.[/]")
+            break
+
+        if not cmd_input:
+            continue
+
+        parts = cmd_input.split(None, 1)
+        cmd = parts[0].lower()
+        args_str = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "done":
+            break
+        elif cmd == "show":
+            _print_preview_table(console, plan_data.get("mission", {}).get("id", "mission"), plan_data)
+            continue
+
+        changed = False
+
+        if cmd == "merge":
+            subparts = args_str.split(None, 1)
+            if len(subparts) < 2:
+                console.print("[red]Usage: merge <t1> <t2>[/]")
+                continue
+            t1, t2 = subparts[0], subparts[1]
+
+            idx1 = next((i for i, t in enumerate(plan_data.get("tasks", [])) if t.get("id") == t1), -1)
+            idx2 = next((i for i, t in enumerate(plan_data.get("tasks", [])) if t.get("id") == t2), -1)
+
+            if idx1 == -1 or idx2 == -1:
+                console.print(f"[red]Error: task '{t1}' or '{t2}' not found.[/]")
+                continue
+
+            tasks = plan_data["tasks"]
+            task1 = tasks[idx1]
+            task2 = tasks[idx2]
+
+            task1["title"] = f"{task1.get('title')} & {task2.get('title')}"
+            deps1 = task1.get("depends_on", []) or []
+            deps2 = task2.get("depends_on", []) or []
+            combined_deps = list(set(deps1 + deps2))
+            if t1 in combined_deps:
+                combined_deps.remove(t1)
+            if t2 in combined_deps:
+                combined_deps.remove(t2)
+            task1["depends_on"] = combined_deps
+
+            # Update references to t2 to point to t1
+            for t in tasks:
+                if t.get("id") == t1 or t.get("id") == t2:
+                    continue
+                deps = t.get("depends_on", []) or []
+                if t2 in deps:
+                    deps = [t1 if d == t2 else d for d in deps]
+                    t["depends_on"] = list(set(deps))
+
+            tasks.pop(idx2)
+            changed = True
+            console.print(f"[green]Merged '{t2}' into '{t1}'.[/]")
+
+        elif cmd == "delete":
+            if not args_str:
+                console.print("[red]Usage: delete <t>[/]")
+                continue
+            target_id = args_str
+
+            tasks = plan_data.get("tasks", [])
+            idx_to_del = next((i for i, t in enumerate(tasks) if t.get("id") == target_id), -1)
+            if idx_to_del == -1:
+                console.print(f"[red]Error: task '{target_id}' not found.[/]")
+                continue
+
+            tasks.pop(idx_to_del)
+            # Remove target_id from depends_on in other tasks
+            for t in tasks:
+                deps = t.get("depends_on", []) or []
+                if target_id in deps:
+                    deps.remove(target_id)
+                    t["depends_on"] = deps
+
+            changed = True
+            console.print(f"[green]Deleted task '{target_id}'.[/]")
+
+        elif cmd == "add":
+            if not args_str:
+                console.print("[red]Usage: add <title>[/]")
+                continue
+            title = args_str
+
+            tasks = plan_data.get("tasks", [])
+            max_num = 0
+            for t in tasks:
+                t_id = t.get("id", "")
+                m = re.match(r"^T(\d+)$", t_id)
+                if m:
+                    max_num = max(max_num, int(m.group(1)))
+            new_id = f"T{max_num + 1}"
+
+            new_task = {
+                "id": new_id,
+                "title": title,
+                "type": "implementation",
+                "status": "pending",
+                "agent": available_agents[0],
+                "depends_on": [tasks[-1]["id"]] if tasks else [],
+                "writes_files": True,
+                "files_allowed": ["*"],
+            }
+            tasks.append(new_task)
+            changed = True
+            console.print(f"[green]Added task '{new_id}': {title}[/]")
+
+        elif cmd == "insert":
+            subparts = args_str.split(None, 1)
+            if len(subparts) < 2:
+                console.print("[red]Usage: insert <after_t> <title>[/]")
+                continue
+            after_t, title = subparts[0], subparts[1]
+
+            tasks = plan_data.get("tasks", [])
+            idx_after = next((i for i, t in enumerate(tasks) if t.get("id") == after_t), -1)
+            if idx_after == -1:
+                console.print(f"[red]Error: task '{after_t}' not found.[/]")
+                continue
+
+            max_num = 0
+            for t in tasks:
+                t_id = t.get("id", "")
+                m = re.match(r"^T(\d+)$", t_id)
+                if m:
+                    max_num = max(max_num, int(m.group(1)))
+            new_id = f"T{max_num + 1}"
+
+            new_task = {
+                "id": new_id,
+                "title": title,
+                "type": "implementation",
+                "status": "pending",
+                "agent": available_agents[0],
+                "depends_on": [after_t],
+                "writes_files": True,
+                "files_allowed": ["*"],
+            }
+            tasks.insert(idx_after + 1, new_task)
+            changed = True
+            console.print(f"[green]Inserted task '{new_id}' after '{after_t}'.[/]")
+
+        elif cmd == "edit":
+            subparts = args_str.split(None, 1)
+            if len(subparts) < 2:
+                console.print("[red]Usage: edit <t> <field>=<value>[/]")
+                continue
+            target_id, field_val = subparts[0], subparts[1]
+
+            tasks = plan_data.get("tasks", [])
+            idx_to_edit = next((i for i, t in enumerate(tasks) if t.get("id") == target_id), -1)
+            if idx_to_edit == -1:
+                console.print(f"[red]Error: task '{target_id}' not found.[/]")
+                continue
+
+            if "=" not in field_val:
+                console.print("[red]Error: field_val must be field=value[/]")
+                continue
+
+            field, val = field_val.split("=", 1)
+            field = field.strip()
+            val = val.strip()
+
+            task = tasks[idx_to_edit]
+            allowed_fields = ("title", "agent", "runtime", "type", "writes_files", "files_allowed", "depends_on")
+            if field not in allowed_fields:
+                console.print(f"[red]Error: field must be one of {allowed_fields}[/]")
+                continue
+
+            if field == "title":
+                task["title"] = val
+            elif field == "agent":
+                if val not in available_agents:
+                    console.print(f"[yellow]Warning: agent '{val}' is not in available agents: {available_agents}[/]")
+                task["agent"] = val
+            elif field == "runtime":
+                task["runtime"] = val
+            elif field == "type":
+                task["type"] = val
+            elif field == "writes_files":
+                task["writes_files"] = val.lower() in ("true", "yes", "1")
+            elif field == "files_allowed":
+                task["files_allowed"] = [v.strip() for v in val.split(",") if v.strip()]
+            elif field == "depends_on":
+                task["depends_on"] = [v.strip() for v in val.split(",") if v.strip()]
+
+            changed = True
+            console.print(f"[green]Updated task '{target_id}' field '{field}'.[/]")
+
+        else:
+            console.print(f"[red]Unknown refinement command: {cmd}[/]")
+            continue
+
+        if changed:
+            # Inject validation commands
+            inject_validation_commands(plan_data["tasks"], repo_root)
+
+            # Save plan-path
+            try:
+                with open(plan_path, "w", encoding="utf-8") as f:
+                    yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+
+                # Save task-list.yaml
+                tasks_path = plan_path.parent / "task-list.yaml"
+                with open(tasks_path, "w", encoding="utf-8") as f:
+                    yaml.dump(plan_data["tasks"], f, default_flow_style=False, sort_keys=False)
+            except Exception as e:
+                console.print(f"[red]Error saving plan: {e}[/]")
+                continue
+
+            # Validate plan
+            try:
+                validate_mission_plan(plan_path, repo_root)
+                console.print("[green]✓ Current plan is valid.[/]")
+            except PlanValidationError as e:
+                console.print("[yellow]⚠ Plan has validation errors/warnings:[/]")
+                for err in e.errors:
+                    console.print(f"  • [red]{err}[/]")
+            except Exception as e:
+                console.print(f"[red]Validation error: {e}[/]")
 
 
 def run_mission_approve(
@@ -1065,40 +1371,15 @@ def run_mission_approve(
         return
 
     if interactive:
-        from rich.table import Table
-        from rich.panel import Panel
-
         while True:
             # Re-load plan data
             with open(plan_path, encoding="utf-8") as f:
                 plan_data = yaml.safe_load(f) or {}
 
-            tasks = plan_data.get("tasks", [])
-            mission_meta = plan_data.get("mission", {})
-
-            table = Table(
-                title=f"Mission Plan preview: [cyan]{mission_id}[/]", expand=True
-            )
-            table.add_column("ID", style="bold magenta", justify="center", width=4)
-            table.add_column("Title")
-            table.add_column("Agent", style="yellow")
-            table.add_column("Runtime", style="cyan")
-            table.add_column("Depends On", style="dim white")
-            table.add_column("Writes", style="green")
-
-            for t in tasks:
-                t_id = t.get("id")
-                t_title = t.get("title")
-                t_agent = t.get("agent")
-                t_rt = t.get("runtime") or mission_meta.get("orchestrator", "claude")
-                t_deps = ", ".join(t.get("depends_on", [])) or "-"
-                t_writes = "Yes" if t.get("writes_files", True) else "No"
-                table.add_row(t_id, t_title, t_agent, t_rt, t_deps, t_writes)
-
-            console.print(Panel(table, border_style="magenta"))
+            _print_preview_table(console, mission_id, plan_data)
 
             try:
-                answer = input("Approve all tasks? [Y/n/edit]: ").strip().lower()
+                answer = input("Approve all tasks? [Y/n/edit/refine]: ").strip().lower()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[red]Mission approval cancelled.[/]")
                 raise SystemExit(1)
@@ -1108,6 +1389,8 @@ def run_mission_approve(
             elif answer in ("n", "no"):
                 console.print("[red]Mission approval cancelled.[/]")
                 raise SystemExit(1)
+            elif answer == "refine":
+                _run_refiner_loop(console, plan_path, repo_root, sutra_dir)
             elif answer == "edit":
                 editor = os.environ.get("EDITOR", "nano")
                 import subprocess
@@ -1136,7 +1419,7 @@ def run_mission_approve(
                 except Exception as e:
                     console.print(f"[bold red]Error during validation:[/] {e}")
             else:
-                console.print("[yellow]Invalid option. Please choose y, n, or edit.[/]")
+                console.print("[yellow]Invalid option. Please choose y, n, edit, or refine.[/]")
 
     # Re-load plan data final time to make sure we write approved status
     with open(plan_path, encoding="utf-8") as f:

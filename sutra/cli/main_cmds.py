@@ -163,11 +163,31 @@ def sync(
             help="Sync a specific runtime only.",
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show detailed file updates during synchronization.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Preview sync changes without writing files.",
+        ),
+    ] = False,
 ) -> None:
     """Sync .sutra/ source of truth to all configured runtimes."""
     from sutra.core.sync import run_sync
 
-    run_sync(runtime=runtime.value if runtime else None, console=console)
+    run_sync(
+        runtime=runtime.value if runtime else None,
+        console=console,
+        verbose=verbose,
+        dry_run=dry_run,
+    )
 
 
 @app.command()
@@ -184,11 +204,22 @@ def doctor(
         Optional[Runtime],
         typer.Argument(help="Check a specific runtime adapter."),
     ] = None,
+    check: Annotated[
+        bool,
+        typer.Option(
+            "--check",
+            help="Run configured lint/format validation checks.",
+        ),
+    ] = False,
 ) -> None:
     """Validate .sutra/ configuration and runtime projections."""
     from sutra.core.doctor import run_doctor
 
-    run_doctor(runtime=runtime.value if runtime else None, console=console)
+    run_doctor(
+        runtime=runtime.value if runtime else None,
+        console=console,
+        check=check,
+    )
 
 
 @app.command()
@@ -277,6 +308,20 @@ def plan(
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
+
+@app.command()
+def hello(
+    name: Annotated[
+        Optional[str],
+        typer.Option("--name", "-n", help="Name to greet."),
+    ] = None,
+) -> None:
+    """A friendly greeting from Sutra."""
+    if name:
+        console.print(f"Hello, {name}!")
+    else:
+        console.print("Hello, Sutra Developer!")
 
 
 @app.command()

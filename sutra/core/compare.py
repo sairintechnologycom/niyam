@@ -6,7 +6,6 @@ import json
 import shutil
 import subprocess
 import time
-from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
@@ -23,7 +22,9 @@ def run_comparison(task_id: str, executors_str: str, console: Console) -> None:
     """Run comparison of multiple executors on a single task."""
     root = find_sutra_root()
     if root is None:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run [bold]sutra init[/] first."
+        )
         raise SystemExit(1)
 
     sutra_dir = get_sutra_dir(root)
@@ -37,12 +38,17 @@ def run_comparison(task_id: str, executors_str: str, console: Console) -> None:
     tasks = plan_data.get("tasks", [])
     task = None
     for t in tasks:
-        if t["id"].lower() == task_id.lower() or t.get("title", "").lower() == task_id.lower():
+        if (
+            t["id"].lower() == task_id.lower()
+            or t.get("title", "").lower() == task_id.lower()
+        ):
             task = t
             break
 
     if not task:
-        console.print(f"[bold red]Error:[/] Task '{task_id}' not found in mission plan.")
+        console.print(
+            f"[bold red]Error:[/] Task '{task_id}' not found in mission plan."
+        )
         raise SystemExit(1)
 
     executors = [e.strip().lower() for e in executors_str.split(",") if e.strip()]
@@ -56,7 +62,9 @@ def run_comparison(task_id: str, executors_str: str, console: Console) -> None:
 
     results = []
 
-    console.print(f"[cyan]Starting Multi-Runtime Comparison for Task: [bold]{task['id']} - {task['title']}[/][/]")
+    console.print(
+        f"[cyan]Starting Multi-Runtime Comparison for Task: [bold]{task['id']} - {task['title']}[/][/]"
+    )
     console.print(f"Executors to compare: [bold]{', '.join(executors)}[/]\n")
 
     for executor in executors:
@@ -82,7 +90,9 @@ def run_comparison(task_id: str, executors_str: str, console: Console) -> None:
         # Copy agents folder for context
         agents_src = sutra_dir / "agents"
         if agents_src.is_dir():
-            shutil.copytree(agents_src, comparison_run_dir / ".sutra" / "agents", dirs_exist_ok=True)
+            shutil.copytree(
+                agents_src, comparison_run_dir / ".sutra" / "agents", dirs_exist_ok=True
+            )
 
         comp_task = task.copy()
         comp_task["runtime"] = executor
@@ -140,15 +150,17 @@ def run_comparison(task_id: str, executors_str: str, console: Console) -> None:
             except Exception:
                 pass
 
-        results.append({
-            "executor": executor,
-            "success": success,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "cost": cost,
-            "duration": duration,
-        })
+        results.append(
+            {
+                "executor": executor,
+                "success": success,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "cost": cost,
+                "duration": duration,
+            }
+        )
 
     # Render results
     table = Table(title=f"Comparison Results for Task {task['id']}")

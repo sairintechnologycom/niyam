@@ -483,3 +483,66 @@ def mission_verify_report(
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
+
+@mission_app.command("active")
+def mission_active(
+    path: Annotated[
+        bool,
+        typer.Option(
+            "--path",
+            "-p",
+            help="Print only the absolute path to the active mission directory.",
+        ),
+    ] = False,
+) -> None:
+    """Print the path or details of the active/latest mission run."""
+    from sutra.core.config import find_sutra_root, get_sutra_dir
+    from sutra.core.errors import SutraConfigError
+    from sutra.mission.planner import resolve_mission_id
+
+    repo_root = find_sutra_root()
+    if not repo_root:
+        raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
+    sutra_dir = get_sutra_dir(repo_root)
+
+    current_symlink = sutra_dir / "runs" / "current"
+    mission_id = None
+    if current_symlink.is_symlink():
+        try:
+            target_path = current_symlink.readlink()
+            if not target_path.is_absolute():
+                resolved_dir = (sutra_dir / "runs" / target_path).resolve()
+            else:
+                resolved_dir = target_path.resolve()
+
+            if resolved_dir.is_dir():
+                mission_id = resolved_dir.name
+        except Exception:
+            pass
+
+    if not mission_id:
+        mission_id = resolve_mission_id(sutra_dir)
+
+    if not mission_id:
+        console.print("[bold red]Error:[/] No active mission found.")
+        raise typer.Exit(1)
+
+    active_dir = (sutra_dir / "runs" / mission_id).resolve()
+    if path:
+        console.print(str(active_dir))
+    else:
+        # Load the status
+        plan_path = active_dir / "mission-plan.yaml"
+        status = "unknown"
+        if plan_path.exists():
+            try:
+                with open(plan_path, encoding="utf-8") as f:
+                    plan_data = yaml.safe_load(f) or {}
+                status = plan_data.get("mission", {}).get("status", "unknown")
+            except Exception:
+                pass
+        console.print(f"Active Mission: [cyan]{mission_id}[/]")
+        console.print(f"Status: [yellow]{status}[/]")
+        console.print(f"Path: {active_dir}")
+

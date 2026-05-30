@@ -226,7 +226,9 @@ def run_mission_report(console: Console, mission_id: str | None = None) -> None:
                 )
             )
     else:
-        report_sections.append("*No acceptance criteria were recorded for this mission.*")
+        report_sections.append(
+            "*No acceptance criteria were recorded for this mission.*"
+        )
     report_sections.append("")
 
     report_sections.append("## Policy Guard Audit Trail")

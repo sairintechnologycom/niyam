@@ -428,9 +428,98 @@ def _check_git_status(repo_root: Path) -> list[DiagnosticResult]:
     return results
 
 
+def _check_lint_format(repo_root: Path) -> list[DiagnosticResult]:
+    """Run lint/format validation commands if configured."""
+    from sutra.core.config import load_project_config
+    from sutra.core.security import safe_run_command, CommandSecurityError
+    import subprocess
+
+    results = []
+    try:
+        project_config = load_project_config(repo_root)
+        validation = project_config.validation
+        if not validation:
+            results.append(
+                DiagnosticResult(
+                    "Validation Check",
+                    True,
+                    "No validation commands configured",
+                    severity="info",
+                )
+            )
+            return results
+
+        checks = {
+            "lint": validation.lint,
+            "format": validation.format,
+        }
+
+        for name, cmd in checks.items():
+            if not cmd:
+                continue
+            try:
+                res = safe_run_command(cmd, cwd=repo_root, timeout=60)
+                if res.returncode == 0:
+                    results.append(
+                        DiagnosticResult(
+                            f"Validation: {name}",
+                            True,
+                            f"Passed ({cmd})",
+                            severity="info",
+                        )
+                    )
+                else:
+                    details = (res.stdout or "") + (res.stderr or "")
+                    if len(details) > 200:
+                        details = details[:200] + "..."
+                    results.append(
+                        DiagnosticResult(
+                            f"Validation: {name}",
+                            False,
+                            f"Failed: {details.strip()}",
+                        )
+                    )
+            except CommandSecurityError as e:
+                results.append(
+                    DiagnosticResult(
+                        f"Validation: {name}",
+                        False,
+                        f"Blocked by security: {e}",
+                    )
+                )
+            except subprocess.TimeoutExpired:
+                results.append(
+                    DiagnosticResult(
+                        f"Validation: {name}",
+                        False,
+                        "Timed out (60s)",
+                    )
+                )
+            except Exception as e:
+                results.append(
+                    DiagnosticResult(
+                        f"Validation: {name}",
+                        False,
+                        f"Error: {e}",
+                    )
+                )
+
+    except Exception as e:
+        results.append(
+            DiagnosticResult(
+                "Validation Check",
+                False,
+                f"Failed to load project config: {e}",
+            )
+        )
+
+    return results
+
+
 def run_doctor(
     runtime: str | None,
     console: Console,
+    check: bool = False,
 ) -> None:
     """Run diagnostic checks on the Sutra workspace."""
     root = find_sutra_root()
@@ -454,6 +543,8 @@ def run_doctor(
         all_results.extend(_check_agents_validity(root))
         all_results.extend(_check_validation_commands_in_path(root))
         all_results.extend(_check_git_status(root))
+        if check:
+            all_results.extend(_check_lint_format(root))
 
     if runtime == "claude" or (runtime is None and "claude" in config.runtimes):
         all_results.extend(_check_claude_runtime(root))

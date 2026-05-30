@@ -8,7 +8,7 @@ Configuration is loaded from .sutra/hook-cache/guard-config.json at runtime.
 import json
 import sys
 import fnmatch
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -59,7 +59,7 @@ def log_policy_event(event_type, details):
     log_file = evidence_dir / "policy-events.json"
 
     event = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "type": event_type,
         "details": details,
     }
