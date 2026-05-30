@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from datetime import datetime, timezone
 from rich.console import Console
 from rich.panel import Panel
 
@@ -37,6 +39,30 @@ def get_memory_file(repo_root: Path, name: str) -> Path:
             f"Available memories: {', '.join(f.stem for f in mem_dir.glob('*.md'))}"
         )
     return filepath
+
+
+def _append_memory_record(repo_root: Path, memory_file: str, note: str) -> None:
+    """Append a structured memory record without changing markdown projections."""
+    import fcntl
+
+    records_path = get_memory_dir(repo_root) / "index.jsonl"
+    records_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "id": datetime.now(timezone.utc).strftime("mem-%Y%m%d%H%M%S%f"),
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "type": "note",
+        "scope": "project",
+        "memory_file": memory_file,
+        "source": "manual",
+        "confidence": "user-provided",
+        "content": note,
+    }
+    with open(records_path, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def run_memory_show(console: Console) -> None:
@@ -88,6 +114,7 @@ def run_memory_add(file: str, note: str, console: Console) -> None:
 
     # Append the note as a bullet point
     filepath.write_text(content + suffix + f"- {note}\n", encoding="utf-8")
+    _append_memory_record(repo_root, filepath.name, note)
     console.print(f"[bold green]✓[/] Added note to memory '[cyan]{filepath.name}[/]'.")
 
 

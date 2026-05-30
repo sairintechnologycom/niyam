@@ -55,18 +55,23 @@ def mission_plan(
 
 
 @mission_app.command("show")
-def mission_show() -> None:
+def mission_show(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to display."),
+    ] = None,
+) -> None:
     """Display tasks and configuration of the latest planned or active mission."""
     from sutra.core.config import find_sutra_root, get_sutra_dir
     from sutra.core.errors import SutraConfigError
-    from sutra.mission.planner import get_latest_mission_id
+    from sutra.mission.planner import resolve_mission_id
 
     repo_root = find_sutra_root()
     if not repo_root:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise typer.Exit(1)
@@ -133,30 +138,39 @@ def mission_dashboard(
             help="Periodically refresh the dashboard (live mode).",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to display."),
+    ] = None,
 ) -> None:
     """Show real-time dashboard of the active or latest mission."""
     from sutra.mission.dashboard import run_mission_dashboard
 
     try:
-        run_mission_dashboard(watch=watch, console=console)
+        run_mission_dashboard(watch=watch, console=console, mission_id=mission_id)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
 
 
 @mission_app.command("validate-plan")
-def mission_validate_plan() -> None:
+def mission_validate_plan(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to validate."),
+    ] = None,
+) -> None:
     """Validate the latest planned mission plan."""
     from sutra.core.config import find_sutra_root, get_sutra_dir
     from sutra.core.errors import SutraConfigError
-    from sutra.mission.planner import get_latest_mission_id
+    from sutra.mission.planner import resolve_mission_id
     from sutra.mission.validator import validate_mission_plan, PlanValidationError
 
     repo_root = find_sutra_root()
     if not repo_root:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise typer.Exit(1)
@@ -191,12 +205,18 @@ def mission_approve(
             help="Approve tasks interactively with option to edit the plan.",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to approve."),
+    ] = None,
 ) -> None:
     """Approve the latest planned mission."""
     from sutra.mission.planner import run_mission_approve
 
     try:
-        run_mission_approve(console=console, interactive=interactive)
+        run_mission_approve(
+            console=console, interactive=interactive, mission_id=mission_id
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -225,6 +245,10 @@ def mission_start(
             help="Run in non-interactive (CI/CD) mode.",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to start."),
+    ] = None,
 ) -> None:
     """Start or resume the latest approved mission."""
     from sutra.mission.executor import run_mission_start
@@ -235,6 +259,7 @@ def mission_start(
             worktree=worktree,
             non_interactive=non_interactive,
             console=console,
+            mission_id=mission_id,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -242,24 +267,34 @@ def mission_start(
 
 
 @mission_app.command("status")
-def mission_status() -> None:
+def mission_status(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to inspect."),
+    ] = None,
+) -> None:
     """Show progress of the latest mission."""
     from sutra.mission.status import run_mission_status
 
     try:
-        run_mission_status(console=console)
+        run_mission_status(console=console, mission_id=mission_id)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
 
 
 @mission_app.command("pause")
-def mission_pause() -> None:
+def mission_pause(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to pause."),
+    ] = None,
+) -> None:
     """Pause the currently running mission."""
     from sutra.mission.executor import run_mission_pause
 
     try:
-        run_mission_pause(console=console)
+        run_mission_pause(console=console, mission_id=mission_id)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
@@ -288,6 +323,10 @@ def mission_resume(
             help="Run in non-interactive (CI/CD) mode.",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to resume."),
+    ] = None,
 ) -> None:
     """Resume a paused mission."""
     from sutra.mission.executor import run_mission_resume
@@ -298,6 +337,7 @@ def mission_resume(
             worktree=worktree,
             non_interactive=non_interactive,
             console=console,
+            mission_id=mission_id,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -327,6 +367,10 @@ def mission_retry(
             help="Run in non-interactive (CI/CD) mode.",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to retry."),
+    ] = None,
 ) -> None:
     """Retry failed or skipped tasks of the latest mission."""
     from sutra.mission.executor import run_mission_retry
@@ -337,6 +381,7 @@ def mission_retry(
             parallel=parallel,
             worktree=worktree,
             non_interactive=non_interactive,
+            mission_id=mission_id,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -367,6 +412,10 @@ def mission_skip(
             help="Run in non-interactive (CI/CD) mode.",
         ),
     ] = False,
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID containing the task."),
+    ] = None,
 ) -> None:
     """Skip a specific task and resume the mission execution."""
     from sutra.mission.executor import run_mission_skip
@@ -378,6 +427,7 @@ def mission_skip(
             parallel=parallel,
             worktree=worktree,
             non_interactive=non_interactive,
+            mission_id=mission_id,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -385,24 +435,34 @@ def mission_skip(
 
 
 @mission_app.command("rollback")
-def mission_rollback() -> None:
+def mission_rollback(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to roll back."),
+    ] = None,
+) -> None:
     """Rollback all workspace changes back to the start of the latest mission."""
     from sutra.mission.executor import run_mission_rollback
 
     try:
-        run_mission_rollback(console=console)
+        run_mission_rollback(console=console, mission_id=mission_id)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
 
 
 @mission_app.command("report")
-def mission_report() -> None:
+def mission_report(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to report."),
+    ] = None,
+) -> None:
     """Generate final evidence package for the latest mission."""
     from sutra.mission.reporter import run_mission_report
 
     try:
-        run_mission_report(console=console)
+        run_mission_report(console=console, mission_id=mission_id)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

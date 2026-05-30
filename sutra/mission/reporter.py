@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 from sutra.mission.executor import load_plan
 import hashlib
 import hmac
@@ -74,7 +74,7 @@ def get_changed_files(repo_root: Path) -> list[str]:
         return []
 
 
-def run_mission_report(console: Console) -> None:
+def run_mission_report(console: Console, mission_id: str | None = None) -> None:
     """Generate final evidence package for the latest mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -84,7 +84,7 @@ def run_mission_report(console: Console) -> None:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -162,6 +162,18 @@ def run_mission_report(console: Console) -> None:
         except Exception:
             pass
 
+    # 4b. Collect Acceptance Criteria Evidence
+    acceptance_path = run_dir / "acceptance-checks.json"
+    acceptance_checks: list[dict] = []
+    if acceptance_path.exists():
+        try:
+            with open(acceptance_path, encoding="utf-8") as f:
+                checks = json.load(f)
+            if isinstance(checks, list):
+                acceptance_checks = checks
+        except Exception:
+            pass
+
     # 5. Build final evidence.md content
     report_sections = []
     report_sections.append(f"# Sutra Mission Evidence Package - {mission_id}")
@@ -199,6 +211,24 @@ def run_mission_report(console: Console) -> None:
         report_sections.append("*No execution logs recorded.*")
     report_sections.append("")
 
+    report_sections.append("## Acceptance Criteria Evidence")
+    report_sections.append("")
+    if acceptance_checks:
+        report_sections.append("| Criterion ID | Status | Criterion | Verification |")
+        report_sections.append("|--------------|--------|-----------|--------------|")
+        for check in acceptance_checks:
+            report_sections.append(
+                "| `{}` | `{}` | {} | {} |".format(
+                    check.get("criterion_id", ""),
+                    check.get("status", "unknown"),
+                    str(check.get("criterion", "")).replace("|", "\\|"),
+                    str(check.get("verification", "")).replace("|", "\\|"),
+                )
+            )
+    else:
+        report_sections.append("*No acceptance criteria were recorded for this mission.*")
+    report_sections.append("")
+
     report_sections.append("## Policy Guard Audit Trail")
     report_sections.append("")
     if policy_events:
@@ -232,6 +262,7 @@ def run_mission_report(console: Console) -> None:
         "execution-log.json",
         "validation-results.md",
         "policy-events.json",
+        "acceptance-checks.json",
     ):
         full_path = run_dir / run_file
         if full_path.exists():

@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from sutra.core.config import get_sutra_dir, load_sutra_config, load_project_config
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 
 # Locks for thread-safe operations
 _print_lock = threading.Lock()
@@ -30,24 +30,67 @@ def load_plan(run_dir: Path) -> dict:
     from sutra.core.security import safe_load_yaml
 
     with _plan_lock:
-        plan_path = run_dir / "mission-plan.yaml"
-        data = safe_load_yaml(plan_path)
-        validated = MissionPlan(**data)
-        return validated.model_dump()
+        import fcntl
+
+        lock_path = run_dir / ".mission-plan.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_path, "a+", encoding="utf-8") as lock_f:
+            fcntl.flock(lock_f, fcntl.LOCK_SH)
+            try:
+                plan_path = run_dir / "mission-plan.yaml"
+                data = safe_load_yaml(plan_path)
+                validated = MissionPlan(**data)
+                return validated.model_dump()
+            finally:
+                fcntl.flock(lock_f, fcntl.LOCK_UN)
 
 
 def save_plan(run_dir: Path, plan_data: dict) -> None:
     """Save mission plan YAML and update task-list.yaml."""
     with _plan_lock:
-        plan_path = run_dir / "mission-plan.yaml"
-        with open(plan_path, "w", encoding="utf-8") as f:
-            yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+        import fcntl
+        import tempfile
 
-        tasks_path = run_dir / "task-list.yaml"
-        with open(tasks_path, "w", encoding="utf-8") as f:
-            yaml.dump(
-                plan_data.get("tasks", []), f, default_flow_style=False, sort_keys=False
-            )
+        lock_path = run_dir / ".mission-plan.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(lock_path, "a+", encoding="utf-8") as lock_f:
+            fcntl.flock(lock_f, fcntl.LOCK_EX)
+            try:
+                plan_path = run_dir / "mission-plan.yaml"
+                tasks_path = run_dir / "task-list.yaml"
+
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=run_dir,
+                    prefix=".mission-plan.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as f:
+                    yaml.dump(
+                        plan_data, f, default_flow_style=False, sort_keys=False
+                    )
+                    plan_tmp = Path(f.name)
+                plan_tmp.replace(plan_path)
+
+                with tempfile.NamedTemporaryFile(
+                    "w",
+                    encoding="utf-8",
+                    dir=run_dir,
+                    prefix=".task-list.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as f:
+                    yaml.dump(
+                        plan_data.get("tasks", []),
+                        f,
+                        default_flow_style=False,
+                        sort_keys=False,
+                    )
+                    tasks_tmp = Path(f.name)
+                tasks_tmp.replace(tasks_path)
+            finally:
+                fcntl.flock(lock_f, fcntl.LOCK_UN)
 
 
 def _lock_and_write_events(log_path: Path, new_event: dict) -> None:
@@ -109,6 +152,55 @@ def log_policy_event(
         sutra_dir / "evidence" / "policy-events.json",
     ):
         _lock_and_write_events(log_path, event)
+
+
+def record_acceptance_criteria(
+    run_dir: Path, task_id: str, criteria: list[str]
+) -> None:
+    """Record acceptance criteria as explicit review evidence for a task."""
+    if not criteria:
+        return
+
+    import fcntl
+
+    checks_path = run_dir / "acceptance-checks.json"
+    checks_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(checks_path, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read().strip()
+            existing: list[dict] = []
+            if content:
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        existing = data
+                except Exception:
+                    existing = []
+
+            existing = [e for e in existing if e.get("task_id") != task_id]
+            timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            for i, criterion in enumerate(criteria, 1):
+                existing.append(
+                    {
+                        "task_id": task_id,
+                        "criterion_id": f"{task_id}-AC{i}",
+                        "criterion": criterion,
+                        "status": "requires_review",
+                        "timestamp": timestamp,
+                        "verification": (
+                            "Recorded by Sutra. Attach a validation command or reviewer "
+                            "verdict to mark this criterion as deterministically verified."
+                        ),
+                    }
+                )
+
+            f.seek(0)
+            f.truncate()
+            json.dump(existing, f, indent=2)
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def parse_cli_token_usage(output_text: str) -> dict | None:
@@ -1225,6 +1317,7 @@ Do not perform destructive operations.
             console.print(
                 f"[{task_id}] Checking {len(criteria)} acceptance criteria..."
             )
+        record_acceptance_criteria(run_dir, task_id, criteria)
         for i, criterion in enumerate(criteria, 1):
             log_execution_event(
                 run_dir=run_dir,
@@ -1430,6 +1523,7 @@ def run_mission_start(
     parallel: int | None = None,
     worktree: bool | None = None,
     non_interactive: bool = False,
+    mission_id: str | None = None,
 ) -> None:
     """Start or resume the latest approved mission."""
     from sutra.core.config import find_sutra_root
@@ -1440,7 +1534,7 @@ def run_mission_start(
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -1784,7 +1878,7 @@ def run_mission_start(
     )
 
 
-def run_mission_pause(console: Console) -> None:
+def run_mission_pause(console: Console, mission_id: str | None = None) -> None:
     """Pause the currently running mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -1794,7 +1888,7 @@ def run_mission_pause(console: Console) -> None:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -1818,6 +1912,7 @@ def run_mission_resume(
     parallel: int | None = None,
     worktree: bool | None = None,
     non_interactive: bool = False,
+    mission_id: str | None = None,
 ) -> None:
     """Resume a paused mission."""
     from sutra.core.config import find_sutra_root
@@ -1828,7 +1923,7 @@ def run_mission_resume(
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -1843,7 +1938,11 @@ def run_mission_resume(
 
     # Start the execution
     run_mission_start(
-        console, parallel=parallel, worktree=worktree, non_interactive=non_interactive
+        console,
+        parallel=parallel,
+        worktree=worktree,
+        non_interactive=non_interactive,
+        mission_id=mission_id,
     )
 
 
@@ -1852,6 +1951,7 @@ def run_mission_retry(
     parallel: int | None = None,
     worktree: bool | None = None,
     non_interactive: bool = False,
+    mission_id: str | None = None,
 ) -> None:
     """Retry failed tasks of the latest mission."""
     from sutra.core.config import find_sutra_root
@@ -1862,7 +1962,7 @@ def run_mission_retry(
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -1899,7 +1999,11 @@ def run_mission_retry(
         f"[bold green]✓[/] Re-queued tasks. Resuming mission [cyan]{mission_id}[/]..."
     )
     run_mission_start(
-        console, parallel=parallel, worktree=worktree, non_interactive=non_interactive
+        console,
+        parallel=parallel,
+        worktree=worktree,
+        non_interactive=non_interactive,
+        mission_id=mission_id,
     )
 
 
@@ -1909,6 +2013,7 @@ def run_mission_skip(
     parallel: int | None = None,
     worktree: bool | None = None,
     non_interactive: bool = False,
+    mission_id: str | None = None,
 ) -> None:
     """Skip a specific task and resume execution."""
     from sutra.core.config import find_sutra_root
@@ -1919,7 +2024,7 @@ def run_mission_skip(
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)
@@ -1950,11 +2055,15 @@ def run_mission_skip(
         f"[bold green]✓[/] Marked task [cyan]{task_id}[/] as skipped. Resuming mission..."
     )
     run_mission_start(
-        console, parallel=parallel, worktree=worktree, non_interactive=non_interactive
+        console,
+        parallel=parallel,
+        worktree=worktree,
+        non_interactive=non_interactive,
+        mission_id=mission_id,
     )
 
 
-def run_mission_rollback(console: Console) -> None:
+def run_mission_rollback(console: Console, mission_id: str | None = None) -> None:
     """Rollback all workspace changes back to the start of the latest mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -1964,7 +2073,7 @@ def run_mission_rollback(console: Console) -> None:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from rich.console import Console
 
@@ -35,6 +36,17 @@ class TestMemory:
         filepath = get_memory_file(sutra_repo, "project-lessons")
         content = filepath.read_text(encoding="utf-8")
         assert "- Test lesson entry" in content
+
+        records_path = filepath.parent / "index.jsonl"
+        assert records_path.exists()
+        records = [
+            json.loads(line)
+            for line in records_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert records[-1]["memory_file"] == "project-lessons.md"
+        assert records[-1]["content"] == "Test lesson entry"
+        assert records[-1]["source"] == "manual"
 
     def test_memory_clear(self, sutra_repo: Path) -> None:
         """memory clear should reset file content but keep the header."""

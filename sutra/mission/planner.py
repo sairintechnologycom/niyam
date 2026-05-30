@@ -975,7 +975,48 @@ def get_latest_mission_id(sutra_dir: Path) -> str | None:
     return runs[0].name
 
 
-def run_mission_approve(console: Console, interactive: bool = False) -> None:
+def resolve_mission_id(sutra_dir: Path, mission_id: str | None = None) -> str | None:
+    """Resolve a mission ID, preferring active work over completed history."""
+    runs_dir = sutra_dir / "runs"
+    if not runs_dir.exists():
+        return None
+
+    if mission_id:
+        run_dir = runs_dir / mission_id
+        return mission_id if run_dir.is_dir() else None
+
+    runs = [d for d in runs_dir.iterdir() if d.is_dir()]
+    if not runs:
+        return None
+
+    status_rank = {
+        "running": 0,
+        "paused": 1,
+        "approved": 2,
+        "planned": 3,
+        "failed": 4,
+        "completed": 5,
+    }
+
+    def sort_key(run_dir: Path) -> tuple[int, float]:
+        status = "completed"
+        plan_path = run_dir / "mission-plan.yaml"
+        if plan_path.exists():
+            try:
+                with open(plan_path, encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                status = data.get("mission", {}).get("status", status)
+            except Exception:
+                pass
+        return (status_rank.get(status, 6), -run_dir.stat().st_mtime)
+
+    runs.sort(key=sort_key)
+    return runs[0].name
+
+
+def run_mission_approve(
+    console: Console, interactive: bool = False, mission_id: str | None = None
+) -> None:
     """Approve the latest planned mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -985,7 +1026,7 @@ def run_mission_approve(console: Console, interactive: bool = False) -> None:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)

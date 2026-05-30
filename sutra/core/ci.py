@@ -15,7 +15,7 @@ from sutra.core.config import (
     get_sutra_dir,
     load_project_config,
 )
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 from sutra.mission.reporter import run_verify_report
 from sutra.policies.guard import load_security_policy
 
@@ -35,7 +35,7 @@ def run_ci_verify(
         raise SystemExit(1)
 
     sutra_dir = get_sutra_dir(root)
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir)
     run_dir = sutra_dir / "runs" / mission_id if mission_id else None
     evidence_path = run_dir / "evidence.md" if run_dir else None
 

@@ -13,7 +13,7 @@ from rich.columns import Columns
 from rich.live import Live
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 
 
 def load_plan(run_dir: Path) -> dict:
@@ -253,7 +253,9 @@ def generate_dashboard_renderable(
     )
 
 
-def run_mission_dashboard(watch: bool, console: Console) -> None:
+def run_mission_dashboard(
+    watch: bool, console: Console, mission_id: str | None = None
+) -> None:
     """Render the mission dashboard."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
@@ -262,7 +264,7 @@ def run_mission_dashboard(watch: bool, console: Console) -> None:
     if not repo_root:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[bold red]Error:[/] No missions found.")
         raise SystemExit(1)

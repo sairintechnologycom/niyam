@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 
 
 def get_github_repo_owner_name(repo_root: Path) -> tuple[str, str] | None:
@@ -318,7 +318,7 @@ def run_pr_create(
 
     # 2. Get evidence report
     evidence_content = ""
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir)
     if mission_id:
         run_dir = sutra_dir / "runs" / mission_id
         evidence_path = run_dir / "evidence.md"

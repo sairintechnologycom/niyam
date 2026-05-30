@@ -10,7 +10,11 @@ import yaml
 from rich.console import Console
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan, run_mission_approve
+from sutra.mission.planner import (
+    run_mission_plan,
+    run_mission_approve,
+    resolve_mission_id,
+)
 from sutra.mission.executor import (
     run_mission_start,
     run_mission_pause,
@@ -94,6 +98,15 @@ class TestMission:
         req_file = sutra_repo / "requirements.md"
         req_file.write_text("# Implement Auth\n", encoding="utf-8")
         mission_id = run_mission_plan(str(req_file), console=console)
+
+        run_dir = get_sutra_dir(sutra_repo) / "runs" / mission_id
+        plan = load_plan(run_dir)
+        plan["tasks"][0]["acceptance_criteria"] = [
+            "The discovery task records current implementation boundaries."
+        ]
+        from sutra.mission.executor import save_plan
+
+        save_plan(run_dir, plan)
         run_mission_approve(console=console)
 
         # Run start with test mock environment
@@ -103,7 +116,6 @@ class TestMission:
         finally:
             del os.environ["SUTRA_TEST"]
 
-        run_dir = get_sutra_dir(sutra_repo) / "runs" / mission_id
         plan = load_plan(run_dir)
         assert plan["mission"]["status"] == "completed"
 
@@ -120,6 +132,13 @@ class TestMission:
         assert logs[0]["event"] == "MISSION_STARTED"
         assert logs[-1]["event"] == "MISSION_COMPLETED"
 
+        acceptance_path = run_dir / "acceptance-checks.json"
+        assert acceptance_path.exists()
+        with open(acceptance_path, encoding="utf-8") as f:
+            acceptance = json.load(f)
+        assert acceptance[0]["criterion_id"] == "T1-AC1"
+        assert acceptance[0]["status"] == "requires_review"
+
         # Check status command runs
         run_mission_status(console=console)
 
@@ -130,6 +149,7 @@ class TestMission:
         assert "Sutra Mission Evidence Package" in report_content
         assert "Execution Log" in report_content
         assert "Task Checklist" in report_content
+        assert "Acceptance Criteria Evidence" in report_content
 
     def test_mission_pause_resume(self, sutra_repo: Path) -> None:
         """Should support pause and resume mid-execution."""
@@ -175,3 +195,28 @@ class TestMission:
         with pytest.raises(SystemExit) as excinfo:
             run_mission_plan(str(req_file), strict=True, console=console)
         assert excinfo.value.code == 1
+
+    def test_resolve_mission_prefers_active_over_completed(
+        self, sutra_repo: Path
+    ) -> None:
+        """Mission resolution should avoid surprising completed-history selection."""
+        os.chdir(sutra_repo)
+        console = Console(quiet=True)
+
+        completed_req = sutra_repo / "completed.md"
+        completed_req.write_text("# Completed\n", encoding="utf-8")
+        completed_id = run_mission_plan(str(completed_req), console=console)
+        completed_dir = get_sutra_dir(sutra_repo) / "runs" / completed_id
+        completed_plan = load_plan(completed_dir)
+        completed_plan["mission"]["status"] = "completed"
+
+        from sutra.mission.executor import save_plan
+
+        save_plan(completed_dir, completed_plan)
+
+        active_req = sutra_repo / "active.md"
+        active_req.write_text("# Active\n", encoding="utf-8")
+        active_id = run_mission_plan(str(active_req), console=console)
+
+        assert resolve_mission_id(get_sutra_dir(sutra_repo)) == active_id
+        assert resolve_mission_id(get_sutra_dir(sutra_repo), completed_id) == completed_id

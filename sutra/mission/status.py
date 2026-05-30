@@ -7,12 +7,12 @@ from rich.table import Table
 from rich.panel import Panel
 
 from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import get_latest_mission_id
+from sutra.mission.planner import resolve_mission_id
 from sutra.mission.executor import load_plan
 
 
-def run_mission_status(console: Console) -> None:
-    """Show status of the latest mission."""
+def run_mission_status(console: Console, mission_id: str | None = None) -> None:
+    """Show status of the selected or active mission."""
     from sutra.core.config import find_sutra_root
     from sutra.core.errors import SutraConfigError
 
@@ -21,7 +21,7 @@ def run_mission_status(console: Console) -> None:
         raise SutraConfigError("Not a Sutra workspace. Run 'sutra init' first.")
     sutra_dir = get_sutra_dir(repo_root)
 
-    mission_id = get_latest_mission_id(sutra_dir)
+    mission_id = resolve_mission_id(sutra_dir, mission_id)
     if not mission_id:
         console.print("[yellow]No missions found.[/]")
         return
