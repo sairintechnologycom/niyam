@@ -129,3 +129,6 @@ pip-wheel-metadata/
 
 # Local antigravity cli config
 .antigravitycli/
+
+# Scratch workspace
+scratch/
