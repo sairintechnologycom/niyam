@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  pypi-release:
+  publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     permissions:
@@ -60,12 +60,12 @@ jobs:
 
       - name: Install PyInstaller and Sutra
         run: |
-          uv pip install pyinstaller --system
-          uv pip install . --system
+          uv venv
+          uv pip install pyinstaller .
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --name sutra sutra/__main__.py
+          uv run pyinstaller --onefile --name sutra sutra/__main__.py
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -75,7 +75,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [pypi-release, build-binaries]
+    needs: [publish, build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
