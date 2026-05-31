@@ -16,7 +16,9 @@ class RuntimeAdapter(ABC):
     into runtime-specific files (e.g., CLAUDE.md, .claude/, AGENTS.md).
     """
 
-    def __init__(self, repo_root: Path, verbose: bool = False, dry_run: bool = False) -> None:
+    def __init__(
+        self, repo_root: Path, verbose: bool = False, dry_run: bool = False
+    ) -> None:
         self.repo_root = repo_root
         self.sutra_dir = repo_root / ".sutra"
         self.verbose = verbose
@@ -71,7 +73,9 @@ class RuntimeAdapter(ABC):
         if self.dry_run:
             if self.verbose:
                 if changed:
-                    console.print(f"[yellow]Dry Run: Would {'update' if existed else 'create'} {rel}[/]")
+                    console.print(
+                        f"[yellow]Dry Run: Would {'update' if existed else 'create'} {rel}[/]"
+                    )
                 else:
                     console.print(f"[dim]Dry Run: {rel} would remain unchanged[/]")
             return
@@ -88,6 +92,7 @@ class RuntimeAdapter(ABC):
     def _mirror_directory(self, source: Path, target: Path, console: Console) -> None:
         """Mirror source directory to target, respecting verbose/dry-run settings."""
         import shutil
+
         if not source.is_dir():
             return
         if not self.dry_run:
@@ -113,9 +118,13 @@ class RuntimeAdapter(ABC):
                 if self.dry_run:
                     if self.verbose:
                         if changed:
-                            console.print(f"[yellow]Dry Run: Would {'update' if existed else 'create'} {rel_dst}[/]")
+                            console.print(
+                                f"[yellow]Dry Run: Would {'update' if existed else 'create'} {rel_dst}[/]"
+                            )
                         else:
-                            console.print(f"[dim]Dry Run: {rel_dst} would remain unchanged[/]")
+                            console.print(
+                                f"[dim]Dry Run: {rel_dst} would remain unchanged[/]"
+                            )
                 else:
                     if changed:
                         shutil.copy2(src_file, dst_file)

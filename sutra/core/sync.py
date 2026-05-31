@@ -77,7 +77,9 @@ def run_runtime_add(
         return
 
     if dry_run:
-        console.print(f"[yellow]Dry Run: Would add runtime [bold cyan]{runtime}[/] to sutra.yaml and runtimes.yaml[/]")
+        console.print(
+            f"[yellow]Dry Run: Would add runtime [bold cyan]{runtime}[/] to sutra.yaml and runtimes.yaml[/]"
+        )
         # Preview sync
         run_sync(runtime=runtime, console=console, verbose=True, dry_run=True)
         return

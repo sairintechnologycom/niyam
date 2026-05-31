@@ -44,7 +44,7 @@ def test_extract_yaml_or_json_malformed() -> None:
     assert parsed4 is None
 
     # Test wrapped nested JSON in response field (ultra-robust extraction check)
-    text5 = '{"response": "{\\\"tasks\\\": [{\\\"id\\\": \\\"T5\\\", \\\"title\\\": \\\"Task 5\\\"}]}"}'
+    text5 = '{"response": "{\\"tasks\\": [{\\"id\\": \\"T5\\", \\"title\\": \\"Task 5\\"}]}"}'
     parsed5 = extract_yaml_or_json(text5)
     assert parsed5 is not None
     assert parsed5["tasks"][0]["id"] == "T5"

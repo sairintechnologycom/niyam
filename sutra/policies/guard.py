@@ -32,16 +32,19 @@ def _resync_hooks(root: Path, console: Console) -> None:
     for rt in config.runtimes:
         if rt == "claude":
             from sutra.runtimes.claude import ClaudeAdapter
+
             adapter = ClaudeAdapter(root)
             adapter._generate_hooks(console)
             console.print("[dim]  ↳ Claude hooks regenerated[/]")
         elif rt == "gemini":
             from sutra.runtimes.gemini import GeminiAdapter
+
             adapter = GeminiAdapter(root)
             adapter._generate_hooks(console)
             console.print("[dim]  ↳ Gemini hooks regenerated[/]")
         elif rt == "codex":
             from sutra.runtimes.codex import CodexAdapter
+
             adapter = CodexAdapter(root)
             adapter._generate_hooks(console)
             console.print("[dim]  ↳ Codex hooks regenerated[/]")
@@ -53,7 +56,9 @@ def run_guard_enable(console: Console, dry_run: bool = False) -> None:
     config = load_sutra_config(root)
 
     if dry_run:
-        console.print("[yellow]Dry Run: Would enable guard mode (denied commands blocked, careful mode active)[/]")
+        console.print(
+            "[yellow]Dry Run: Would enable guard mode (denied commands blocked, careful mode active)[/]"
+        )
         return
 
     config.guard.enabled = True
@@ -84,7 +89,9 @@ def run_guard_disable(console: Console, dry_run: bool = False) -> None:
     config = load_sutra_config(root)
 
     if dry_run:
-        console.print("[yellow]Dry Run: Would disable guard mode (AI agents can execute freely)[/]")
+        console.print(
+            "[yellow]Dry Run: Would disable guard mode (AI agents can execute freely)[/]"
+        )
         return
 
     config.guard.enabled = False
@@ -105,7 +112,9 @@ def run_guard_careful(console: Console, dry_run: bool = False) -> None:
     config = load_sutra_config(root)
 
     if dry_run:
-        console.print("[yellow]Dry Run: Would enable careful mode (warnings for destructive commands like rm -rf, etc.)[/]")
+        console.print(
+            "[yellow]Dry Run: Would enable careful mode (warnings for destructive commands like rm -rf, etc.)[/]"
+        )
         return
 
     config.guard.enabled = True
@@ -167,7 +176,9 @@ def run_guard_freeze(path: str, console: Console, dry_run: bool = False) -> None
         raise SystemExit(1)
 
     if dry_run:
-        console.print(f"[yellow]Dry Run: Would restrict edits to path '{clean_path}'[/]")
+        console.print(
+            f"[yellow]Dry Run: Would restrict edits to path '{clean_path}'[/]"
+        )
         return
 
     if clean_path not in config.guard.frozen_paths:

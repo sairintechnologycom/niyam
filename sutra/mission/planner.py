@@ -1018,7 +1018,9 @@ def run_mission_plan(
     try:
         current_symlink.symlink_to(mission_id)
     except Exception as e:
-        console.print(f"[yellow]Warning: failed to create symlink '.sutra/runs/current': {e}[/]")
+        console.print(
+            f"[yellow]Warning: failed to create symlink '.sutra/runs/current': {e}[/]"
+        )
 
     console.print(
         f"[bold green]✓[/] Created mission plan '[cyan]{mission_id}[/]' in .sutra/runs/{mission_id}/"
@@ -1085,9 +1087,7 @@ def _print_preview_table(console: Console, mission_id: str, plan_data: dict) -> 
     tasks = plan_data.get("tasks", [])
     mission_meta = plan_data.get("mission", {})
 
-    table = Table(
-        title=f"Mission Plan preview: [cyan]{mission_id}[/]", expand=True
-    )
+    table = Table(title=f"Mission Plan preview: [cyan]{mission_id}[/]", expand=True)
     table.add_column("ID", style="bold magenta", justify="center", width=4)
     table.add_column("Title")
     table.add_column("Agent", style="yellow")
@@ -1129,10 +1129,16 @@ def _run_refiner_loop(
     console.print("  [bold]merge <t1> <t2>[/]      - Merge task t2 into t1")
     console.print("  [bold]delete <t>[/]          - Delete task t")
     console.print("  [bold]add <title>[/]         - Append a new task to the end")
-    console.print("  [bold]insert <after_t> <title>[/] - Insert a new task after after_t")
-    console.print("  [bold]edit <t> <f>=<v>[/]     - Edit field f (title, agent, runtime, depends_on, writes_files, files_allowed) of task t")
+    console.print(
+        "  [bold]insert <after_t> <title>[/] - Insert a new task after after_t"
+    )
+    console.print(
+        "  [bold]edit <t> <f>=<v>[/]     - Edit field f (title, agent, runtime, depends_on, writes_files, files_allowed) of task t"
+    )
     console.print("  [bold]show[/]                  - Show the current tasks table")
-    console.print("  [bold]done[/]                  - Finish refinement and return to approval menu")
+    console.print(
+        "  [bold]done[/]                  - Finish refinement and return to approval menu"
+    )
     console.print("")
 
     while True:
@@ -1159,7 +1165,9 @@ def _run_refiner_loop(
         if cmd == "done":
             break
         elif cmd == "show":
-            _print_preview_table(console, plan_data.get("mission", {}).get("id", "mission"), plan_data)
+            _print_preview_table(
+                console, plan_data.get("mission", {}).get("id", "mission"), plan_data
+            )
             continue
 
         changed = False
@@ -1171,8 +1179,22 @@ def _run_refiner_loop(
                 continue
             t1, t2 = subparts[0], subparts[1]
 
-            idx1 = next((i for i, t in enumerate(plan_data.get("tasks", [])) if t.get("id") == t1), -1)
-            idx2 = next((i for i, t in enumerate(plan_data.get("tasks", [])) if t.get("id") == t2), -1)
+            idx1 = next(
+                (
+                    i
+                    for i, t in enumerate(plan_data.get("tasks", []))
+                    if t.get("id") == t1
+                ),
+                -1,
+            )
+            idx2 = next(
+                (
+                    i
+                    for i, t in enumerate(plan_data.get("tasks", []))
+                    if t.get("id") == t2
+                ),
+                -1,
+            )
 
             if idx1 == -1 or idx2 == -1:
                 console.print(f"[red]Error: task '{t1}' or '{t2}' not found.[/]")
@@ -1212,7 +1234,9 @@ def _run_refiner_loop(
             target_id = args_str
 
             tasks = plan_data.get("tasks", [])
-            idx_to_del = next((i for i, t in enumerate(tasks) if t.get("id") == target_id), -1)
+            idx_to_del = next(
+                (i for i, t in enumerate(tasks) if t.get("id") == target_id), -1
+            )
             if idx_to_del == -1:
                 console.print(f"[red]Error: task '{target_id}' not found.[/]")
                 continue
@@ -1265,7 +1289,9 @@ def _run_refiner_loop(
             after_t, title = subparts[0], subparts[1]
 
             tasks = plan_data.get("tasks", [])
-            idx_after = next((i for i, t in enumerate(tasks) if t.get("id") == after_t), -1)
+            idx_after = next(
+                (i for i, t in enumerate(tasks) if t.get("id") == after_t), -1
+            )
             if idx_after == -1:
                 console.print(f"[red]Error: task '{after_t}' not found.[/]")
                 continue
@@ -1300,7 +1326,9 @@ def _run_refiner_loop(
             target_id, field_val = subparts[0], subparts[1]
 
             tasks = plan_data.get("tasks", [])
-            idx_to_edit = next((i for i, t in enumerate(tasks) if t.get("id") == target_id), -1)
+            idx_to_edit = next(
+                (i for i, t in enumerate(tasks) if t.get("id") == target_id), -1
+            )
             if idx_to_edit == -1:
                 console.print(f"[red]Error: task '{target_id}' not found.[/]")
                 continue
@@ -1314,7 +1342,15 @@ def _run_refiner_loop(
             val = val.strip()
 
             task = tasks[idx_to_edit]
-            allowed_fields = ("title", "agent", "runtime", "type", "writes_files", "files_allowed", "depends_on")
+            allowed_fields = (
+                "title",
+                "agent",
+                "runtime",
+                "type",
+                "writes_files",
+                "files_allowed",
+                "depends_on",
+            )
             if field not in allowed_fields:
                 console.print(f"[red]Error: field must be one of {allowed_fields}[/]")
                 continue
@@ -1323,7 +1359,9 @@ def _run_refiner_loop(
                 task["title"] = val
             elif field == "agent":
                 if val not in available_agents:
-                    console.print(f"[yellow]Warning: agent '{val}' is not in available agents: {available_agents}[/]")
+                    console.print(
+                        f"[yellow]Warning: agent '{val}' is not in available agents: {available_agents}[/]"
+                    )
                 task["agent"] = val
             elif field == "runtime":
                 task["runtime"] = val
@@ -1355,7 +1393,9 @@ def _run_refiner_loop(
                 # Save task-list.yaml
                 tasks_path = plan_path.parent / "task-list.yaml"
                 with open(tasks_path, "w", encoding="utf-8") as f:
-                    yaml.dump(plan_data["tasks"], f, default_flow_style=False, sort_keys=False)
+                    yaml.dump(
+                        plan_data["tasks"], f, default_flow_style=False, sort_keys=False
+                    )
             except Exception as e:
                 console.print(f"[red]Error saving plan: {e}[/]")
                 continue
@@ -1471,7 +1511,9 @@ def run_mission_approve(
                 except Exception as e:
                     console.print(f"[bold red]Error during validation:[/] {e}")
             else:
-                console.print("[yellow]Invalid option. Please choose y, n, edit, or refine.[/]")
+                console.print(
+                    "[yellow]Invalid option. Please choose y, n, edit, or refine.[/]"
+                )
 
     # Re-load plan data final time to make sure we write approved status
     with open(plan_path, encoding="utf-8") as f:

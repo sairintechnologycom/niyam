@@ -33,7 +33,9 @@ def test_doctor_check_lint_format_success(sutra_repo: Path) -> None:
     mock_res.stdout = "All clean"
     mock_res.stderr = ""
 
-    with patch("sutra.core.security.safe_run_command", return_value=mock_res) as mock_run:
+    with patch(
+        "sutra.core.security.safe_run_command", return_value=mock_res
+    ) as mock_run:
         results = _check_lint_format(sutra_repo)
 
     assert len(results) == 2
@@ -69,7 +71,9 @@ def test_doctor_check_lint_format_failure(sutra_repo: Path) -> None:
     mock_res.stdout = ""
     mock_res.stderr = "Linter syntax error on line 4"
 
-    with patch("sutra.core.security.safe_run_command", return_value=mock_res) as mock_run:
+    with patch(
+        "sutra.core.security.safe_run_command", return_value=mock_res
+    ):
         results = _check_lint_format(sutra_repo)
 
     assert len(results) == 1

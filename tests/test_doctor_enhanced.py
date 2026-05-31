@@ -116,17 +116,21 @@ def test_doctor_smoke_tests(sutra_repo: Path) -> None:
     os.chdir(sutra_repo)
 
     # Patch smoke run helpers to return success
-    with patch("sutra.core.doctor._run_planner_smoke", return_value=(True, "ok")), \
-         patch("sutra.core.doctor._run_claude_smoke", return_value=(True, "ok")):
+    with (
+        patch("sutra.core.doctor._run_planner_smoke", return_value=(True, "ok")),
+        patch("sutra.core.doctor._run_claude_smoke", return_value=(True, "ok")),
+    ):
         # Should run successfully
         run_doctor(runtime=None, console=console, smoke_test=True)
 
     # Patch smoke run helpers to return failure and simulate missing env variables
-    with patch("sutra.core.doctor._run_planner_smoke", return_value=(False, "error")), \
-         patch("sutra.core.doctor._run_claude_smoke", return_value=(False, "error")), \
-         patch.dict(os.environ, {}, clear=True):
-        
+    with (
+        patch("sutra.core.doctor._run_planner_smoke", return_value=(False, "error")),
+        patch("sutra.core.doctor._run_claude_smoke", return_value=(False, "error")),
+        patch.dict(os.environ, {}, clear=True),
+    ):
         # Should raise SystemExit due to errors
         import pytest
+
         with pytest.raises(SystemExit):
             run_doctor(runtime=None, console=console, smoke_test=True)

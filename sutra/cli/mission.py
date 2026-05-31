@@ -545,4 +545,3 @@ def mission_active(
         console.print(f"Active Mission: [cyan]{mission_id}[/]")
         console.print(f"Status: [yellow]{status}[/]")
         console.print(f"Path: {active_dir}")
-

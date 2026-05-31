@@ -1751,15 +1751,15 @@ def run_mission_start(
                     dep_tasks = [task_by_id[dep] for dep in deps if dep in task_by_id]
 
                     if all(dt["status"] in finished_statuses for dt in dep_tasks):
-                        # If any dependency failed, this task must be skipped
-                        if any(dt["status"] == "failed" for dt in dep_tasks):
+                        # If any dependency failed or was skipped, this task must be skipped
+                        if any(dt["status"] in ("failed", "skipped") for dt in dep_tasks):
                             t["status"] = "skipped"
                             save_plan(run_dir, plan_data)
                             log_execution_event(
                                 run_dir,
                                 "TASK_SKIPPED",
                                 t_id,
-                                "Dependency failed, skipping task.",
+                                "Dependency failed or skipped, skipping task.",
                             )
                             continue
                         ready_tasks.append(t)

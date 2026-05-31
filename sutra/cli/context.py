@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
+import typer
+
 from sutra.cli import console, context_app
 
 
@@ -15,9 +19,11 @@ def context_refresh(
     """Scan the repo and update project context."""
     if dry_run:
         from sutra.core.context import run_context_diff
+
         run_context_diff(console=console)
     else:
         from sutra.core.context import run_context_refresh
+
         run_context_refresh(console=console)
 
 

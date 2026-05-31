@@ -7,6 +7,7 @@ from __future__ import annotations
 import builtins
 import typing
 import typer
+
 builtins.Annotated = typing.Annotated
 builtins.Optional = typing.Optional
 builtins.typer = typer

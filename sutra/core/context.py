@@ -149,8 +149,12 @@ def _extract_dependency_versions(repo_root: Path) -> list[str]:
                 with open(pyproject, "rb") as f:
                     data = tomllib.load(f)
                 project_deps = data.get("project", {}).get("dependencies", [])
-                opt_deps = data.get("project", {}).get("optional-dependencies", {}) or {}
-                poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {}) or {}
+                opt_deps = (
+                    data.get("project", {}).get("optional-dependencies", {}) or {}
+                )
+                poetry_deps = (
+                    data.get("tool", {}).get("poetry", {}).get("dependencies", {}) or {}
+                )
                 for name, ver in sorted(poetry_deps.items()):
                     if name != "python":
                         versions.append(f"{name} ({ver})")
@@ -331,14 +335,29 @@ def _scan_repo(repo_root: Path) -> dict:
             for line in req_txt.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    dep_name = line.split("=")[0].split(">")[0].split("<")[0].split("[")[0].strip().lower()
+                    dep_name = (
+                        line.split("=")[0]
+                        .split(">")[0]
+                        .split("<")[0]
+                        .split("[")[0]
+                        .strip()
+                        .lower()
+                    )
                     if dep_name in dependency_frameworks:
                         frameworks.add(dependency_frameworks[dep_name])
         except Exception:
             pass
 
     for dep_str in dep_versions:
-        dep_name = dep_str.split()[0].split(">")[0].split("<")[0].split("=")[0].split("[")[0].strip().lower()
+        dep_name = (
+            dep_str.split()[0]
+            .split(">")[0]
+            .split("<")[0]
+            .split("=")[0]
+            .split("[")[0]
+            .strip()
+            .lower()
+        )
         if dep_name in dependency_frameworks:
             frameworks.add(dependency_frameworks[dep_name])
 
@@ -358,7 +377,11 @@ def _scan_repo(repo_root: Path) -> dict:
     try:
         config = load_sutra_config(repo_root)
         project_name = config.project_name
-        if project_name and (repo_root / project_name).is_dir() and project_name not in source_dirs:
+        if (
+            project_name
+            and (repo_root / project_name).is_dir()
+            and project_name not in source_dirs
+        ):
             source_dirs.append(project_name)
     except Exception:
         pass
@@ -551,7 +574,7 @@ def _boilerplate_cli_commands(root: Path, console: Console) -> None:
 
     def traverse(cmd, parts: list[str]):
         name_parts = parts + [cmd.name]
-        
+
         # If it is a group (TyperGroup), traverse subcommands
         if isinstance(cmd, typer.core.TyperGroup):
             for sub_name in cmd.list_commands(None):
@@ -563,7 +586,7 @@ def _boilerplate_cli_commands(root: Path, console: Console) -> None:
             cmd_full_name = "-".join(name_parts)
             filename = f"{cmd_full_name}.md"
             target_file = commands_dir / filename
-            
+
             if not target_file.exists():
                 # Let's generate markdown content
                 help_text = cmd.help or "No description provided."
@@ -572,13 +595,15 @@ def _boilerplate_cli_commands(root: Path, console: Console) -> None:
                     if isinstance(p, typer.core.TyperOption):
                         usage_parts.append("[OPTIONS]")
                         break
-                
+
                 for p in cmd.params:
                     if isinstance(p, typer.core.TyperArgument):
                         usage_parts.append(p.name.upper())
 
-                usage_str = " ".join(name_parts) + (" " + " ".join(usage_parts) if usage_parts else "")
-                
+                usage_str = " ".join(name_parts) + (
+                    " " + " ".join(usage_parts) if usage_parts else ""
+                )
+
                 md_lines = [
                     f"# {cmd_full_name.replace('-', ' ')}",
                     "",
@@ -591,25 +616,31 @@ def _boilerplate_cli_commands(root: Path, console: Console) -> None:
                     "```",
                     "",
                 ]
-                
+
                 options_lines = []
                 arguments_lines = []
                 for p in cmd.params:
                     p_help = getattr(p, "help", None) or "No description."
-                    default_str = f" (Default: {p.default})" if p.default is not None else ""
+                    default_str = (
+                        f" (Default: {p.default})" if p.default is not None else ""
+                    )
                     if isinstance(p, typer.core.TyperOption):
                         opt_names = ", ".join(p.opts)
                         options_lines.append(f"* `{opt_names}`: {p_help}{default_str}")
                     elif isinstance(p, typer.core.TyperArgument):
                         arguments_lines.append(f"* `{p.name}`: {p_help}{default_str}")
-                
+
                 if arguments_lines:
-                    md_lines.extend(["## Arguments", "", "\n".join(arguments_lines), ""])
+                    md_lines.extend(
+                        ["## Arguments", "", "\n".join(arguments_lines), ""]
+                    )
                 if options_lines:
                     md_lines.extend(["## Options", "", "\n".join(options_lines), ""])
-                
+
                 target_file.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
-                console.print(f"  [dim]•[/] Boilerplated missing command template: [cyan].sutra/commands/{filename}[/]")
+                console.print(
+                    f"  [dim]•[/] Boilerplated missing command template: [cyan].sutra/commands/{filename}[/]"
+                )
 
     # Start traversal
     traverse(click_app, [])
@@ -676,7 +707,9 @@ def run_context_refresh(console: Console) -> None:
     try:
         _boilerplate_cli_commands(root, console)
     except Exception as e:
-        console.print(f"[yellow]Warning: failed to auto-boilerplate command templates: {e}[/]")
+        console.print(
+            f"[yellow]Warning: failed to auto-boilerplate command templates: {e}[/]"
+        )
 
     # Summary
     console.print(

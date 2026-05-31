@@ -35,7 +35,7 @@ def test_interactive_refiner_loop(sutra_repo: Path) -> None:
         "edit T6 type=review",
         "show",
         "delete T6",
-        "done"
+        "done",
     ]
 
     with patch("builtins.input", side_effect=inputs):

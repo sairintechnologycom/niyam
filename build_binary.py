@@ -1,14 +1,13 @@
-import os
 import subprocess
 import sys
+import importlib.util
+
 
 def build():
     print("Building Sutra CLI standalone binary...")
-    
+
     # Check if pyinstaller is installed
-    try:
-        import PyInstaller
-    except ImportError:
+    if importlib.util.find_spec("PyInstaller") is None:
         print("Error: PyInstaller is not installed. Run: pip install pyinstaller")
         sys.exit(1)
 
@@ -16,9 +15,10 @@ def build():
     cmd = [
         "pyinstaller",
         "--onefile",
-        "--name", "sutra",
+        "--name",
+        "sutra",
         "--clean",
-        "sutra/__main__.py"
+        "sutra/__main__.py",
     ]
 
     try:
@@ -27,6 +27,7 @@ def build():
     except subprocess.CalledProcessError as e:
         print(f"\nBuild failed: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     build()

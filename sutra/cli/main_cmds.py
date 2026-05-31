@@ -361,7 +361,9 @@ def interrogate_requirement(requirement: str, orchestrator: str, console) -> str
     import shutil
     import subprocess
 
-    console.print(f"[cyan]Deep analyzing requirement with {orchestrator} to identify missing context...[/]")
+    console.print(
+        f"[cyan]Deep analyzing requirement with {orchestrator} to identify missing context...[/]"
+    )
     prompt = f"""
 You are the Sutra project architect. I am about to give you a requirement. 
 Before we start planning, identify 3 critical clarifying questions that would help you generate a perfect, production-ready implementation plan.
@@ -393,10 +395,14 @@ Format your response as a numbered list of 3 questions.
     except Exception:
         return requirement
 
-    console.print("\n[bold cyan]Sutra needs a bit more context to be highly accurate:[/]")
+    console.print(
+        "\n[bold cyan]Sutra needs a bit more context to be highly accurate:[/]"
+    )
     console.print(raw.strip())
 
-    console.print("\n[dim](Enter your answers below, or just press Enter to skip and proceed with current context)[/]")
+    console.print(
+        "\n[dim](Enter your answers below, or just press Enter to skip and proceed with current context)[/]"
+    )
     answers = []
     for i in range(1, 4):
         try:
@@ -407,7 +413,9 @@ Format your response as a numbered list of 3 questions.
             break
 
     if answers:
-        return requirement + "\n\n## Additional Developer Context\n" + "\n".join(answers)
+        return (
+            requirement + "\n\n## Additional Developer Context\n" + "\n".join(answers)
+        )
     return requirement
 
 
@@ -427,7 +435,9 @@ def start(
 
     repo_root = find_sutra_root()
     if not repo_root:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run 'sutra init' first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run 'sutra init' first."
+        )
         raise typer.Exit(1)
 
     console.print("🚀 [bold cyan]Welcome to Sutra! Let's start your new task.[/]")
@@ -445,6 +455,7 @@ def start(
 
     # Clean the run_id
     import re
+
     run_id = re.sub(r"[^a-zA-Z0-9_\-]+", "-", run_id).strip("-")
 
     # 2. Ask for Requirement Source
@@ -467,7 +478,9 @@ def start(
             raise typer.Exit(1)
 
         if not Path(input_source).exists():
-            console.print(f"   [yellow]Warning:[/] File {input_source} not found. Falling back to paste mode.")
+            console.print(
+                f"   [yellow]Warning:[/] File {input_source} not found. Falling back to paste mode."
+            )
             input_source = "-"
         else:
             requirement = Path(input_source).read_text(encoding="utf-8")
@@ -493,9 +506,17 @@ def start(
 
     engine = runtime.value if runtime else default_engine
     if not runtime:
-        console.print(f"\n3. Which planning engine should I use? (default: {default_engine})")
+        console.print(
+            f"\n3. Which planning engine should I use? (default: {default_engine})"
+        )
         try:
-            custom_engine = input(f"   Press Enter for {default_engine}, or type [claude/gemini/codex]: ").strip().lower()
+            custom_engine = (
+                input(
+                    f"   Press Enter for {default_engine}, or type [claude/gemini/codex]: "
+                )
+                .strip()
+                .lower()
+            )
             if custom_engine in {"claude", "gemini", "codex"}:
                 engine = custom_engine
         except (KeyboardInterrupt, EOFError):
@@ -506,7 +527,9 @@ def start(
     requirement = interrogate_requirement(requirement, engine, console)
 
     # 4. Confirm and Run Plan
-    console.print(f"\n[cyan]Ready! Running plan generation for mission '{run_id}' using engine '{engine}'...[/]")
+    console.print(
+        f"\n[cyan]Ready! Running plan generation for mission '{run_id}' using engine '{engine}'...[/]"
+    )
 
     # We need a temporary file for the requirement
     temp_dir = repo_root / ".sutra" / "temp"
@@ -538,8 +561,6 @@ def next(
     ] = False,
 ) -> None:
     """Automatically execute the next step in the current run."""
-    import sys
-    from pathlib import Path
     import yaml
     from sutra.core.config import find_sutra_root, get_sutra_dir
     from sutra.mission.planner import resolve_mission_id
@@ -549,7 +570,9 @@ def next(
 
     repo_root = find_sutra_root()
     if not repo_root:
-        console.print("[bold red]Error:[/] Not a Sutra workspace. Run 'sutra init' first.")
+        console.print(
+            "[bold red]Error:[/] Not a Sutra workspace. Run 'sutra init' first."
+        )
         raise typer.Exit(1)
 
     sutra_dir = get_sutra_dir(repo_root)
@@ -579,6 +602,7 @@ def next(
     approved = False
     if approval_path.exists():
         import json
+
         try:
             with open(approval_path, encoding="utf-8") as f:
                 app_data = json.load(f)
@@ -592,7 +616,9 @@ def next(
         console.print("Next logical step: Validating the plan.")
         try:
             validate_mission_plan(plan_path, repo_root)
-            console.print(f"[bold green]✓[/] Mission plan '{mission_id}' is valid and ready for approval.")
+            console.print(
+                f"[bold green]✓[/] Mission plan '{mission_id}' is valid and ready for approval."
+            )
             plan_data["mission"]["status"] = "validated"
             with open(plan_path, "w", encoding="utf-8") as f:
                 yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
@@ -612,7 +638,9 @@ def next(
         if not approved:
             console.print("Next logical step: Approving the plan.")
             try:
-                run_mission_approve(console=console, interactive=not chain, mission_id=mission_id)
+                run_mission_approve(
+                    console=console, interactive=not chain, mission_id=mission_id
+                )
             except Exception as e:
                 console.print(f"[bold red]Error during approval:[/] {e}")
                 raise typer.Exit(1)
@@ -650,12 +678,15 @@ def next(
         console.print("Current run is completed. Launching dashboard.")
         try:
             from sutra.mission.dashboard import run_mission_dashboard
+
             run_mission_dashboard(watch=False, console=console, mission_id=mission_id)
         except Exception as e:
             console.print(f"[bold red]Error displaying dashboard:[/] {e}")
             raise typer.Exit(1)
     else:
-        console.print(f"Unknown status '{status}'. Try running 'sutra mission status --mission {mission_id}' for details.")
+        console.print(
+            f"Unknown status '{status}'. Try running 'sutra mission status --mission {mission_id}' for details."
+        )
 
 
 @app.command()
@@ -674,7 +705,11 @@ def update() -> None:
         console.print("Detected editable/git installation. Pulling latest changes...")
         try:
             subprocess.run(["git", "pull"], check=True, cwd=str(repo_root))
-            subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], check=True, cwd=str(repo_root))
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-e", "."],
+                check=True,
+                cwd=str(repo_root),
+            )
             console.print("[green]Successfully updated from git.[/]")
         except Exception as exc:
             console.print(f"[red]Update failed:[/] {exc}")

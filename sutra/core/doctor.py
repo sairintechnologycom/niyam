@@ -518,6 +518,7 @@ def _check_lint_format(repo_root: Path) -> list[DiagnosticResult]:
 
 def _run_planner_smoke(engine: str) -> tuple[bool, str]:
     import subprocess
+
     prompt = "Return exactly this text and nothing else: SUTRA_PLANNER_OK"
     cmd = [engine, "-p", prompt]
     if engine == "gemini":
@@ -533,13 +534,16 @@ def _run_planner_smoke(engine: str) -> tuple[bool, str]:
             timeout=60,
         )
         output = (res.stdout or "") + (res.stderr or "")
-        return ("SUTRA_PLANNER_OK" in output and res.returncode == 0), output.strip()[:100]
+        return ("SUTRA_PLANNER_OK" in output and res.returncode == 0), output.strip()[
+            :100
+        ]
     except Exception as e:
         return False, str(e)
 
 
 def _run_claude_smoke() -> tuple[bool, str]:
     import subprocess
+
     prompt = "Return exactly this text and nothing else: SUTRA_CLAUDE_OK"
     try:
         res = subprocess.run(
@@ -550,7 +554,9 @@ def _run_claude_smoke() -> tuple[bool, str]:
             timeout=60,
         )
         output = (res.stdout or "") + (res.stderr or "")
-        return ("SUTRA_CLAUDE_OK" in output and res.returncode == 0), output.strip()[:100]
+        return ("SUTRA_CLAUDE_OK" in output and res.returncode == 0), output.strip()[
+            :100
+        ]
     except Exception as e:
         return False, str(e)
 
@@ -563,6 +569,7 @@ def run_doctor(
 ) -> None:
     """Run diagnostic checks on the Sutra workspace."""
     import os
+
     root = find_sutra_root()
     if root is None:
         console.print(
