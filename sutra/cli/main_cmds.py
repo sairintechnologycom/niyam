@@ -333,6 +333,28 @@ def hello(
 
 
 @app.command()
+def info() -> None:
+    """Display system and workspace information."""
+    import sys
+    import platform
+    from rich.table import Table
+    from sutra.core.config import find_sutra_root
+
+    table = Table(title="Sutra System Info", show_header=False, box=None)
+    table.add_row("Sutra Version", f"[cyan]{__version__}[/]")
+    table.add_row("Python Version", f"[cyan]{platform.python_version()}[/]")
+    table.add_row("OS", f"[cyan]{platform.system()} {platform.release()}[/]")
+
+    repo_root = find_sutra_root()
+    is_workspace = repo_root is not None
+    table.add_row("Sutra Workspace", "[green]Yes[/]" if is_workspace else "[red]No[/]")
+    if is_workspace:
+        table.add_row("Workspace Root", str(repo_root))
+
+    console.print(table)
+
+
+@app.command()
 def compare(
     task_id: Annotated[
         str,
