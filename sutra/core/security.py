@@ -49,6 +49,9 @@ ALLOWED_VALIDATION_EXECUTABLES: set[str] = {
     "cmake",
     "gradle",
     "mvn",
+    # Docker
+    "docker",
+    "docker-compose",
     # Security scanners
     "semgrep",
     "gitleaks",

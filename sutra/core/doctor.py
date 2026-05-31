@@ -516,12 +516,53 @@ def _check_lint_format(repo_root: Path) -> list[DiagnosticResult]:
     return results
 
 
+def _run_planner_smoke(engine: str) -> tuple[bool, str]:
+    import subprocess
+    prompt = "Return exactly this text and nothing else: SUTRA_PLANNER_OK"
+    cmd = [engine, "-p", prompt]
+    if engine == "gemini":
+        cmd.append("--skip-trust")
+    elif engine == "codex":
+        cmd = ["codex", "exec", prompt]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = (res.stdout or "") + (res.stderr or "")
+        return ("SUTRA_PLANNER_OK" in output and res.returncode == 0), output.strip()[:100]
+    except Exception as e:
+        return False, str(e)
+
+
+def _run_claude_smoke() -> tuple[bool, str]:
+    import subprocess
+    prompt = "Return exactly this text and nothing else: SUTRA_CLAUDE_OK"
+    try:
+        res = subprocess.run(
+            ["claude", "-p", prompt],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = (res.stdout or "") + (res.stderr or "")
+        return ("SUTRA_CLAUDE_OK" in output and res.returncode == 0), output.strip()[:100]
+    except Exception as e:
+        return False, str(e)
+
+
 def run_doctor(
     runtime: str | None,
     console: Console,
     check: bool = False,
+    smoke_test: bool = False,
 ) -> None:
     """Run diagnostic checks on the Sutra workspace."""
+    import os
     root = find_sutra_root()
     if root is None:
         console.print(
@@ -554,6 +595,47 @@ def run_doctor(
 
     if runtime == "gemini" or (runtime is None and "gemini" in config.runtimes):
         all_results.extend(_check_gemini_runtime(root))
+
+    if smoke_test:
+        engine = runtime or (config.runtimes[0] if config.runtimes else "claude")
+        if engine in ("gemini", "codex"):
+            p_ok, p_msg = _run_planner_smoke(engine)
+            all_results.append(
+                DiagnosticResult(
+                    f"{engine} headless smoke test",
+                    p_ok,
+                    p_msg or "Passed",
+                )
+            )
+            if not p_ok and engine == "gemini":
+                gemini_key = os.environ.get("GOOGLE_API_KEY")
+                if not gemini_key:
+                    all_results.append(
+                        DiagnosticResult(
+                            "GOOGLE_API_KEY",
+                            False,
+                            "MISSING (required for Gemini API/headless mode)",
+                        )
+                    )
+
+        c_ok, c_msg = _run_claude_smoke()
+        all_results.append(
+            DiagnosticResult(
+                "Claude headless smoke test",
+                c_ok,
+                c_msg or "Passed",
+            )
+        )
+        if not c_ok:
+            anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not anthropic_key:
+                all_results.append(
+                    DiagnosticResult(
+                        "ANTHROPIC_API_KEY",
+                        False,
+                        "MISSING (required for Claude API/headless mode)",
+                    )
+                )
 
     # Display results
     table = Table(title="Sutra Doctor", show_lines=False)

@@ -43,6 +43,12 @@ def test_extract_yaml_or_json_malformed() -> None:
     parsed4 = extract_yaml_or_json(text4)
     assert parsed4 is None
 
+    # Test wrapped nested JSON in response field (ultra-robust extraction check)
+    text5 = '{"response": "{\\\"tasks\\\": [{\\\"id\\\": \\\"T5\\\", \\\"title\\\": \\\"Task 5\\\"}]}"}'
+    parsed5 = extract_yaml_or_json(text5)
+    assert parsed5 is not None
+    assert parsed5["tasks"][0]["id"] == "T5"
+
 
 def test_fallback_matches_requirement_keywords() -> None:
     """Should choose closest fallback template based on requirement keywords."""

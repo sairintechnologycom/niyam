@@ -105,3 +105,28 @@ def test_doctor_git_status_dirty(sutra_repo: Path) -> None:
     assert len(git_status_results) == 1
     assert git_status_results[0].passed is False
     assert git_status_results[0].severity == "warning"
+
+
+def test_doctor_smoke_tests(sutra_repo: Path) -> None:
+    """Should run smoke tests and check for missing keys on failure."""
+    from sutra.core.doctor import run_doctor
+    from rich.console import Console
+
+    console = Console(quiet=True)
+    os.chdir(sutra_repo)
+
+    # Patch smoke run helpers to return success
+    with patch("sutra.core.doctor._run_planner_smoke", return_value=(True, "ok")), \
+         patch("sutra.core.doctor._run_claude_smoke", return_value=(True, "ok")):
+        # Should run successfully
+        run_doctor(runtime=None, console=console, smoke_test=True)
+
+    # Patch smoke run helpers to return failure and simulate missing env variables
+    with patch("sutra.core.doctor._run_planner_smoke", return_value=(False, "error")), \
+         patch("sutra.core.doctor._run_claude_smoke", return_value=(False, "error")), \
+         patch.dict(os.environ, {}, clear=True):
+        
+        # Should raise SystemExit due to errors
+        import pytest
+        with pytest.raises(SystemExit):
+            run_doctor(runtime=None, console=console, smoke_test=True)

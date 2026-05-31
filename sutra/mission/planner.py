@@ -60,7 +60,69 @@ def get_repo_map(repo_root: Path) -> str:
 
 def extract_yaml_or_json(text: str) -> dict | None:
     """Extract and parse YAML or JSON block from text."""
-    # Try looking for ```yaml ... ```
+    text = text.strip()
+    if not text:
+        return None
+
+    # Helper to extract JSON recursively
+    def extract_json_blob(t: str) -> dict | list | None:
+        t = t.strip()
+        if not t:
+            return None
+
+        # helper for cleaning prose around JSON
+        def clean_prose(s: str) -> str:
+            # Remove markdown blocks
+            s = re.sub(r"```(?:json)?\s*(.*?)\s*```", r"\1", s, flags=re.DOTALL)
+            # Find first { or [ and last } or ]
+            start = s.find("{")
+            if start == -1:
+                start = s.find("[")
+            end = s.rfind("}")
+            if end == -1:
+                end = s.rfind("]")
+            if start != -1 and end != -1 and end > start:
+                return s[start : end + 1]
+            return s
+
+        # Try direct parse first
+        try:
+            data = json.loads(t)
+            if isinstance(data, dict):
+                for key in ["response", "text", "content", "message"]:
+                    val = data.get(key)
+                    if isinstance(val, str) and ("{" in val or "[" in val):
+                        nested = extract_json_blob(val)
+                        if nested:
+                            return nested
+            return data
+        except Exception:
+            pass
+
+        # Try cleaning prose and parsing again
+        cleaned = clean_prose(t)
+        try:
+            data = json.loads(cleaned)
+            # Repeat unwrapping for cleaned data
+            if isinstance(data, dict):
+                for key in ["response", "text", "content", "message"]:
+                    val = data.get(key)
+                    if isinstance(val, str) and ("{" in val or "[" in val):
+                        nested = extract_json_blob(val)
+                        if nested:
+                            return nested
+            return data
+        except Exception:
+            pass
+
+        return None
+
+    # 1. Try extracting JSON first
+    parsed_json = extract_json_blob(text)
+    if isinstance(parsed_json, dict) and "tasks" in parsed_json:
+        return parsed_json
+
+    # 2. Try looking for ```yaml ... ```
     yaml_block = re.search(
         r"```(?:yaml|yml)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE
     )
@@ -72,17 +134,7 @@ def extract_yaml_or_json(text: str) -> dict | None:
         except Exception:
             pass
 
-    # Try looking for ```json ... ```
-    json_block = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
-    if json_block:
-        try:
-            parsed = json.loads(json_block.group(1))
-            if isinstance(parsed, dict) and "tasks" in parsed:
-                return parsed
-        except Exception:
-            pass
-
-    # Try parsing the whole text as YAML
+    # 3. Try parsing the whole text as YAML
     try:
         data = yaml.safe_load(text)
         if isinstance(data, dict) and "tasks" in data:

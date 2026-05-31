@@ -16,7 +16,7 @@ class TestCLI:
         """sutra version should print the version."""
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert "0.3.9" in result.output
 
     def test_help(self) -> None:
         """sutra --help should show all commands."""
@@ -26,6 +26,24 @@ class TestCLI:
         assert "sync" in result.output
         assert "doctor" in result.output
         assert "report" in result.output
+        assert "start" in result.output
+        assert "next" in result.output
+        assert "update" in result.output
+
+    def test_update_help(self) -> None:
+        """sutra update --help should work."""
+        result = runner.invoke(app, ["update", "--help"])
+        assert result.exit_code == 0
+
+    def test_start_help(self) -> None:
+        """sutra start --help should work."""
+        result = runner.invoke(app, ["start", "--help"])
+        assert result.exit_code == 0
+
+    def test_next_help(self) -> None:
+        """sutra next --help should work."""
+        result = runner.invoke(app, ["next", "--help"])
+        assert result.exit_code == 0
 
     def test_context_help(self) -> None:
         """sutra context --help should show subcommands."""
