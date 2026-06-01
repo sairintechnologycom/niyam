@@ -8,11 +8,22 @@ version = "0.3.9"
 description = "Governed autonomous development for AI coding agents."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [
     { name = "Niyam Team" },
 ]
-keywords = ["ai", "agents", "claude-code", "codex", "gemini", "developer-tools", "cli", "governance", "devops", "automation"]
+keywords = [
+  "ai",
+  "agents",
+  "claude-code",
+  "codex",
+  "gemini",
+  "developer-tools",
+  "cli",
+  "governance",
+  "devops",
+  "automation"
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -42,6 +53,11 @@ dev = [
 [project.scripts]
 niyam = "niyam.cli:app"
 sutra = "niyam.cli:deprecated_sutra"
+
+[project.urls]
+Homepage = "https://github.com/aincloudtools/niyam"
+Repository = "https://github.com/aincloudtools/niyam"
+Issues = "https://github.com/aincloudtools/niyam/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["niyam"]
