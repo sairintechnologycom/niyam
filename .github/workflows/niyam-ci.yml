@@ -1,4 +1,4 @@
-name: Niyam CI/CD Verification
+name: Niyam CI
 
 on:
   push:
