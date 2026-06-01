@@ -1,11 +1,11 @@
-# sutra hello
+# niyam hello
 
-A friendly greeting from Sutra.
+A friendly greeting from Niyam.
 
 ## Usage
 
 ```bash
-sutra hello [OPTIONS]
+niyam hello [OPTIONS]
 ```
 
 ## Options

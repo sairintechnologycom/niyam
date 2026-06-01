@@ -1,11 +1,11 @@
-# sutra mission dashboard
+# niyam mission dashboard
 
 Show real-time dashboard of the active or latest mission.
 
 ## Usage
 
 ```bash
-sutra mission dashboard [OPTIONS]
+niyam mission dashboard [OPTIONS]
 ```
 
 ## Options

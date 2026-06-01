@@ -9,7 +9,7 @@
 
 **Secondary:**
 - Markdown - Used for instruction files (CLAUDE.md, AGENTS.md, GEMINI.md) and memory.
-- YAML - Configuration and policy definition in `.sutra/`.
+- YAML - Configuration and policy definition in `.niyam/`.
 
 ## Runtime
 
@@ -32,7 +32,7 @@
 - Pytest-cov >= 5.0.0 - Test coverage reporting.
 
 **Build/Dev:**
-- Hatchling - Build backend for the `sutra-cli` package.
+- Hatchling - Build backend for the `niyam-dev` package.
 
 ## Key Dependencies
 
@@ -42,12 +42,12 @@
 - `pyyaml` - Parsing and writing YAML configuration and policy files.
 
 **Infrastructure:**
-- `urllib` (Standard Library) - Used for direct GitHub REST API interactions in `sutra/core/pr.py`.
+- `urllib` (Standard Library) - Used for direct GitHub REST API interactions in `niyam/core/pr.py`.
 
 ## Configuration
 
 **Environment:**
-- Configured via `.sutra/` directory in project roots.
+- Configured via `.niyam/` directory in project roots.
 - Environment variables for sensitive tokens (e.g., `GITHUB_TOKEN`).
 
 **Build:**

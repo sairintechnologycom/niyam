@@ -1,5 +1,5 @@
 from typer.testing import CliRunner
-from sutra.cli import app
+from niyam.cli import app
 
 runner = CliRunner()
 
@@ -7,7 +7,7 @@ runner = CliRunner()
 def test_hello_no_args():
     result = runner.invoke(app, ["hello"])
     assert result.exit_code == 0
-    assert "Hello, Sutra Developer!" in result.stdout
+    assert "Hello, Niyam Developer!" in result.stdout
 
 
 def test_hello_with_name():

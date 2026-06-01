@@ -1,11 +1,11 @@
-# sutra pr create
+# niyam pr create
 
 Push the active branch and create a GitHub pull request with evidence report attached.
 
 ## Usage
 
 ```bash
-sutra pr create [OPTIONS]
+niyam pr create [OPTIONS]
 ```
 
 ## Options

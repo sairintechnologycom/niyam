@@ -118,14 +118,14 @@ pip-wheel-metadata/
 *.swo
 .DS_Store
 
-# Sutra workspace run directories (if initialized)
-.sutra/runs/
-.sutra/worktrees/
-.sutra/evidence/
-.sutra/hook-cache/
-.sutra/sutra.yaml
-.sutra/project.yaml
-.sutra/runtimes.yaml
+# Niyam workspace run directories (if initialized)
+.niyam/runs/
+.niyam/worktrees/
+.niyam/evidence/
+.niyam/hook-cache/
+.niyam/niyam.yaml
+.niyam/project.yaml
+.niyam/runtimes.yaml
 
 # Local antigravity cli config
 .antigravitycli/

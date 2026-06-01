@@ -1,0 +1,34 @@
+```yaml
+tasks:
+  - id: T1
+    title: "Discovery: analyze CLI structure, version retrieval, and workspace detection conventions"
+    type: "discovery"
+    agent: "backend-specialist"
+    writes_files: false
+  - id: T2
+    title: "Implementation: write failing unit tests for the 'niyam info' command"
+    type: "implementation"
+    agent: "qa-reviewer"
+    runtime: "claude"
+    depends_on: ["T1"]
+    files_allowed: ["tests/**"]
+    tdd_required: true
+  - id: T3
+    title: "Implementation: add 'niyam info' command in main_cmds.py using typer and rich"
+    type: "implementation"
+    agent: "backend-specialist"
+    depends_on: ["T2"]
+    files_allowed: ["niyam/cli/main_cmds.py", "niyam/cli/__init__.py"]
+  - id: T4
+    title: "Review: security and code-quality check of the new command"
+    type: "review"
+    agent: "security-reviewer"
+    depends_on: ["T3"]
+    writes_files: false
+  - id: T5
+    title: "Validation: run pytest and verify 'niyam info' executes without errors"
+    type: "validation"
+    agent: "qa-reviewer"
+    depends_on: ["T4"]
+```
+

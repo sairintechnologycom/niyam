@@ -1,11 +1,11 @@
-# sutra memory clear
+# niyam memory clear
 
 Clear a memory file, resetting it to its title/headers.
 
 ## Usage
 
 ```bash
-sutra memory clear FILE
+niyam memory clear FILE
 ```
 
 ## Arguments

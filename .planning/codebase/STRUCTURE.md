@@ -5,7 +5,7 @@
 ## Directory Layout
 
 ```
-sutra/
+niyam/
 ├── core/           # Core infrastructure and shared services
 ├── evidence/       # Reporting and cryptographic evidence
 ├── mission/        # Mission lifecycle management (plan/execute)
@@ -14,32 +14,32 @@ sutra/
 ├── templates/      # Workspace profiles and modular packs
 └── cli.py          # Main CLI entry point
 tests/              # Comprehensive test suite
-.sutra/             # Default workspace state directory (local projects)
+.niyam/             # Default workspace state directory (local projects)
 ```
 
 ## Directory Purposes
 
-**sutra/core/:**
+**niyam/core/:**
 - Purpose: Infrastructure and shared logic.
 - Contains: Configuration models, security primitives, context scanning, project memory, and sync logic.
 - Key files: `config.py`, `security.py`, `context.py`, `sync.py`.
 
-**sutra/mission/:**
+**niyam/mission/:**
 - Purpose: Single-agent mission lifecycle orchestration.
 - Contains: AI-powered planner, task executor with worktree isolation, dashboard, and status reporting.
 - Key files: `planner.py`, `executor.py`, `validator.py`, `dashboard.py`.
 
-**sutra/policies/:**
+**niyam/policies/:**
 - Purpose: Safety and security guardrails.
 - Contains: Command validation, write restriction enforcement, and policy YAML schema validation.
 - Key files: `guard.py`, `validator.py`.
 
-**sutra/runtimes/:**
+**niyam/runtimes/:**
 - Purpose: Adapters for external AI coding tools.
 - Contains: Base adapter class and implementations for Claude Code, Gemini, and Codex.
 - Key files: `base.py`, `claude.py`, `gemini.py`, `codex.py`.
 
-**sutra/templates/:**
+**niyam/templates/:**
 - Purpose: Blueprints for workspace initialization.
 - Contains: Project profiles (frontend, backend, etc.) and modular packs (A/B testing, security scanning).
 - Key files: `packs/`, `profiles/`.
@@ -47,14 +47,14 @@ tests/              # Comprehensive test suite
 ## Key File Locations
 
 **Entry Points:**
-- `sutra/cli.py`: Main Typer-based CLI entry point.
+- `niyam/cli.py`: Main Typer-based CLI entry point.
 
 **Configuration:**
-- `sutra/core/config.py`: Pydantic models for all YAML configuration.
+- `niyam/core/config.py`: Pydantic models for all YAML configuration.
 
 **Core Logic:**
-- `sutra/mission/executor.py`: Logic for running tasks, managing worktrees, and enforcing boundaries.
-- `sutra/core/context.py`: Repository scanning and architecture metadata extraction.
+- `niyam/mission/executor.py`: Logic for running tasks, managing worktrees, and enforcing boundaries.
+- `niyam/core/context.py`: Repository scanning and architecture metadata extraction.
 
 **Testing:**
 - `tests/`: Project-wide tests covering all modules.
@@ -71,30 +71,30 @@ tests/              # Comprehensive test suite
 ## Where to Add New Code
 
 **New Feature:**
-- Add command to `sutra/cli.py`.
-- Implementation in `sutra/core/` or `sutra/mission/` depending on scope.
+- Add command to `niyam/cli.py`.
+- Implementation in `niyam/core/` or `niyam/mission/` depending on scope.
 - Tests in `tests/test_[feature].py`.
 
 **New AI Runtime:**
-- Implementation in `sutra/runtimes/[runtime].py` inheriting from `BaseRuntimeAdapter`.
-- Register in `sutra/core/config.py` and `sutra/cli.py`.
+- Implementation in `niyam/runtimes/[runtime].py` inheriting from `BaseRuntimeAdapter`.
+- Register in `niyam/core/config.py` and `niyam/cli.py`.
 
 **New Security Guardrail:**
-- Logic in `sutra/policies/guard.py` or `sutra/core/security.py`.
-- Configuration in `sutra/core/config.py`.
+- Logic in `niyam/policies/guard.py` or `niyam/core/security.py`.
+- Configuration in `niyam/core/config.py`.
 
 **New Project Template:**
-- Add profile to `sutra/templates/profiles/`.
-- Add pack to `sutra/templates/packs/`.
+- Add profile to `niyam/templates/profiles/`.
+- Add pack to `niyam/templates/packs/`.
 
 ## Special Directories
 
-**.sutra/:**
-- Purpose: Stores project-specific Sutra state, context, and mission logs.
-- Generated: Yes (via `sutra init`).
+**.niyam/:**
+- Purpose: Stores project-specific Niyam state, context, and mission logs.
+- Generated: Yes (via `niyam init`).
 - Committed: Yes (typically, except for `runs/` and `worktrees/`).
 
-**.sutra/runs/:**
+**.niyam/runs/:**
 - Purpose: Contains all files related to specific mission executions.
 - Generated: Yes.
 - Committed: Optional (usually ignored via `.gitignore`).

@@ -1,11 +1,11 @@
-# sutra mission report
+# niyam mission report
 
 Generate final evidence package for the latest mission.
 
 ## Usage
 
 ```bash
-sutra mission report [OPTIONS]
+niyam mission report [OPTIONS]
 ```
 
 ## Options

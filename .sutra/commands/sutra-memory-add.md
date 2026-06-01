@@ -1,11 +1,11 @@
-# sutra memory add
+# niyam memory add
 
 Append a note to a memory file.
 
 ## Usage
 
 ```bash
-sutra memory add FILE NOTE
+niyam memory add FILE NOTE
 ```
 
 ## Arguments

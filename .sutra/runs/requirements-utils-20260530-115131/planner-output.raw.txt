@@ -1,0 +1,36 @@
+```yaml
+tasks:
+  - id: T1
+    title: "Discovery: analyze utils requirement and existing core module conventions"
+    type: "discovery"
+    agent: "backend-specialist"
+    writes_files: false
+  - id: T2
+    title: "Implementation: write failing pytest tests for format_date_iso in tests/test_utils.py"
+    type: "implementation"
+    agent: "qa-reviewer"
+    runtime: "claude"
+    depends_on: ["T1"]
+    files_allowed: ["tests/test_utils.py"]
+  - id: T3
+    title: "Implementation: implement format_date_iso in niyam/core/utils.py"
+    type: "implementation"
+    agent: "backend-specialist"
+    runtime: "claude"
+    depends_on: ["T2"]
+    files_allowed: ["niyam/core/utils.py"]
+  - id: T4
+    title: "Review: security and code-quality check of utils module and tests"
+    type: "review"
+    agent: "security-reviewer"
+    depends_on: ["T3"]
+    writes_files: false
+  - id: T5
+    title: "Validation: run pytest and confirm all tests pass"
+    type: "validation"
+    agent: "qa-reviewer"
+    depends_on: ["T4"]
+    writes_files: false
+```
+
+Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.

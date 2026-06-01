@@ -7,14 +7,14 @@ from pathlib import Path
 import yaml
 from rich.console import Console
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan
-from sutra.mission.executor import load_plan
+from niyam.core.config import get_niyam_dir
+from niyam.mission.planner import run_mission_plan
+from niyam.mission.executor import load_plan
 
 
-def test_builtin_template_planning(sutra_repo: Path) -> None:
+def test_builtin_template_planning(niyam_repo: Path) -> None:
     """Should plan a mission using the built-in api-endpoint template."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # 1. Generate plan using api-endpoint template
@@ -26,8 +26,8 @@ def test_builtin_template_planning(sutra_repo: Path) -> None:
     )
     assert mission_id is not None
 
-    sutra_dir = get_sutra_dir(sutra_repo)
-    run_dir = sutra_dir / "runs" / mission_id
+    niyam_dir = get_niyam_dir(niyam_repo)
+    run_dir = niyam_dir / "runs" / mission_id
     assert run_dir.is_dir()
 
     # Load generated plan
@@ -36,7 +36,7 @@ def test_builtin_template_planning(sutra_repo: Path) -> None:
     assert plan["mission"]["status"] == "planned"
     assert plan["mission"]["orchestrator"] == "claude"
 
-    # Verify variable interpolation (using defaults in non-interactive SUTRA_TEST mode)
+    # Verify variable interpolation (using defaults in non-interactive NIYAM_TEST mode)
     # T2 should be: "TDD: Write endpoint contract test case for GET /api/v1/resource"
     tasks = plan["tasks"]
     assert len(tasks) == 5
@@ -50,13 +50,13 @@ def test_builtin_template_planning(sutra_repo: Path) -> None:
     )
 
 
-def test_custom_template_planning(sutra_repo: Path) -> None:
-    """Should plan a mission using a custom template file in .sutra/templates/missions/."""
-    os.chdir(sutra_repo)
+def test_custom_template_planning(niyam_repo: Path) -> None:
+    """Should plan a mission using a custom template file in .niyam/templates/missions/."""
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
-    sutra_dir = get_sutra_dir(sutra_repo)
-    custom_tmpl_dir = sutra_dir / "templates" / "missions"
+    niyam_dir = get_niyam_dir(niyam_repo)
+    custom_tmpl_dir = niyam_dir / "templates" / "missions"
     custom_tmpl_dir.mkdir(parents=True, exist_ok=True)
 
     # Define custom template
@@ -100,7 +100,7 @@ def test_custom_template_planning(sutra_repo: Path) -> None:
         runtime_override="codex",
     )
 
-    run_dir = sutra_dir / "runs" / mission_id
+    run_dir = niyam_dir / "runs" / mission_id
     plan = load_plan(run_dir)
 
     assert plan["mission"]["orchestrator"] == "codex"

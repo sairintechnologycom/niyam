@@ -1,0 +1,29 @@
+{
+  "mission_id": "requirements-utils-20260530-115223",
+  "events": [
+    {
+      "task_id": "T1",
+      "timestamp": "2026-05-30T06:23:06.418726Z",
+      "agent": "backend-specialist",
+      "runtime": "claude",
+      "input_tokens": 430,
+      "output_tokens": 631,
+      "total_tokens": 1061,
+      "cost_usd": 0.010755,
+      "baseline_tokens": 5305,
+      "baseline_cost_usd": 0.053775,
+      "savings_usd": 0.04302,
+      "estimated": true
+    }
+  ],
+  "summary": {
+    "total_input_tokens": 430,
+    "total_output_tokens": 631,
+    "total_tokens": 1061,
+    "total_cost_usd": 0.010755,
+    "total_baseline_tokens": 5305,
+    "total_baseline_cost_usd": 0.053775,
+    "total_savings_usd": 0.04302,
+    "savings_percent": 80.0
+  }
+}

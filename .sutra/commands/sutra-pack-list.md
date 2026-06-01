@@ -1,10 +1,10 @@
-# sutra pack list
+# niyam pack list
 
 Show available and installed packs.
 
 ## Usage
 
 ```bash
-sutra pack list
+niyam pack list
 ```
 

@@ -1,11 +1,11 @@
-# sutra guard disable
+# niyam guard disable
 
 Disable all guardrails.
 
 ## Usage
 
 ```bash
-sutra guard disable [OPTIONS]
+niyam guard disable [OPTIONS]
 ```
 
 ## Options

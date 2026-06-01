@@ -6,7 +6,7 @@ import json
 import yaml
 from pathlib import Path
 
-from sutra.mission.executor import parse_cli_token_usage, update_token_ledger
+from niyam.mission.executor import parse_cli_token_usage, update_token_ledger
 
 
 def test_parse_claude_cli_output() -> None:
@@ -129,14 +129,14 @@ def test_ledger_uses_real_values_when_available(tmp_path: Path) -> None:
 def test_baseline_multiplier_opt_in(tmp_path: Path) -> None:
     """Should only include baseline & savings metrics in the ledger if show_marketing_metrics is enabled in config."""
     # Setup mock workspace structure under tmp_path
-    sutra_dir = tmp_path / ".sutra"
-    sutra_dir.mkdir()
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir()
 
-    # Write a sutra.yaml with show_marketing_metrics=true
-    with open(sutra_dir / "sutra.yaml", "w") as f:
+    # Write a niyam.yaml with show_marketing_metrics=true
+    with open(niyam_dir / "niyam.yaml", "w") as f:
         yaml.dump({"show_marketing_metrics": True, "baseline_multiplier": 4.0}, f)
 
-    run_dir = sutra_dir / "runs" / "test-mission"
+    run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True)
 
     # Run update_token_ledger

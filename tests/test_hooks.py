@@ -7,17 +7,17 @@ from pathlib import Path
 import yaml
 from rich.console import Console
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.executor import run_hooks
+from niyam.core.config import get_niyam_dir
+from niyam.mission.executor import run_hooks
 
 
-def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
+def test_hooks_lifecycle_triggers(niyam_repo: Path) -> None:
     """Should load hooks.yaml and execute matched hooks, interpolating variables."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
-    sutra_dir = get_sutra_dir(sutra_repo)
-    hooks_file = sutra_dir / "hooks.yaml"
+    niyam_dir = get_niyam_dir(niyam_repo)
+    hooks_file = niyam_dir / "hooks.yaml"
 
     # Define hooks config
     hooks_config = {
@@ -48,8 +48,8 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
         yaml.safe_dump(hooks_config, f)
 
     # 1. Run pre_mission hook
-    run_hooks("pre_mission", {"mission_id": "m1"}, sutra_dir, console)
-    pre_mission_file = sutra_repo / "pre_mission.txt"
+    run_hooks("pre_mission", {"mission_id": "m1"}, niyam_dir, console)
+    pre_mission_file = niyam_repo / "pre_mission.txt"
     assert pre_mission_file.exists()
     assert "Pre-mission starting for m1" in pre_mission_file.read_text(encoding="utf-8")
 
@@ -60,8 +60,8 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
         "agent": "coder-agent",
         "title": "Impl task",
     }
-    run_hooks("pre_task", {"mission_id": "m1", "task": impl_task}, sutra_dir, console)
-    impl_hook_file = sutra_repo / "pre_task_T2.txt"
+    run_hooks("pre_task", {"mission_id": "m1", "task": impl_task}, niyam_dir, console)
+    impl_hook_file = niyam_repo / "pre_task_T2.txt"
     assert impl_hook_file.exists()
     assert "Pre-task T2 with agent coder-agent" in impl_hook_file.read_text(
         encoding="utf-8"
@@ -74,14 +74,14 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
         "agent": "scanner-agent",
         "title": "Disc task",
     }
-    run_hooks("pre_task", {"mission_id": "m1", "task": disc_task}, sutra_dir, console)
-    should_not_run_file = sutra_repo / "should_not_run.txt"
+    run_hooks("pre_task", {"mission_id": "m1", "task": disc_task}, niyam_dir, console)
+    should_not_run_file = niyam_repo / "should_not_run.txt"
     assert not should_not_run_file.exists()
 
     # 4. Run post_task hook
     impl_task["status"] = "completed"
-    run_hooks("post_task", {"mission_id": "m1", "task": impl_task}, sutra_dir, console)
-    post_task_file = sutra_repo / "post_task_T2.txt"
+    run_hooks("post_task", {"mission_id": "m1", "task": impl_task}, niyam_dir, console)
+    post_task_file = niyam_repo / "post_task_T2.txt"
     assert post_task_file.exists()
     assert "Post-task T2 status: completed" in post_task_file.read_text(
         encoding="utf-8"
@@ -91,10 +91,10 @@ def test_hooks_lifecycle_triggers(sutra_repo: Path) -> None:
     run_hooks(
         "post_mission",
         {"mission_id": "m1", "mission_status": "success"},
-        sutra_dir,
+        niyam_dir,
         console,
     )
-    post_mission_file = sutra_repo / "post_mission.txt"
+    post_mission_file = niyam_repo / "post_mission.txt"
     assert post_mission_file.exists()
     assert "Post-mission m1 status: success" in post_mission_file.read_text(
         encoding="utf-8"

@@ -1,0 +1,104 @@
+- id: T1
+  title: 'Discovery: analyze utils requirement and existing core module conventions'
+  type: discovery
+  status: completed
+  agent: backend-specialist
+  runtime: null
+  depends_on: []
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T2
+  title: 'Implementation: write failing pytest tests for format_date_iso in tests/test_utils.py'
+  type: implementation
+  status: completed
+  agent: qa-reviewer
+  runtime: claude
+  depends_on:
+  - T1
+  allowed_files:
+  - tests/test_utils.py
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T3
+  title: 'Implementation: implement format_date_iso in niyam/core/utils.py'
+  type: implementation
+  status: completed
+  agent: backend-specialist
+  runtime: claude
+  depends_on:
+  - T2
+  allowed_files:
+  - niyam/core/utils.py
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T4
+  title: 'Review: security and code-quality check of utils module and tests'
+  type: review
+  status: completed
+  agent: security-reviewer
+  runtime: null
+  depends_on:
+  - T3
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T5
+  title: 'Validation: run pytest and confirm all tests pass'
+  type: validation
+  status: completed
+  agent: qa-reviewer
+  runtime: null
+  depends_on:
+  - T4
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null

@@ -7,18 +7,18 @@ from pathlib import Path
 from unittest.mock import patch
 from rich.console import Console
 
-from sutra.core.config import load_sutra_config, get_sutra_dir
-from sutra.core.setup import run_setup
+from niyam.core.config import load_niyam_config, get_niyam_dir
+from niyam.core.setup import run_setup
 
 
 def test_setup_wizard_fresh_initialization(tmp_repo: Path) -> None:
-    """Should run setup, initialize sutra with selected profile, detected runtimes, and guardrails."""
+    """Should run setup, initialize niyam with selected profile, detected runtimes, and guardrails."""
     os.chdir(tmp_repo)
     console = Console(quiet=True)
 
-    # 1. Assert .sutra does not exist yet
-    sutra_dir = get_sutra_dir(tmp_repo)
-    assert not sutra_dir.exists()
+    # 1. Assert .niyam does not exist yet
+    niyam_dir = get_niyam_dir(tmp_repo)
+    assert not niyam_dir.exists()
 
     # 2. Patch inputs and detections
     # Profile prompt: "backend"
@@ -56,12 +56,12 @@ def test_setup_wizard_fresh_initialization(tmp_repo: Path) -> None:
     ):
         run_setup(console=console)
 
-    # 3. Verify .sutra/ is initialized
-    assert sutra_dir.exists()
-    assert (sutra_dir / "sutra.yaml").exists()
+    # 3. Verify .niyam/ is initialized
+    assert niyam_dir.exists()
+    assert (niyam_dir / "niyam.yaml").exists()
 
     # 4. Verify config settings
-    config = load_sutra_config(tmp_repo)
+    config = load_niyam_config(tmp_repo)
     # Runtimes list should have claude, but not gemini or codex
     assert "claude" in config.runtimes
     assert "gemini" not in config.runtimes

@@ -1,0 +1,20 @@
+{
+  "guard_enabled": false,
+  "deny_patterns": [
+    "rm -rf",
+    "sudo",
+    "chmod 777",
+    "git push --force",
+    "git reset --hard",
+    "npm publish",
+    "terraform apply",
+    "terraform destroy",
+    "curl * | sh",
+    "DROP TABLE",
+    "DROP DATABASE"
+  ],
+  "warn_patterns": [],
+  "deny_write_patterns": [],
+  "allow_write_patterns": [],
+  "frozen_paths": []
+}

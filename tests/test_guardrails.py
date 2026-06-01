@@ -1,4 +1,4 @@
-"""Tests for Sutra path-based guardrails."""
+"""Tests for Niyam path-based guardrails."""
 
 from __future__ import annotations
 
@@ -10,19 +10,19 @@ import pytest
 from rich.console import Console
 from unittest.mock import patch, MagicMock
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan, run_mission_approve
-from sutra.mission.executor import run_mission_start, load_plan
+from niyam.core.config import get_niyam_dir
+from niyam.mission.planner import run_mission_plan, run_mission_approve
+from niyam.mission.executor import run_mission_start, load_plan
 
 
-def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
+def test_path_write_denial_and_revert(niyam_repo: Path) -> None:
     """Should detect unauthorized changes to denied path, revert them, and fail task."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # 1. Write custom security policy with deny write patterns
-    sutra_dir = get_sutra_dir(sutra_repo)
-    security_yaml = sutra_dir / "policies" / "security.yaml"
+    niyam_dir = get_niyam_dir(niyam_repo)
+    security_yaml = niyam_dir / "policies" / "security.yaml"
     policy_data = {
         "block_secrets_in_code": True,
         "require_auth_review": True,
@@ -33,13 +33,13 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
         yaml.dump(policy_data, f)
 
     # Create dummy directories
-    (sutra_repo / "src" / "secure").mkdir(parents=True, exist_ok=True)
+    (niyam_repo / "src" / "secure").mkdir(parents=True, exist_ok=True)
 
     # Initial git commit so checkout works
-    os.system("git add .sutra && git commit -m 'Initial commit'")
+    os.system("git add .niyam && git commit -m 'Initial commit'")
 
     # 2. Plan and approve mission
-    req_file = sutra_repo / "requirements.md"
+    req_file = niyam_repo / "requirements.md"
     req_file.write_text("# Guardrail test\n", encoding="utf-8")
     mission_id = run_mission_plan(str(req_file), console=console)
     run_mission_approve(console=console)
@@ -54,7 +54,7 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
         if args and args[0] == "git":
             return real_run(args, **kwargs)
 
-        cwd = kwargs.get("cwd", sutra_repo)
+        cwd = kwargs.get("cwd", niyam_repo)
 
         # Write the unauthorized file to the correct cwd
         unauthorized_file = Path(cwd) / "src" / "secure" / "secret.py"
@@ -72,7 +72,7 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
         patch("shutil.which", return_value="/usr/local/bin/claude"),
         patch("subprocess.run", side_effect=mock_subprocess_run),
     ):
-        # We do NOT run in test mode (SUTRA_TEST) because we want orchestrator execution path
+        # We do NOT run in test mode (NIYAM_TEST) because we want orchestrator execution path
         # But wait, run_mission_start will run.
         # Let's make sure it doesn't fail on validation test commands (no validation set in fullstack by default)
         try:
@@ -86,7 +86,7 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
             pass
 
     # 4. Assert task T1 failed due to violation, and unauthorized file was deleted/reverted
-    run_dir = sutra_dir / "runs" / mission_id
+    run_dir = niyam_dir / "runs" / mission_id
     plan = load_plan(run_dir)
 
     # The first task executed (T1) should be failed
@@ -94,7 +94,7 @@ def test_path_write_denial_and_revert(sutra_repo: Path) -> None:
     assert plan["mission"]["status"] == "failed"
 
     # Unauthorized file should have been deleted (since it was untracked/added and then checkout/removed)
-    assert not (sutra_repo / "src" / "secure" / "secret.py").exists()
+    assert not (niyam_repo / "src" / "secure" / "secret.py").exists()
 
     # Verify policy event was logged
     policy_events_path = run_dir / "policy-events.json"

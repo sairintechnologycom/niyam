@@ -1,0 +1,68 @@
+[
+  {
+    "timestamp": "2026-05-30T06:22:51.679177Z",
+    "event": "MISSION_STARTED",
+    "task_id": "",
+    "details": "Mission execution started (parallel=1, worktree=True)."
+  },
+  {
+    "timestamp": "2026-05-30T06:22:51.696034Z",
+    "event": "TASK_STARTED",
+    "task_id": "T1",
+    "details": "Running task: Discovery: Analyze requirement in requirement.md"
+  },
+  {
+    "timestamp": "2026-05-30T06:22:51.882367Z",
+    "event": "TASK_EXECUTION_MOCK",
+    "task_id": "T1",
+    "details": "Mocked execution successfully."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.479233Z",
+    "event": "TASK_FAILED",
+    "task_id": "T1",
+    "details": "Task execution failed."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.488849Z",
+    "event": "TASK_SKIPPED",
+    "task_id": "T2",
+    "details": "Dependency failed, skipping task."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.493411Z",
+    "event": "TASK_STARTED",
+    "task_id": "T3",
+    "details": "Running task: Implementation: Code the solution"
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.541733Z",
+    "event": "TASK_FAILED",
+    "task_id": "T3",
+    "details": "Task execution failed."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.550486Z",
+    "event": "TASK_SKIPPED",
+    "task_id": "T4",
+    "details": "Dependency failed, skipping task."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.555289Z",
+    "event": "TASK_STARTED",
+    "task_id": "T5",
+    "details": "Running task: Validation: Run full verification suite"
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.604711Z",
+    "event": "TASK_FAILED",
+    "task_id": "T5",
+    "details": "Task execution failed."
+  },
+  {
+    "timestamp": "2026-05-30T06:23:06.616841Z",
+    "event": "MISSION_FAILED",
+    "task_id": "",
+    "details": "Mission execution failed due to task failures."
+  }
+]

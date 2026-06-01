@@ -1,10 +1,10 @@
-# sutra version
+# niyam version
 
-Show the Sutra version.
+Show the Niyam version.
 
 ## Usage
 
 ```bash
-sutra version
+niyam version
 ```
 

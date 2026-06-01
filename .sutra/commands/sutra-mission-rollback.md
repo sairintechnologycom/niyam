@@ -1,11 +1,11 @@
-# sutra mission rollback
+# niyam mission rollback
 
 Rollback all workspace changes back to the start of the latest mission.
 
 ## Usage
 
 ```bash
-sutra mission rollback [OPTIONS]
+niyam mission rollback [OPTIONS]
 ```
 
 ## Options

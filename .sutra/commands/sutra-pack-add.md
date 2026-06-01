@@ -1,11 +1,11 @@
-# sutra pack add
+# niyam pack add
 
 Install a pack into the workspace.
 
 ## Usage
 
 ```bash
-sutra pack add [OPTIONS] NAME
+niyam pack add [OPTIONS] NAME
 ```
 
 ## Arguments

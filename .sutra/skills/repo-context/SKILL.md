@@ -15,7 +15,7 @@ Before making changes, understand the repository's structure, conventions, and p
 
 ## Process
 
-1. **Read project context** — check `.sutra/context/` for architecture and validation info
+1. **Read project context** — check `.niyam/context/` for architecture and validation info
 2. **Scan relevant directories** — understand the file layout
 3. **Find existing patterns** — look for similar implementations
 4. **Check tests** — understand how existing code is tested

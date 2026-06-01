@@ -1,11 +1,11 @@
-# sutra run
+# niyam run
 
 Plan, approve, and execute a mission in one step.
 
 ## Usage
 
 ```bash
-sutra run [OPTIONS] REQUIREMENT
+niyam run [OPTIONS] REQUIREMENT
 ```
 
 ## Arguments

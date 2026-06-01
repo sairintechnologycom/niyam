@@ -1,6 +1,6 @@
-# Implement Sutra Task
+# Implement Niyam Task
 
-Use this skill when implementing a bounded Sutra task.
+Use this skill when implementing a bounded Niyam task.
 
 Steps:
 1. Read the assigned task.

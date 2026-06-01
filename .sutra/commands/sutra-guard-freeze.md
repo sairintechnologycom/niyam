@@ -1,11 +1,11 @@
-# sutra guard freeze
+# niyam guard freeze
 
 Restrict AI edits to a specific directory.
 
 ## Usage
 
 ```bash
-sutra guard freeze [OPTIONS] PATH
+niyam guard freeze [OPTIONS] PATH
 ```
 
 ## Arguments

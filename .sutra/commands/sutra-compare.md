@@ -1,11 +1,11 @@
-# sutra compare
+# niyam compare
 
 Compare performance, cost, and validation status of multiple runtimes on a task.
 
 ## Usage
 
 ```bash
-sutra compare [OPTIONS] TASK_ID
+niyam compare [OPTIONS] TASK_ID
 ```
 
 ## Arguments

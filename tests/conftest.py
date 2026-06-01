@@ -1,4 +1,4 @@
-"""Test fixtures for Sutra."""
+"""Test fixtures for Niyam."""
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ def tmp_repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def sutra_repo(tmp_repo: Path) -> Path:
-    """Create a temporary repo with sutra initialized."""
-    from sutra.core.init import run_init
+def niyam_repo(tmp_repo: Path) -> Path:
+    """Create a temporary repo with niyam initialized."""
+    from niyam.core.init import run_init
     from rich.console import Console
 
     console = Console(quiet=True)

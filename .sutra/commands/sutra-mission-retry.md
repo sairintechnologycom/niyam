@@ -1,11 +1,11 @@
-# sutra mission retry
+# niyam mission retry
 
 Retry failed or skipped tasks of the latest mission.
 
 ## Usage
 
 ```bash
-sutra mission retry [OPTIONS]
+niyam mission retry [OPTIONS]
 ```
 
 ## Options

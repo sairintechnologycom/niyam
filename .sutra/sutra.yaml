@@ -1,0 +1,10 @@
+version: 0.1.0
+project_name: niyam
+profile: fullstack
+runtimes:
+- claude
+packs: []
+guard:
+  enabled: false
+  careful: false
+  frozen_paths: []

@@ -1,0 +1,97 @@
+- id: T1
+  title: 'Discovery: analyze utils requirement, existing utils.py, and test conventions'
+  type: discovery
+  status: pending
+  agent: backend-specialist
+  depends_on: []
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+- id: T2
+  title: 'Implementation: write failing pytest tests for format_date_iso (aware, naive/UTC,
+    output format)'
+  type: implementation
+  status: pending
+  agent: qa-reviewer
+  depends_on:
+  - T1
+  allowed_files:
+  - tests/test_utils.py
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands:
+    - pytest
+    - ruff check .
+  approval_required: false
+  tdd_required: true
+- id: T3
+  title: 'Implementation: implement format_date_iso(dt) -> str in niyam/core/utils.py'
+  type: implementation
+  status: pending
+  agent: backend-specialist
+  depends_on:
+  - T2
+  allowed_files:
+  - niyam/core/utils.py
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands:
+    - pytest
+    - ruff check .
+  approval_required: false
+- id: T4
+  title: 'Review: security and correctness review of utils implementation'
+  type: review
+  status: pending
+  agent: security-reviewer
+  depends_on:
+  - T3
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+- id: T5
+  title: 'Validation: run pytest and verify all utils tests pass'
+  type: validation
+  status: pending
+  agent: qa-reviewer
+  depends_on:
+  - T4
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands:
+    - pytest
+    - ruff check .
+  approval_required: false

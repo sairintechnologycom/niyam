@@ -1,11 +1,11 @@
-# sutra guard careful
+# niyam guard careful
 
 Enable destructive-command warnings.
 
 ## Usage
 
 ```bash
-sutra guard careful [OPTIONS]
+niyam guard careful [OPTIONS]
 ```
 
 ## Options

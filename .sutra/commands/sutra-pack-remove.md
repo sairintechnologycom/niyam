@@ -1,11 +1,11 @@
-# sutra pack remove
+# niyam pack remove
 
 Remove an installed pack from the workspace.
 
 ## Usage
 
 ```bash
-sutra pack remove NAME
+niyam pack remove NAME
 ```
 
 ## Arguments

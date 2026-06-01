@@ -1,3 +1,3 @@
 # Progress
 
-Sutra will append task progress here.
+Niyam will append task progress here.

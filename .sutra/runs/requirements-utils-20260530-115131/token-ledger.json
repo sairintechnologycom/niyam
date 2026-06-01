@@ -1,0 +1,85 @@
+{
+  "mission_id": "requirements-utils-20260530-115131",
+  "events": [
+    {
+      "task_id": "T1",
+      "timestamp": "2026-05-30T06:23:59.219767Z",
+      "agent": "backend-specialist",
+      "runtime": "claude",
+      "input_tokens": 436,
+      "output_tokens": 5836,
+      "total_tokens": 6272,
+      "cost_usd": 0.088848,
+      "baseline_tokens": 31360,
+      "baseline_cost_usd": 0.44424,
+      "savings_usd": 0.35539200000000004,
+      "estimated": true
+    },
+    {
+      "task_id": "T2",
+      "timestamp": "2026-05-30T06:25:10.092885Z",
+      "agent": "qa-reviewer",
+      "runtime": "claude",
+      "input_tokens": 470,
+      "output_tokens": 486,
+      "total_tokens": 956,
+      "cost_usd": 0.0087,
+      "baseline_tokens": 4780,
+      "baseline_cost_usd": 0.0435,
+      "savings_usd": 0.0348,
+      "estimated": true
+    },
+    {
+      "task_id": "T3",
+      "timestamp": "2026-05-30T06:25:23.026221Z",
+      "agent": "backend-specialist",
+      "runtime": "claude",
+      "input_tokens": 440,
+      "output_tokens": 565,
+      "total_tokens": 1005,
+      "cost_usd": 0.009795,
+      "baseline_tokens": 5025,
+      "baseline_cost_usd": 0.048975,
+      "savings_usd": 0.03918,
+      "estimated": true
+    },
+    {
+      "task_id": "T4",
+      "timestamp": "2026-05-30T06:25:36.826012Z",
+      "agent": "security-reviewer",
+      "runtime": "claude",
+      "input_tokens": 494,
+      "output_tokens": 533,
+      "total_tokens": 1027,
+      "cost_usd": 0.009477,
+      "baseline_tokens": 5135,
+      "baseline_cost_usd": 0.047385,
+      "savings_usd": 0.037908,
+      "estimated": true
+    },
+    {
+      "task_id": "T5",
+      "timestamp": "2026-05-30T06:25:51.813401Z",
+      "agent": "qa-reviewer",
+      "runtime": "claude",
+      "input_tokens": 455,
+      "output_tokens": 545,
+      "total_tokens": 1000,
+      "cost_usd": 0.00954,
+      "baseline_tokens": 5000,
+      "baseline_cost_usd": 0.0477,
+      "savings_usd": 0.03816,
+      "estimated": true
+    }
+  ],
+  "summary": {
+    "total_input_tokens": 2295,
+    "total_output_tokens": 7965,
+    "total_tokens": 10260,
+    "total_cost_usd": 0.12636,
+    "total_baseline_tokens": 51300,
+    "total_baseline_cost_usd": 0.6318,
+    "total_savings_usd": 0.50544,
+    "savings_percent": 80.0
+  }
+}

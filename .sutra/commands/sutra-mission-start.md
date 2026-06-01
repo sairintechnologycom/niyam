@@ -1,11 +1,11 @@
-# sutra mission start
+# niyam mission start
 
 Start or resume the latest approved mission.
 
 ## Usage
 
 ```bash
-sutra mission start [OPTIONS]
+niyam mission start [OPTIONS]
 ```
 
 ## Options

@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sutra-cli"
+name = "niyam-dev"
 version = "0.3.9"
-description = "Governed AI-development workspaces for Claude Code, Codex CLI, and future coding runtimes."
+description = "Governed autonomous development for AI coding agents."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    { name = "Sutra Team" },
+    { name = "Niyam Team" },
 ]
-keywords = ["ai", "cli", "claude", "codex", "governance", "agents"]
+keywords = ["ai", "agents", "claude-code", "codex", "gemini", "developer-tools", "cli", "governance", "devops", "automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -40,10 +40,11 @@ dev = [
 ]
 
 [project.scripts]
-sutra = "sutra.cli:main"
+niyam = "niyam.cli:app"
+sutra = "niyam.cli:deprecated_sutra"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sutra"]
+packages = ["niyam"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

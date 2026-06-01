@@ -1,4 +1,4 @@
-"""Tests for the enhanced diagnostics in sutra doctor."""
+"""Tests for the enhanced diagnostics in niyam doctor."""
 
 from __future__ import annotations
 
@@ -6,18 +6,18 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from sutra.core.doctor import (
+from niyam.core.doctor import (
     _check_runtimes_in_path,
     _check_agents_validity,
     _check_validation_commands_in_path,
     _check_git_status,
 )
-from sutra.core.config import load_sutra_config
+from niyam.core.config import load_niyam_config
 
 
-def test_doctor_runtimes_in_path(sutra_repo: Path) -> None:
+def test_doctor_runtimes_in_path(niyam_repo: Path) -> None:
     """Should correctly report when runtimes are missing or present in PATH."""
-    config = load_sutra_config(sutra_repo)
+    config = load_niyam_config(niyam_repo)
     config.runtimes = ["claude", "gemini"]
 
     def mock_which(cmd):
@@ -26,7 +26,7 @@ def test_doctor_runtimes_in_path(sutra_repo: Path) -> None:
         return None
 
     with patch("shutil.which", side_effect=mock_which):
-        results = _check_runtimes_in_path(sutra_repo, config)
+        results = _check_runtimes_in_path(niyam_repo, config)
 
     assert len(results) == 2
 
@@ -40,13 +40,13 @@ def test_doctor_runtimes_in_path(sutra_repo: Path) -> None:
     assert results[1].severity == "warning"
 
 
-def test_doctor_agents_validity(sutra_repo: Path) -> None:
+def test_doctor_agents_validity(niyam_repo: Path) -> None:
     """Should detect empty or invalid agent persona files."""
     # Write an empty agent file
-    empty_agent = sutra_repo / ".sutra" / "agents" / "empty-agent.md"
+    empty_agent = niyam_repo / ".niyam" / "agents" / "empty-agent.md"
     empty_agent.write_text("   \n  ", encoding="utf-8")
 
-    results = _check_agents_validity(sutra_repo)
+    results = _check_agents_validity(niyam_repo)
 
     # Verify warning generated for empty-agent
     empty_agent_results = [r for r in results if "empty-agent" in r.name]
@@ -55,10 +55,10 @@ def test_doctor_agents_validity(sutra_repo: Path) -> None:
     assert empty_agent_results[0].severity == "warning"
 
 
-def test_doctor_validation_commands(sutra_repo: Path) -> None:
+def test_doctor_validation_commands(niyam_repo: Path) -> None:
     """Should check validation commands' binaries existence in PATH."""
     # Write a test project.yaml with a missing validation command
-    project_yaml = sutra_repo / ".sutra" / "project.yaml"
+    project_yaml = niyam_repo / ".niyam" / "project.yaml"
     project_data = {
         "name": "test-project",
         "validation": {"test": "pytest", "lint": "nonexistent-linter --verbose"},
@@ -74,7 +74,7 @@ def test_doctor_validation_commands(sutra_repo: Path) -> None:
         return None
 
     with patch("shutil.which", side_effect=mock_which):
-        results = _check_validation_commands_in_path(sutra_repo)
+        results = _check_validation_commands_in_path(niyam_repo)
 
     # pytest should pass, nonexistent-linter should fail
     pytest_results = [r for r in results if "test command" in r.name]
@@ -87,18 +87,18 @@ def test_doctor_validation_commands(sutra_repo: Path) -> None:
     assert lint_results[0].severity == "warning"
 
 
-def test_doctor_git_status_dirty(sutra_repo: Path) -> None:
+def test_doctor_git_status_dirty(niyam_repo: Path) -> None:
     """Should report warning if uncommitted changes are present in the Git repository."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
 
     # Initial commit so HEAD exists
     os.system("git add . && git commit -m 'Initial commit'")
 
     # Create uncommitted file to dirty the git repo
-    dirty_file = sutra_repo / "dirty.txt"
+    dirty_file = niyam_repo / "dirty.txt"
     dirty_file.write_text("dirty content", encoding="utf-8")
 
-    results = _check_git_status(sutra_repo)
+    results = _check_git_status(niyam_repo)
 
     # Verify Git Status check fails or warns
     git_status_results = [r for r in results if "Git Status" in r.name]
@@ -107,26 +107,26 @@ def test_doctor_git_status_dirty(sutra_repo: Path) -> None:
     assert git_status_results[0].severity == "warning"
 
 
-def test_doctor_smoke_tests(sutra_repo: Path) -> None:
+def test_doctor_smoke_tests(niyam_repo: Path) -> None:
     """Should run smoke tests and check for missing keys on failure."""
-    from sutra.core.doctor import run_doctor
+    from niyam.core.doctor import run_doctor
     from rich.console import Console
 
     console = Console(quiet=True)
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
 
     # Patch smoke run helpers to return success
     with (
-        patch("sutra.core.doctor._run_planner_smoke", return_value=(True, "ok")),
-        patch("sutra.core.doctor._run_claude_smoke", return_value=(True, "ok")),
+        patch("niyam.core.doctor._run_planner_smoke", return_value=(True, "ok")),
+        patch("niyam.core.doctor._run_claude_smoke", return_value=(True, "ok")),
     ):
         # Should run successfully
         run_doctor(runtime=None, console=console, smoke_test=True)
 
     # Patch smoke run helpers to return failure and simulate missing env variables
     with (
-        patch("sutra.core.doctor._run_planner_smoke", return_value=(False, "error")),
-        patch("sutra.core.doctor._run_claude_smoke", return_value=(False, "error")),
+        patch("niyam.core.doctor._run_planner_smoke", return_value=(False, "error")),
+        patch("niyam.core.doctor._run_claude_smoke", return_value=(False, "error")),
         patch.dict(os.environ, {}, clear=True),
     ):
         # Should raise SystemExit due to errors

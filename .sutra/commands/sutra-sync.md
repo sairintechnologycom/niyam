@@ -1,11 +1,11 @@
-# sutra sync
+# niyam sync
 
-Sync .sutra/ source of truth to all configured runtimes.
+Sync .niyam/ source of truth to all configured runtimes.
 
 ## Usage
 
 ```bash
-sutra sync [OPTIONS]
+niyam sync [OPTIONS]
 ```
 
 ## Options

@@ -1,11 +1,11 @@
-# sutra mission resume
+# niyam mission resume
 
 Resume a paused mission.
 
 ## Usage
 
 ```bash
-sutra mission resume [OPTIONS]
+niyam mission resume [OPTIONS]
 ```
 
 ## Options

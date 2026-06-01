@@ -1,11 +1,11 @@
-# sutra doctor
+# niyam doctor
 
-Validate .sutra/ configuration and runtime projections.
+Validate .niyam/ configuration and runtime projections.
 
 ## Usage
 
 ```bash
-sutra doctor [OPTIONS] RUNTIME
+niyam doctor [OPTIONS] RUNTIME
 ```
 
 ## Arguments

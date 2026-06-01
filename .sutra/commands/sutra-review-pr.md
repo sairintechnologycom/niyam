@@ -1,11 +1,11 @@
-# sutra review pr
+# niyam review pr
 
 Run a structured code review on a GitHub pull request.
 
 ## Usage
 
 ```bash
-sutra review pr [OPTIONS] PR
+niyam review pr [OPTIONS] PR
 ```
 
 ## Arguments

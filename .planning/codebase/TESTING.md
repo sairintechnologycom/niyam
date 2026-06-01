@@ -15,7 +15,7 @@
 ```bash
 pytest                 # Run all tests
 pytest -v              # Verbose mode
-pytest --cov=sutra     # Coverage (requires pytest-cov)
+pytest --cov=niyam     # Coverage (requires pytest-cov)
 ```
 
 ## Test File Organization
@@ -64,7 +64,7 @@ class TestFeature:
 ```python
 from unittest.mock import patch, MagicMock
 
-def test_feature(sutra_repo: Path):
+def test_feature(niyam_repo: Path):
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
         # Call function that uses subprocess
@@ -92,8 +92,8 @@ def tmp_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 @pytest.fixture
-def sutra_repo(tmp_repo: Path) -> Path:
-    """Create a temporary repo with sutra initialized."""
+def niyam_repo(tmp_repo: Path) -> Path:
+    """Create a temporary repo with niyam initialized."""
     # ... calls run_init ...
     return tmp_repo
 ```
@@ -108,7 +108,7 @@ def sutra_repo(tmp_repo: Path) -> Path:
 
 **View Coverage:**
 ```bash
-pytest --cov=sutra
+pytest --cov=niyam
 ```
 
 ## Test Types
@@ -118,7 +118,7 @@ pytest --cov=sutra
 
 **Integration Tests:**
 - Testing CLI commands and their interaction with the filesystem (e.g., `tests/test_cli.py`, `tests/test_init.py`).
-- Use `sutra_repo` fixture to test against a real initialized workspace on disk.
+- Use `niyam_repo` fixture to test against a real initialized workspace on disk.
 
 **E2E Tests:**
 - CLI invocation tests using `typer.testing.CliRunner`.
@@ -130,10 +130,10 @@ pytest --cov=sutra
 **Error Testing:**
 ```python
 import pytest
-from sutra.core.errors import SutraError
+from niyam.core.errors import NiyamError
 
 def test_failure():
-    with pytest.raises(SutraError):
+    with pytest.raises(NiyamError):
         do_something_invalid()
 ```
 

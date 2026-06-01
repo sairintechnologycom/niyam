@@ -4,21 +4,21 @@ import importlib.util
 
 
 def build():
-    print("Building Sutra CLI standalone binary...")
+    print("Building Niyam CLI standalone binary...")
 
     # Check if pyinstaller is installed
     if importlib.util.find_spec("PyInstaller") is None:
         print("Error: PyInstaller is not installed. Run: pip install pyinstaller")
         sys.exit(1)
 
-    # Command to build the binary using sutra/__main__.py as entrypoint
+    # Command to build the binary using niyam/__main__.py as entrypoint
     cmd = [
         "pyinstaller",
         "--onefile",
         "--name",
-        "sutra",
+        "niyam",
         "--clean",
-        "sutra/__main__.py",
+        "niyam/__main__.py",
     ]
 
     try:

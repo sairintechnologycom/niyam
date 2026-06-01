@@ -1,11 +1,11 @@
-# sutra mission plan
+# niyam mission plan
 
 Generate a mission plan from a requirements file.
 
 ## Usage
 
 ```bash
-sutra mission plan [OPTIONS] REQUIREMENTS
+niyam mission plan [OPTIONS] REQUIREMENTS
 ```
 
 ## Arguments

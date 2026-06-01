@@ -27,10 +27,10 @@ jobs:
 
       - name: Verify Version Consistency
         run: |
-          PYTHON_VERSION=$(uv run python -c 'import sutra; print(f"v{sutra.__version__}")')
+          PYTHON_VERSION=$(uv run python -c 'import niyam; print(f"v{niyam.__version__}")')
           TAG_VERSION=${{ github.ref_name }}
           if [ "$PYTHON_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Version in sutra/__init__.py ($PYTHON_VERSION) does not match tag ($TAG_VERSION)"
+            echo "Error: Version in niyam/__init__.py ($PYTHON_VERSION) does not match tag ($TAG_VERSION)"
             exit 1
           fi
 
@@ -58,20 +58,20 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Install PyInstaller and Sutra
+      - name: Install PyInstaller and Niyam
         run: |
           uv venv
           uv pip install pyinstaller .
 
       - name: Build with PyInstaller
         run: |
-          uv run pyinstaller --onefile --name sutra sutra/__main__.py
+          uv run pyinstaller --onefile --name niyam niyam/__main__.py
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sutra-${{ matrix.os }}
-          path: dist/sutra*
+          name: niyam-${{ matrix.os }}
+          path: dist/niyam*
 
   create-release:
     name: Create GitHub Release
@@ -92,8 +92,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/sutra-ubuntu-latest/sutra
-            artifacts/sutra-macos-latest/sutra
-            artifacts/sutra-windows-latest/sutra.exe
+            artifacts/niyam-ubuntu-latest/niyam
+            artifacts/niyam-macos-latest/niyam
+            artifacts/niyam-windows-latest/niyam.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

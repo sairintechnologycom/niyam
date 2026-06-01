@@ -1,4 +1,4 @@
-"""Tests for the linter checking functionality in sutra doctor."""
+"""Tests for the linter checking functionality in niyam doctor."""
 
 from __future__ import annotations
 
@@ -7,15 +7,15 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import yaml
 
-from sutra.core.doctor import _check_lint_format
-from sutra.core.config import get_sutra_dir
+from niyam.core.doctor import _check_lint_format
+from niyam.core.config import get_niyam_dir
 
 
-def test_doctor_check_lint_format_success(sutra_repo: Path) -> None:
-    os.chdir(sutra_repo)
+def test_doctor_check_lint_format_success(niyam_repo: Path) -> None:
+    os.chdir(niyam_repo)
 
     # 1. Configure lint and format commands in project.yaml
-    project_yaml = get_sutra_dir(sutra_repo) / "project.yaml"
+    project_yaml = get_niyam_dir(niyam_repo) / "project.yaml"
     with open(project_yaml, "r", encoding="utf-8") as f:
         proj_data = yaml.safe_load(f) or {}
 
@@ -34,9 +34,9 @@ def test_doctor_check_lint_format_success(sutra_repo: Path) -> None:
     mock_res.stderr = ""
 
     with patch(
-        "sutra.core.security.safe_run_command", return_value=mock_res
+        "niyam.core.security.safe_run_command", return_value=mock_res
     ) as mock_run:
-        results = _check_lint_format(sutra_repo)
+        results = _check_lint_format(niyam_repo)
 
     assert len(results) == 2
     assert results[0].passed is True
@@ -46,15 +46,15 @@ def test_doctor_check_lint_format_success(sutra_repo: Path) -> None:
 
     # Verify mock commands were run
     assert mock_run.call_count == 2
-    mock_run.assert_any_call("mock-linter --check", cwd=sutra_repo, timeout=60)
-    mock_run.assert_any_call("mock-formatter --check", cwd=sutra_repo, timeout=60)
+    mock_run.assert_any_call("mock-linter --check", cwd=niyam_repo, timeout=60)
+    mock_run.assert_any_call("mock-formatter --check", cwd=niyam_repo, timeout=60)
 
 
-def test_doctor_check_lint_format_failure(sutra_repo: Path) -> None:
-    os.chdir(sutra_repo)
+def test_doctor_check_lint_format_failure(niyam_repo: Path) -> None:
+    os.chdir(niyam_repo)
 
     # 1. Configure lint and format commands in project.yaml
-    project_yaml = get_sutra_dir(sutra_repo) / "project.yaml"
+    project_yaml = get_niyam_dir(niyam_repo) / "project.yaml"
     with open(project_yaml, "r", encoding="utf-8") as f:
         proj_data = yaml.safe_load(f) or {}
 
@@ -72,9 +72,9 @@ def test_doctor_check_lint_format_failure(sutra_repo: Path) -> None:
     mock_res.stderr = "Linter syntax error on line 4"
 
     with patch(
-        "sutra.core.security.safe_run_command", return_value=mock_res
+        "niyam.core.security.safe_run_command", return_value=mock_res
     ):
-        results = _check_lint_format(sutra_repo)
+        results = _check_lint_format(niyam_repo)
 
     assert len(results) == 1
     assert results[0].passed is False

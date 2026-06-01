@@ -1,11 +1,11 @@
-# sutra ci verify
+# niyam ci verify
 
 Verify cryptographic integrity, guardrails, and validation status for CI/CD.
 
 ## Usage
 
 ```bash
-sutra ci verify [OPTIONS]
+niyam ci verify [OPTIONS]
 ```
 
 ## Options

@@ -1,11 +1,11 @@
 # Release Process
 
-This document outlines the standard process for releasing a new version of Sutra CLI.
+This document outlines the standard process for releasing a new version of Niyam CLI.
 
 ## Release Steps
 
 1.  **Prepare the version bump:**
-    *   Update the `VERSION` string in `sutra_cli/main.py`.
+    *   Update the `VERSION` string in `niyam/main.py`.
     *   Ensure all tests pass: `pytest tests/test_cli_smoke.py`.
     *   Update `docs/progress.md` or `CHANGELOG.md` if applicable.
 
@@ -19,7 +19,7 @@ This document outlines the standard process for releasing a new version of Sutra
     *   Push the tag: `git push origin vX.Y.Z`.
 
 4.  **Verify Automation:**
-    *   Monitor the [GitHub Actions](https://github.com/sairintechnologycom/sutra/actions) tab.
+    *   Monitor the [GitHub Actions](https://github.com/sairintechnologycom/niyam/actions) tab.
     *   The `pypi-release` job will publish to PyPI.
     *   The `create-release` job will create a GitHub Release with standalone binaries.
 
@@ -27,4 +27,4 @@ This document outlines the standard process for releasing a new version of Sutra
 
 The GitHub workflow is configured to:
 - Only publish when a tag matching `v*` is pushed.
-- Fail if the version in `sutra_cli/main.py` does not match the git tag (added in v0.3.8+).
+- Fail if the version in `niyam/main.py` does not match the git tag (added in v0.3.8+).

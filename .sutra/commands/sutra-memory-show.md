@@ -1,10 +1,10 @@
-# sutra memory show
+# niyam memory show
 
 Display all memory files and their content.
 
 ## Usage
 
 ```bash
-sutra memory show
+niyam memory show
 ```
 

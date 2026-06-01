@@ -1,11 +1,11 @@
-# sutra init
+# niyam init
 
 Initialize a governed AI-development workspace.
 
 ## Usage
 
 ```bash
-sutra init [OPTIONS]
+niyam init [OPTIONS]
 ```
 
 ## Options
@@ -13,5 +13,5 @@ sutra init [OPTIONS]
 * `--profile, -p`: Project profile to use (e.g., fullstack, backend, frontend, startup-saas, platform-engineering, governed-enterprise). (Default: fullstack)
 * `--runtime, -r`: Initial runtime to configure.
 * `--dry-run`: Preview changes without writing files. (Default: False)
-* `--force`: Overwrite existing .sutra/ directory. (Default: False)
+* `--force`: Overwrite existing .niyam/ directory. (Default: False)
 

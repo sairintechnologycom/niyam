@@ -1,0 +1,34 @@
+```yaml
+tasks:
+  - id: T1
+    title: "Discovery: analyze Typer CLI structure and locate command registration point"
+    type: "discovery"
+    agent: "backend-specialist"
+    writes_files: false
+  - id: T2
+    title: "Implementation: write failing unit tests for the hello command"
+    type: "implementation"
+    agent: "qa-reviewer"
+    runtime: "claude"
+    depends_on: ["T1"]
+    files_allowed: ["tests/**"]
+    tdd_required: true
+  - id: T3
+    title: "Implementation: add the hello command with optional --name argument to the CLI"
+    type: "implementation"
+    agent: "backend-specialist"
+    depends_on: ["T2"]
+    files_allowed: ["niyam/cli/**", "niyam/__main__.py"]
+  - id: T4
+    title: "Review: security and code-quality check of the new command"
+    type: "review"
+    agent: "security-reviewer"
+    depends_on: ["T3"]
+    writes_files: false
+  - id: T5
+    title: "Validation: run the full test suite and verify all tests pass"
+    type: "validation"
+    agent: "qa-reviewer"
+    depends_on: ["T4"]
+```
+

@@ -1,4 +1,4 @@
-"""Remediation tests for Sutra security and logic bug fixes."""
+"""Remediation tests for Niyam security and logic bug fixes."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from sutra.core.security import validate_command, CommandSecurityError
-from sutra.evidence.reporter import run_report
-from sutra.core.context import run_context_refresh, run_context_diff
-from sutra.runtimes.claude import ClaudeAdapter
+from niyam.core.security import validate_command, CommandSecurityError
+from niyam.evidence.reporter import run_report
+from niyam.core.context import run_context_refresh, run_context_diff
+from niyam.runtimes.claude import ClaudeAdapter
 
 
 def test_bash_sh_blocked() -> None:
@@ -30,15 +30,15 @@ def test_bash_sh_blocked() -> None:
     assert parts == ["pytest"]
 
 
-def test_report_fails_on_validation_failure(sutra_repo: Path) -> None:
-    """sutra report should fail (raise SystemExit(1)) when a validation command fails."""
-    os.chdir(sutra_repo)
+def test_report_fails_on_validation_failure(niyam_repo: Path) -> None:
+    """niyam report should fail (raise SystemExit(1)) when a validation command fails."""
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # Run context refresh first to ensure config exists
     run_context_refresh(console=console)
 
-    project_yaml = sutra_repo / ".sutra" / "project.yaml"
+    project_yaml = niyam_repo / ".niyam" / "project.yaml"
     with open(project_yaml) as f:
         data = yaml.safe_load(f) or {}
 
@@ -54,17 +54,17 @@ def test_report_fails_on_validation_failure(sutra_repo: Path) -> None:
 
 
 def test_context_diff_ignores_manual_sections(
-    sutra_repo: Path, capsys: pytest.CaptureFixture
+    niyam_repo: Path, capsys: pytest.CaptureFixture
 ) -> None:
     """context diff should ignore changes in manual sections of architecture.md."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console()
 
     # 1. Initialize context
     run_context_refresh(console=console)
 
     # 2. Add manual section to architecture.md
-    arch_path = sutra_repo / ".sutra" / "context" / "architecture.md"
+    arch_path = niyam_repo / ".niyam" / "context" / "architecture.md"
     content = arch_path.read_text(encoding="utf-8")
     assert "<!-- MANUAL SECTION:" in content
 
@@ -118,12 +118,12 @@ def test_claude_hook_script_formatting_and_imports(tmp_path: Path) -> None:
 
 def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
     """Should raise PlanValidationError when a dependency cycle is detected."""
-    from sutra.mission.validator import validate_mission_plan, PlanValidationError
+    from niyam.mission.validator import validate_mission_plan, PlanValidationError
 
-    # Create a mock .sutra directory structure with dummy agents
-    sutra_dir = tmp_path / ".sutra"
-    sutra_dir.mkdir()
-    agents_dir = sutra_dir / "agents"
+    # Create a mock .niyam directory structure with dummy agents
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir()
+    agents_dir = niyam_dir / "agents"
     agents_dir.mkdir()
     (agents_dir / "mock-agent.md").write_text("# Mock Agent\n", encoding="utf-8")
 
@@ -169,11 +169,11 @@ def test_validate_mission_plan_cycle(tmp_path: Path) -> None:
 
 def test_validate_mission_plan_unknown_dependency(tmp_path: Path) -> None:
     """Should raise PlanValidationError when a task depends on an unknown task ID."""
-    from sutra.mission.validator import validate_mission_plan, PlanValidationError
+    from niyam.mission.validator import validate_mission_plan, PlanValidationError
 
-    sutra_dir = tmp_path / ".sutra"
-    sutra_dir.mkdir()
-    agents_dir = sutra_dir / "agents"
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir()
+    agents_dir = niyam_dir / "agents"
     agents_dir.mkdir()
     (agents_dir / "mock-agent.md").write_text("# Mock Agent\n", encoding="utf-8")
 
@@ -208,27 +208,27 @@ def test_validate_mission_plan_unknown_dependency(tmp_path: Path) -> None:
     assert "depends on unknown task ID 'T99'" in str(excinfo.value)
 
 
-def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
+def test_writes_files_false_violation_and_revert(niyam_repo: Path) -> None:
     """Should revert changes and fail task if a writes_files: false task modifies files."""
     from unittest.mock import patch, MagicMock
-    from sutra.mission.executor import run_mission_start, load_plan
-    from sutra.mission.planner import run_mission_plan, run_mission_approve
-    from sutra.core.config import get_sutra_dir
+    from niyam.mission.executor import run_mission_start, load_plan
+    from niyam.mission.planner import run_mission_plan, run_mission_approve
+    from niyam.core.config import get_niyam_dir
 
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # Initial git commit so checkout works
-    os.system("git add .sutra && git commit -m 'Initial commit'")
+    os.system("git add .niyam && git commit -m 'Initial commit'")
 
     # Plan and approve mission
-    req_file = sutra_repo / "requirements.md"
+    req_file = niyam_repo / "requirements.md"
     req_file.write_text("# Writes files false test\n", encoding="utf-8")
     mission_id = run_mission_plan(str(req_file), console=console)
 
     # Let's override the generated plan to set writes_files: false on the task being run
-    sutra_dir = get_sutra_dir(sutra_repo)
-    run_dir = sutra_dir / "runs" / mission_id
+    niyam_dir = get_niyam_dir(niyam_repo)
+    run_dir = niyam_dir / "runs" / mission_id
     plan_path = run_dir / "mission-plan.yaml"
     with open(plan_path, encoding="utf-8") as f:
         plan_data = yaml.safe_load(f)
@@ -249,7 +249,7 @@ def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
     def mock_subprocess_run(args, **kwargs):
         if args and args[0] == "git":
             return real_run(args, **kwargs)
-        cwd = kwargs.get("cwd", sutra_repo)
+        cwd = kwargs.get("cwd", niyam_repo)
 
         # Modify an existing file or write an unauthorized file
         modified_file = Path(cwd) / "src" / "changed.py"
@@ -275,7 +275,7 @@ def test_writes_files_false_violation_and_revert(sutra_repo: Path) -> None:
     # Verify task failed and file was reverted/deleted
     plan = load_plan(run_dir)
     assert plan["tasks"][0]["status"] == "failed"
-    assert not (sutra_repo / "src" / "changed.py").exists()
+    assert not (niyam_repo / "src" / "changed.py").exists()
 
     # Verify write violation event is logged
     policy_events_path = run_dir / "policy-events.json"

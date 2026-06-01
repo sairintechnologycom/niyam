@@ -1,11 +1,11 @@
-# sutra context refresh
+# niyam context refresh
 
 Scan the repo and update project context.
 
 ## Usage
 
 ```bash
-sutra context refresh [OPTIONS]
+niyam context refresh [OPTIONS]
 ```
 
 ## Options

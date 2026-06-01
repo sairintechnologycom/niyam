@@ -7,22 +7,22 @@ from pathlib import Path
 from unittest.mock import patch
 from rich.console import Console
 
-from sutra.mission.planner import run_mission_plan, _run_refiner_loop
-from sutra.core.config import get_sutra_dir
+from niyam.mission.planner import run_mission_plan, _run_refiner_loop
+from niyam.core.config import get_niyam_dir
 import yaml
 
 
-def test_interactive_refiner_loop(sutra_repo: Path) -> None:
-    os.chdir(sutra_repo)
+def test_interactive_refiner_loop(niyam_repo: Path) -> None:
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # 1. Generate a plan
-    req_file = sutra_repo / "reqs.md"
+    req_file = niyam_repo / "reqs.md"
     req_file.write_text("# Test Requirements\n", encoding="utf-8")
     mission_id = run_mission_plan(str(req_file), console=console)
 
-    sutra_dir = get_sutra_dir(sutra_repo)
-    plan_path = sutra_dir / "runs" / mission_id / "mission-plan.yaml"
+    niyam_dir = get_niyam_dir(niyam_repo)
+    plan_path = niyam_dir / "runs" / mission_id / "mission-plan.yaml"
 
     # We will simulate user inputs to the refiner CLI:
     # 1. add T_New: test task (gets assigned T6 automatically since there are 5 fallback tasks)
@@ -39,7 +39,7 @@ def test_interactive_refiner_loop(sutra_repo: Path) -> None:
     ]
 
     with patch("builtins.input", side_effect=inputs):
-        _run_refiner_loop(console, plan_path, sutra_repo, sutra_dir)
+        _run_refiner_loop(console, plan_path, niyam_repo, niyam_dir)
 
     # Load the plan and verify
     with open(plan_path, encoding="utf-8") as f:

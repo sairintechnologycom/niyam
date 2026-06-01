@@ -9,14 +9,14 @@
 - Lowercase for directory names.
 
 **Functions:**
-- snake_case for function and method names (e.g., `run_init`, `load_sutra_config`).
+- snake_case for function and method names (e.g., `run_init`, `load_niyam_config`).
 
 **Variables:**
 - snake_case for local variables and parameters.
-- UPPER_SNAKE_CASE for constants (e.g., `SUTRA_DIR`, `MANIFEST_MAP`).
+- UPPER_SNAKE_CASE for constants (e.g., `NIYAM_DIR`, `MANIFEST_MAP`).
 
 **Types:**
-- PascalCase for class names (e.g., `SutraConfig`, `RuntimeAdapter`, `SutraError`).
+- PascalCase for class names (e.g., `NiyamConfig`, `RuntimeAdapter`, `NiyamError`).
 - Modern type hints using `from __future__ import annotations`.
 - Use of `Annotated`, `Optional`, `Literal` from `typing`.
 
@@ -28,7 +28,7 @@
 
 **Linting:**
 - Ruff is used for linting and formatting (evidenced by `.ruff_cache`).
-- Pydantic models used for configuration validation (`sutra/core/config.py`).
+- Pydantic models used for configuration validation (`niyam/core/config.py`).
 
 ## Import Organization
 
@@ -36,17 +36,17 @@
 1. Future imports (`from __future__ import annotations`).
 2. Standard library imports.
 3. Third-party library imports (e.g., `typer`, `rich`, `pydantic`).
-4. Local application imports (e.g., `from sutra.core import ...`).
+4. Local application imports (e.g., `from niyam.core import ...`).
 
 **Path Aliases:**
-- None detected; standard absolute imports used within the `sutra` package.
+- None detected; standard absolute imports used within the `niyam` package.
 
 ## Error Handling
 
 **Patterns:**
-- Custom exception hierarchy defined in `sutra/core/errors.py`.
-- Base exception `SutraError` with integer `code` attribute.
-- Specific exceptions like `SutraConfigError`, `SutraSecurityError`, and `SutraExecutionError`.
+- Custom exception hierarchy defined in `niyam/core/errors.py`.
+- Base exception `NiyamError` with integer `code` attribute.
+- Specific exceptions like `NiyamConfigError`, `NiyamSecurityError`, and `NiyamExecutionError`.
 - Use of `raise SystemExit(1)` for CLI errors to return non-zero exit codes.
 
 ## Logging
@@ -57,7 +57,7 @@
 
 **Patterns:**
 - Consistent use of colors and formatting (e.g., `[bold red]`, `[cyan]`, `[dim]`) to indicate status.
-- Rich Panels and Tables for structured data display (`sutra/core/ci.py`).
+- Rich Panels and Tables for structured data display (`niyam/core/ci.py`).
 
 ## Comments
 
@@ -71,7 +71,7 @@
 
 ## Function Design
 
-**Size:** Generally focused and modular. Some CLI implementation functions in `sutra/cli.py` handle multiple subcommands.
+**Size:** Generally focused and modular. Some CLI implementation functions in `niyam/cli.py` handle multiple subcommands.
 
 **Parameters:** Uses `Annotated` for Typer CLI parameters. Prefer keyword arguments or sensible defaults in core logic.
 
@@ -81,7 +81,7 @@
 
 **Exports:** `__init__.py` files used to define package exports and version.
 
-**Barrel Files:** `sutra/core/__init__.py` and others used to expose core functionality from submodules.
+**Barrel Files:** `niyam/core/__init__.py` and others used to expose core functionality from submodules.
 
 ---
 

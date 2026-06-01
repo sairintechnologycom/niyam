@@ -1,11 +1,11 @@
-# sutra runtime add
+# niyam runtime add
 
 Add and configure a new AI runtime.
 
 ## Usage
 
 ```bash
-sutra runtime add [OPTIONS] RUNTIME
+niyam runtime add [OPTIONS] RUNTIME
 ```
 
 ## Arguments

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sutra.core.utils import format_date_iso
+from niyam.core.utils import format_date_iso
 
 
 def test_format_date_iso_utc() -> None:

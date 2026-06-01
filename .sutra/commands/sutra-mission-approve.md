@@ -1,11 +1,11 @@
-# sutra mission approve
+# niyam mission approve
 
 Approve the latest planned mission.
 
 ## Usage
 
 ```bash
-sutra mission approve [OPTIONS]
+niyam mission approve [OPTIONS]
 ```
 
 ## Options

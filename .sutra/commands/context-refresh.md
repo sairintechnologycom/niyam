@@ -10,8 +10,8 @@ Re-scan the repository and update project context.
 
 ## Workflow
 
-1. Run `sutra context refresh` to scan the repository
-2. Run `sutra sync` to propagate changes to runtime files
+1. Run `niyam context refresh` to scan the repository
+2. Run `niyam sync` to propagate changes to runtime files
 3. Report what changed
 
 ## When to Use

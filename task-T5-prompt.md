@@ -39,7 +39,7 @@ You are an expert QA engineer performing quality review. Your focus areas:
 --- MISSION REQUIREMENT ---
 # Requirement: Core Utilities Module
 
-Create a core utilities module in `sutra/core/utils.py` that implements helper functions.
+Create a core utilities module in `niyam/core/utils.py` that implements helper functions.
 
 ## Feature Specifications
 

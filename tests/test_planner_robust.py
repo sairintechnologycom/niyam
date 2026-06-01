@@ -9,8 +9,8 @@ from unittest.mock import patch, MagicMock
 import yaml
 from rich.console import Console
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import (
+from niyam.core.config import get_niyam_dir
+from niyam.mission.planner import (
     run_mission_plan,
     extract_yaml_or_json,
     choose_fallback_template,
@@ -60,12 +60,12 @@ def test_fallback_matches_requirement_keywords() -> None:
     assert choose_fallback_template("do some generic stuff") == "default"
 
 
-def test_validation_commands_injected_from_project_yaml(sutra_repo: Path) -> None:
+def test_validation_commands_injected_from_project_yaml(niyam_repo: Path) -> None:
     """Should inject validation commands from project.yaml into task configuration."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
 
     # Setup project config validation commands
-    proj_config_path = get_sutra_dir(sutra_repo) / "project.yaml"
+    proj_config_path = get_niyam_dir(niyam_repo) / "project.yaml"
     proj_data = yaml.safe_load(proj_config_path.read_text()) or {}
     proj_data["validation"] = {
         "test": "pytest tests/",
@@ -83,7 +83,7 @@ def test_validation_commands_injected_from_project_yaml(sutra_repo: Path) -> Non
         {"id": "T4", "type": "validation"},
     ]
 
-    inject_validation_commands(tasks, sutra_repo)
+    inject_validation_commands(tasks, niyam_repo)
 
     assert tasks[0]["validation"]["commands"] == []
     assert "pytest tests/" in tasks[1]["validation"]["commands"]
@@ -96,9 +96,9 @@ def test_validation_commands_injected_from_project_yaml(sutra_repo: Path) -> Non
 
 
 @patch("subprocess.run")
-def test_planner_retry_on_bad_output(mock_run: MagicMock, sutra_repo: Path) -> None:
+def test_planner_retry_on_bad_output(mock_run: MagicMock, niyam_repo: Path) -> None:
     """Should retry AI planning if first attempt returns garbage, and succeed on second attempt."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # Configure mock_run to fail/return garbage on first run, succeed on second run
@@ -136,26 +136,26 @@ tasks:
     mock_run.side_effect = [first_res, second_res]
 
     # Set up config to trigger AI planner
-    sutra_config_path = get_sutra_dir(sutra_repo) / "sutra.yaml"
-    sutra_data = yaml.safe_load(sutra_config_path.read_text()) or {}
-    sutra_data["runtimes"] = ["claude"]
-    with open(sutra_config_path, "w") as f:
-        yaml.dump(sutra_data, f)
+    niyam_config_path = get_niyam_dir(niyam_repo) / "niyam.yaml"
+    niyam_data = yaml.safe_load(niyam_config_path.read_text()) or {}
+    niyam_data["runtimes"] = ["claude"]
+    with open(niyam_config_path, "w") as f:
+        yaml.dump(niyam_data, f)
 
-    req_file = sutra_repo / "requirements.md"
+    req_file = niyam_repo / "requirements.md"
     req_file.write_text("# Test requirement", encoding="utf-8")
 
     # Mock shutil.which to say 'claude' is present
     with patch("shutil.which", return_value="/usr/local/bin/claude"):
         # Make sure we are not in basic unit test mode
-        with patch.dict(os.environ, {"SUTRA_TEST": "0", "SUTRA_TEST_PLANNER": "1"}):
+        with patch.dict(os.environ, {"NIYAM_TEST": "0", "NIYAM_TEST_PLANNER": "1"}):
             mission_id = run_mission_plan(str(req_file), console=console)
 
     assert mission_id is not None
     assert mock_run.call_count == 2
 
     # Check that second output is written to runs
-    run_dir = get_sutra_dir(sutra_repo) / "runs" / mission_id
+    run_dir = get_niyam_dir(niyam_repo) / "runs" / mission_id
     plan_path = run_dir / "mission-plan.yaml"
     assert plan_path.exists()
 

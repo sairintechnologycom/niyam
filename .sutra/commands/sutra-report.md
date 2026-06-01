@@ -1,11 +1,11 @@
-# sutra report
+# niyam report
 
 Generate evidence report for the current branch.
 
 ## Usage
 
 ```bash
-sutra report [OPTIONS]
+niyam report [OPTIONS]
 ```
 
 ## Options

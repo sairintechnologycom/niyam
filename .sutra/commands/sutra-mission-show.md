@@ -1,11 +1,11 @@
-# sutra mission show
+# niyam mission show
 
 Display tasks and configuration of the latest planned or active mission.
 
 ## Usage
 
 ```bash
-sutra mission show [OPTIONS]
+niyam mission show [OPTIONS]
 ```
 
 ## Options

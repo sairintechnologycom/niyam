@@ -10,9 +10,9 @@ Validate all changes and prepare for merge.
 
 ## Workflow
 
-1. **Run all validation commands** — build, test, lint, typecheck from `.sutra/context/validation.md`
+1. **Run all validation commands** — build, test, lint, typecheck from `.niyam/context/validation.md`
 2. **Check for uncommitted changes** — ensure everything is committed or staged
-3. **Generate evidence** — Run `sutra report` to create the evidence pack
+3. **Generate evidence** — Run `niyam report` to create the evidence pack
 4. **Create summary** — Write a clear summary of:
    - What was implemented
    - What was tested

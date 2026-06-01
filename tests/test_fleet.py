@@ -1,4 +1,4 @@
-"""Tests for Sutra Fleet Mode — parallel execution and worktree isolation."""
+"""Tests for Niyam Fleet Mode — parallel execution and worktree isolation."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import subprocess
 import pytest
 from rich.console import Console
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan, run_mission_approve
-from sutra.mission.executor import run_mission_start, load_plan, save_plan
+from niyam.core.config import get_niyam_dir
+from niyam.mission.planner import run_mission_plan, run_mission_approve
+from niyam.mission.executor import run_mission_start, load_plan, save_plan
 
 
 @pytest.fixture
 def git_repo_with_commit(tmp_repo: Path) -> Path:
-    """Create a temporary repo with at least one commit and sutra initialized."""
+    """Create a temporary repo with at least one commit and niyam initialized."""
     # Write a dummy file and commit it so HEAD exists
     dummy_file = tmp_repo / "dummy.txt"
     dummy_file.write_text("initial content", encoding="utf-8")
@@ -30,7 +30,7 @@ def git_repo_with_commit(tmp_repo: Path) -> Path:
         capture_output=True,
     )
 
-    from sutra.core.init import run_init
+    from niyam.core.init import run_init
 
     console = Console(quiet=True)
 
@@ -62,7 +62,7 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     mission_id = run_mission_plan(str(req_file), console=console)
     run_mission_approve(console=console)
 
-    run_dir = get_sutra_dir(git_repo_with_commit) / "runs" / mission_id
+    run_dir = get_niyam_dir(git_repo_with_commit) / "runs" / mission_id
     plan_data = load_plan(run_dir)
 
     # 2. Re-structure tasks to test parallel fork and join:
@@ -107,12 +107,12 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     ]
     save_plan(run_dir, plan_data)
 
-    # 3. Run mission with SUTRA_TEST enabled so CLI execution is mocked
-    os.environ["SUTRA_TEST"] = "1"
+    # 3. Run mission with NIYAM_TEST enabled so CLI execution is mocked
+    os.environ["NIYAM_TEST"] = "1"
     try:
         run_mission_start(console=console, parallel=2, worktree=True)
     finally:
-        del os.environ["SUTRA_TEST"]
+        del os.environ["NIYAM_TEST"]
 
     # 4. Verify completion
     updated_plan = load_plan(run_dir)
@@ -123,7 +123,7 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
         assert task["status"] == "completed"
 
     # Check that changes from both T2 and T3 were successfully merged back to workspace!
-    # Because SUTRA_TEST mocks wrote dummy files: change-T2.txt and change-T3.txt
+    # Because NIYAM_TEST mocks wrote dummy files: change-T2.txt and change-T3.txt
     assert (git_repo_with_commit / "change-T2.txt").exists()
     assert (git_repo_with_commit / "change-T3.txt").exists()
 
@@ -131,8 +131,8 @@ def test_fleet_parallel_execution(git_repo_with_commit: Path) -> None:
     res = subprocess.run(
         ["git", "branch"], cwd=git_repo_with_commit, capture_output=True, text=True
     )
-    assert f"sutra-{mission_id}-T1" not in res.stdout
-    assert f"sutra-{mission_id}-T4" not in res.stdout
+    assert f"niyam-{mission_id}-T1" not in res.stdout
+    assert f"niyam-{mission_id}-T4" not in res.stdout
 
 
 def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
@@ -146,7 +146,7 @@ def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
     mission_id = run_mission_plan(str(req_file), console=console)
     run_mission_approve(console=console)
 
-    run_dir = get_sutra_dir(git_repo_with_commit) / "runs" / mission_id
+    run_dir = get_niyam_dir(git_repo_with_commit) / "runs" / mission_id
     plan_data = load_plan(run_dir)
 
     # Re-structure: T1 (completes) -> T2 (failed) -> T3 (depends on T2, should be skipped)
@@ -177,12 +177,12 @@ def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
     ]
     save_plan(run_dir, plan_data)
 
-    os.environ["SUTRA_TEST"] = "1"
+    os.environ["NIYAM_TEST"] = "1"
     try:
         with pytest.raises(SystemExit):
             run_mission_start(console=console, parallel=2, worktree=True)
     finally:
-        del os.environ["SUTRA_TEST"]
+        del os.environ["NIYAM_TEST"]
 
     # Verify task states
     updated_plan = load_plan(run_dir)
@@ -195,7 +195,7 @@ def test_fleet_dependency_failure(git_repo_with_commit: Path) -> None:
 def test_fleet_worktree_fallback_when_no_git(tmp_path: Path) -> None:
     """Should execute sequentially without worktrees if directory is not a Git repo."""
     # Note: tmp_path is a plain directory (NOT a git repo)
-    from sutra.core.init import run_init
+    from niyam.core.init import run_init
 
     console = Console(quiet=True)
 
@@ -218,14 +218,14 @@ def test_fleet_worktree_fallback_when_no_git(tmp_path: Path) -> None:
 
         # Start execution. Since parallel is 1 and worktree defaults to True,
         # it should detect no Git and fallback to worktree=False, executing sequentially.
-        os.environ["SUTRA_TEST"] = "1"
+        os.environ["NIYAM_TEST"] = "1"
         try:
             run_mission_start(console=console, parallel=1, worktree=None)
         finally:
-            del os.environ["SUTRA_TEST"]
+            del os.environ["NIYAM_TEST"]
 
         # Verify completed in place
-        run_dir = get_sutra_dir(tmp_path) / "runs" / mission_id
+        run_dir = get_niyam_dir(tmp_path) / "runs" / mission_id
         updated_plan = load_plan(run_dir)
         assert updated_plan["mission"]["status"] == "completed"
         assert updated_plan["mission"]["worktree"] is False  # verified fallback

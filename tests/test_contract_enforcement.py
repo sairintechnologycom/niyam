@@ -1,4 +1,4 @@
-"""Tests for Sutra contract enforcement."""
+"""Tests for Niyam contract enforcement."""
 
 from __future__ import annotations
 
@@ -9,32 +9,32 @@ import yaml
 from rich.console import Console
 from unittest.mock import patch, MagicMock
 
-from sutra.core.config import get_sutra_dir
-from sutra.mission.planner import run_mission_plan, run_mission_approve
-from sutra.mission.executor import run_mission_start, load_plan
+from niyam.core.config import get_niyam_dir
+from niyam.mission.planner import run_mission_plan, run_mission_approve
+from niyam.mission.executor import run_mission_start, load_plan
 
 
-def test_any_bypass_removed_and_contract_prompt_enrichment(sutra_repo: Path) -> None:
+def test_any_bypass_removed_and_contract_prompt_enrichment(niyam_repo: Path) -> None:
     """Should ensure allowed_files enforce boundaries strictly (Any is not bypass) and prompt has contract details."""
-    os.chdir(sutra_repo)
+    os.chdir(niyam_repo)
     console = Console(quiet=True)
 
     # Commit initial state so checkout works
     os.system("git add . && git commit -m 'Setup'")
 
     # 1. Plan a mission with allowed_files = ["src/*.py"] and acceptance criteria
-    req_file = sutra_repo / "requirements.md"
+    req_file = niyam_repo / "requirements.md"
     req_file.write_text("# Implement Authentication\n", encoding="utf-8")
 
     # Let's run a custom template plan with allowed_files and acceptance_criteria
-    sutra_dir = get_sutra_dir(sutra_repo)
-    run_dir = sutra_dir / "runs"
+    niyam_dir = get_niyam_dir(niyam_repo)
+    run_dir = niyam_dir / "runs"
 
     # We will invoke run_mission_plan, then modify the generated mission plan directly
     # to set allowed_files = ["src/*.py"] and acceptance_criteria
     mission_id = run_mission_plan(str(req_file), console=console)
 
-    plan_path = sutra_dir / "runs" / mission_id / "mission-plan.yaml"
+    plan_path = niyam_dir / "runs" / mission_id / "mission-plan.yaml"
     with open(plan_path) as f:
         plan_data = yaml.safe_load(f)
 
@@ -59,7 +59,7 @@ def test_any_bypass_removed_and_contract_prompt_enrichment(sutra_repo: Path) -> 
         if args and args[0] == "git":
             return real_run(args, **kwargs)
 
-        cwd = kwargs.get("cwd", sutra_repo)
+        cwd = kwargs.get("cwd", niyam_repo)
 
         # Write to tests/test_auth.py (not in src/*.py, so should trigger violation!)
         wrong_file = Path(cwd) / "tests" / "test_auth.py"
@@ -84,7 +84,7 @@ def test_any_bypass_removed_and_contract_prompt_enrichment(sutra_repo: Path) -> 
             pass
 
     # 3. Assert task failed due to boundary violation (Any did not bypass it)
-    run_dir = sutra_dir / "runs" / mission_id
+    run_dir = niyam_dir / "runs" / mission_id
     plan = load_plan(run_dir)
     assert plan["tasks"][0]["status"] == "failed"
 

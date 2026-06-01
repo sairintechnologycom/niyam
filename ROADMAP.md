@@ -1,16 +1,16 @@
-# Sutra Roadmap & Target Architecture
+# Niyam Roadmap & Target Architecture
 
-## Yes — this should become a **core Sutra capability** 🚀
+## Yes — this should become a **core Niyam capability** 🚀
 
-Not a side feature. This is exactly the problem Sutra should solve:
+Not a side feature. This is exactly the problem Niyam should solve:
 
 > **Coordinate multiple AI coding agents while reducing token waste, enforcing quality gates, and keeping development auditable.**
 
-Sutra should become the **AI Development Orchestrator** sitting above Claude Code, Codex CLI, Gemini CLI, Antigravity, local scripts, Git, and CI/CD.
+Niyam should become the **AI Development Orchestrator** sitting above Claude Code, Codex CLI, Gemini CLI, Antigravity, local scripts, Git, and CI/CD.
 
 ---
 
-# 1. Sutra positioning
+# 1. Niyam positioning
 
 ## Current problem
 
@@ -26,14 +26,14 @@ Developers using Claude Code, Codex, Gemini, or Antigravity often face:
 | Multiple agents cannot coordinate cleanly | Duplicate work                       |
 | No audit trail                            | Hard to trust in enterprise settings |
 
-## Sutra’s answer
+## Niyam’s answer
 
-**Sutra = Orchestration + Task Control + Token Governance + Validation Layer**
+**Niyam = Orchestration + Task Control + Token Governance + Validation Layer**
 
 ```text
 Claude defines.
 Codex/Gemini build.
-Sutra controls.
+Niyam controls.
 CI validates.
 Claude reviews only evidence.
 ```
@@ -42,11 +42,11 @@ This is a very strong product direction.
 
 ---
 
-# 2. Sutra target architecture
+# 2. Niyam target architecture
 
 ```mermaid
 flowchart TD
-    U[Developer Goal] --> S[Sutra CLI]
+    U[Developer Goal] --> S[Niyam CLI]
 
     S --> C[Claude Orchestrator]
     C --> T[Task Contracts]
@@ -74,15 +74,15 @@ flowchart TD
 
 ---
 
-# 3. What Sutra should own
+# 3. What Niyam should own
 
-Sutra should not try to replace Claude, Codex, Gemini, or CI tools.
+Niyam should not try to replace Claude, Codex, Gemini, or CI tools.
 
 It should **control the workflow**.
 
-## Sutra responsibilities
+## Niyam responsibilities
 
-| Area          | Sutra responsibility                               |
+| Area          | Niyam responsibility                               |
 | ------------- | -------------------------------------------------- |
 | Planning      | Ask Claude to break work into task contracts       |
 | Context       | Provide only relevant files/context to executors   |
@@ -96,9 +96,9 @@ It should **control the workflow**.
 
 ---
 
-# 4. Core Sutra concept: **Task Contract**
+# 4. Core Niyam concept: **Task Contract**
 
-This should become the central primitive in Sutra.
+This should become the central primitive in Niyam.
 
 Every AI coding task should be represented as a contract.
 
@@ -146,48 +146,48 @@ review:
     - executor_summary
 ```
 
-This makes Sutra deterministic.
+This makes Niyam deterministic.
 
 ---
 
-# 5. Sutra command model
+# 5. Niyam command model
 
 ## MVP command set
 
 ```bash
-sutra init
-sutra plan "Add user profile validation"
-sutra run TASK-001 --executor codex
-sutra validate TASK-001
-sutra review TASK-001 --reviewer claude
-sutra status
+niyam init
+niyam plan "Add user profile validation"
+niyam run TASK-001 --executor codex
+niyam validate TASK-001
+niyam review TASK-001 --reviewer claude
+niyam status
 ```
 
 ## Later command set
 
 ```bash
-sutra run TASK-001 --executor gemini
-sutra run-phase PHASE-01 --parallel
-sutra compare TASK-001 --executors codex,gemini
-sutra budget
-sutra evidence TASK-001
-sutra approve TASK-001
-sutra merge TASK-001
+niyam run TASK-001 --executor gemini
+niyam run-phase PHASE-01 --parallel
+niyam compare TASK-001 --executors codex,gemini
+niyam budget
+niyam evidence TASK-001
+niyam approve TASK-001
+niyam merge TASK-001
 ```
 
 ---
 
-# 6. Recommended Sutra workflow
+# 6. Recommended Niyam workflow
 
 ## Step 1 — Developer gives goal
 
 ```bash
-sutra plan "Build login audit trail and admin dashboard"
+niyam plan "Build login audit trail and admin dashboard"
 ```
 
 Claude is used only for planning.
 
-Sutra asks Claude to generate:
+Niyam asks Claude to generate:
 
 ```text
 PHASE-001
@@ -209,17 +209,17 @@ Each task includes:
 
 ---
 
-## Step 2 — Sutra creates isolated worktrees
+## Step 2 — Niyam creates isolated worktrees
 
 ```bash
-sutra run TASK-001 --executor codex
+niyam run TASK-001 --executor codex
 ```
 
 Internally:
 
 ```text
 Creates branch: ai/TASK-001
-Creates worktree: .sutra/worktrees/TASK-001
+Creates worktree: .niyam/worktrees/TASK-001
 Runs Codex only inside that worktree
 Captures summary, diff, logs
 ```
@@ -241,10 +241,10 @@ Not the full project history.
 
 ---
 
-## Step 4 — Sutra validates deterministically
+## Step 4 — Niyam validates deterministically
 
 ```bash
-sutra validate TASK-001
+niyam validate TASK-001
 ```
 
 Runs:
@@ -264,7 +264,7 @@ Depending on project config.
 ## Step 5 — Claude reviews evidence only
 
 ```bash
-sutra review TASK-001 --reviewer claude
+niyam review TASK-001 --reviewer claude
 ```
 
 Claude receives:
@@ -284,14 +284,14 @@ This is where token savings happen.
 
 ---
 
-# 7. Sutra internal folder structure
+# 7. Niyam internal folder structure
 
 ```text
 repo/
-├── sutra.yaml
+├── niyam.yaml
 ├── CLAUDE.md
 ├── AGENTS.md
-├── .sutra/
+├── .niyam/
 │   ├── context/
 │   │   ├── project-brief.md
 │   │   ├── architecture.md
@@ -325,7 +325,7 @@ repo/
 
 ---
 
-# 8. `sutra.yaml` example
+# 8. `niyam.yaml` example
 
 ```yaml
 project:
@@ -378,26 +378,26 @@ budget:
 
 ---
 
-# 9. Sutra MVP modules
+# 9. Niyam MVP modules
 
 ## Phase 1 — Local orchestration MVP
 
 Build this first.
 
 ```text
-sutra init
-sutra plan
-sutra run
-sutra validate
-sutra review
-sutra status
+niyam init
+niyam plan
+niyam run
+niyam validate
+niyam review
+niyam status
 ```
 
 ### Capability
 
 | Feature                              | MVP?  |
 | ------------------------------------ | ----- |
-| Create `.sutra` structure            | ✅     |
+| Create `.niyam` structure            | ✅     |
 | Generate task contracts using Claude | ✅     |
 | Run Codex against task               | ✅     |
 | Run Gemini against task              | ✅     |
@@ -453,10 +453,10 @@ required_changes:
 
 ## Phase 3 — Parallel agent execution
 
-This is where Sutra becomes powerful.
+This is where Niyam becomes powerful.
 
 ```bash
-sutra run-phase PHASE-01 --parallel
+niyam run-phase PHASE-01 --parallel
 ```
 
 Example:
@@ -469,7 +469,7 @@ Example:
 | Docs update          | Gemini          |
 | Security review      | Claude subagent |
 
-Sutra should prevent collisions by checking file overlap.
+Niyam should prevent collisions by checking file overlap.
 
 ```text
 TASK-001 changes backend files
@@ -477,11 +477,11 @@ TASK-002 changes frontend files
 TASK-003 changes docs
 ```
 
-If two tasks touch the same files, Sutra should mark them as **serial only**.
+If two tasks touch the same files, Niyam should mark them as **serial only**.
 
 ---
 
-## Phase 4 — Product-grade Sutra
+## Phase 4 — Product-grade Niyam
 
 Add:
 
@@ -500,11 +500,11 @@ This aligns very strongly with your platform engineering and governance backgrou
 
 ---
 
-# 10. Token reduction design inside Sutra
+# 10. Token reduction design inside Niyam
 
 ## Token budget rules
 
-Sutra should enforce:
+Niyam should enforce:
 
 | Rule                                | Purpose                                |
 | ----------------------------------- | -------------------------------------- |
@@ -519,12 +519,12 @@ Sutra should enforce:
 
 ---
 
-# 11. Sutra should maintain an evidence pack
+# 11. Niyam should maintain an evidence pack
 
 For every task:
 
 ```text
-.sutra/runs/TASK-001/evidence.md
+.niyam/runs/TASK-001/evidence.md
 ```
 
 Example:
@@ -568,7 +568,7 @@ This is excellent for enterprise trust.
 
 ---
 
-# 12. Key Sutra differentiator
+# 12. Key Niyam differentiator
 
 Most AI coding tools focus on:
 
@@ -576,7 +576,7 @@ Most AI coding tools focus on:
 Generate code faster.
 ```
 
-Sutra should focus on:
+Niyam should focus on:
 
 ```text
 Generate controlled, validated, auditable code changes with lower token cost.
@@ -586,32 +586,32 @@ That is a better enterprise-grade angle.
 
 ---
 
-# 13. Updated Sutra product statement
+# 13. Updated Niyam product statement
 
 Use this:
 
-> **Sutra is an AI development orchestration CLI that coordinates Claude, Codex, Gemini, and other coding agents through task contracts, isolated execution, deterministic validation, and evidence-based review. It reduces token consumption, prevents uncontrolled code changes, and gives engineering teams an auditable way to use AI coding agents safely.**
+> **Niyam is an AI development orchestration CLI that coordinates Claude, Codex, Gemini, and other coding agents through task contracts, isolated execution, deterministic validation, and evidence-based review. It reduces token consumption, prevents uncontrolled code changes, and gives engineering teams an auditable way to use AI coding agents safely.**
 
 Excellent positioning. Very sellable. ⚡
 
 ---
 
-# 14. Recommended Sutra MVP backlog
+# 14. Recommended Niyam MVP backlog
 
 ## Epic 1 — Project initialization
 
-### Story 1.1 — `sutra init`
+### Story 1.1 — `niyam init`
 
 Creates:
 
 ```text
-sutra.yaml
-.sutra/
-.sutra/tasks/
-.sutra/runs/
-.sutra/context/
-.sutra/policies/
-.sutra/templates/
+niyam.yaml
+.niyam/
+.niyam/tasks/
+.niyam/runs/
+.niyam/context/
+.niyam/policies/
+.niyam/templates/
 ```
 
 Acceptance criteria:
@@ -625,20 +625,20 @@ Acceptance criteria:
 
 ## Epic 2 — Task contract generation
 
-### Story 2.1 — `sutra plan`
+### Story 2.1 — `niyam plan`
 
 Input:
 
 ```bash
-sutra plan "Add onboarding flow"
+niyam plan "Add onboarding flow"
 ```
 
 Output:
 
 ```text
-.sutra/tasks/TASK-001.yaml
-.sutra/tasks/TASK-002.yaml
-.sutra/tasks/TASK-003.yaml
+.niyam/tasks/TASK-001.yaml
+.niyam/tasks/TASK-002.yaml
+.niyam/tasks/TASK-003.yaml
 ```
 
 Acceptance criteria:
@@ -656,7 +656,7 @@ Acceptance criteria:
 ### Story 3.1 — Codex executor
 
 ```bash
-sutra run TASK-001 --executor codex
+niyam run TASK-001 --executor codex
 ```
 
 Acceptance criteria:
@@ -671,7 +671,7 @@ Acceptance criteria:
 ### Story 3.2 — Gemini executor
 
 ```bash
-sutra run TASK-001 --executor gemini
+niyam run TASK-001 --executor gemini
 ```
 
 Acceptance criteria:
@@ -685,7 +685,7 @@ Acceptance criteria:
 
 ## Epic 4 — Validation engine
 
-### Story 4.1 — `sutra validate`
+### Story 4.1 — `niyam validate`
 
 Acceptance criteria:
 
@@ -699,7 +699,7 @@ Acceptance criteria:
 
 ## Epic 5 — Claude evidence review
 
-### Story 5.1 — `sutra review`
+### Story 5.1 — `niyam review`
 
 Acceptance criteria:
 
@@ -712,7 +712,7 @@ Acceptance criteria:
 
 ## Epic 6 — Task status tracking
 
-### Story 6.1 — `sutra status`
+### Story 6.1 — `niyam status`
 
 Example output:
 
@@ -726,7 +726,7 @@ TASK-003  PLANNED              none    not-run      risk:high
 
 # 15. MVP technology choice
 
-I would build Sutra CLI in **TypeScript/Node.js** first.
+I would build Niyam CLI in **TypeScript/Node.js** first.
 
 Reason:
 
@@ -759,12 +759,12 @@ Package manager: pnpm
 Start with this order:
 
 ```text
-1. sutra init
-2. sutra plan
-3. sutra run --executor codex
-4. sutra validate
-5. sutra review
-6. sutra status
+1. niyam init
+2. niyam plan
+3. niyam run --executor codex
+4. niyam validate
+5. niyam review
+6. niyam status
 ```
 
 Do **not** start with dashboard, cloud backend, or marketplace.
@@ -772,7 +772,7 @@ Do **not** start with dashboard, cloud backend, or marketplace.
 First prove:
 
 ```text
-Can Sutra reduce Claude token usage by delegating execution and reviewing only evidence?
+Can Niyam reduce Claude token usage by delegating execution and reviewing only evidence?
 ```
 
 That is the core MVP.
@@ -781,12 +781,12 @@ That is the core MVP.
 
 ## Final answer
 
-**Yes — incorporate this directly into Sutra.**
+**Yes — incorporate this directly into Niyam.**
 
-In fact, I would redefine Sutra MVP around this:
+In fact, I would redefine Niyam MVP around this:
 
 ```text
-Sutra MVP = AI coding-agent control plane
+Niyam MVP = AI coding-agent control plane
 ```
 
 Core value:
@@ -799,4 +799,4 @@ Review with Claude using evidence only.
 Track tokens, quality, and task state.
 ```
 
-This gives Sutra a clear, sharp, high-value purpose: **safe, low-token, multi-agent software delivery orchestration**.
+This gives Niyam a clear, sharp, high-value purpose: **safe, low-token, multi-agent software delivery orchestration**.

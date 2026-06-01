@@ -1,11 +1,11 @@
-# sutra mission validate plan
+# niyam mission validate plan
 
 Validate the latest planned mission plan.
 
 ## Usage
 
 ```bash
-sutra mission validate-plan [OPTIONS]
+niyam mission validate-plan [OPTIONS]
 ```
 
 ## Options

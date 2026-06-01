@@ -1,11 +1,11 @@
-# sutra mission skip
+# niyam mission skip
 
 Skip a specific task and resume the mission execution.
 
 ## Usage
 
 ```bash
-sutra mission skip [OPTIONS] TASK_ID
+niyam mission skip [OPTIONS] TASK_ID
 ```
 
 ## Arguments

@@ -1,11 +1,11 @@
-# sutra plan
+# niyam plan
 
 Plan a mission from a requirements file (alias for 'mission plan').
 
 ## Usage
 
 ```bash
-sutra plan [OPTIONS] REQUIREMENTS
+niyam plan [OPTIONS] REQUIREMENTS
 ```
 
 ## Arguments

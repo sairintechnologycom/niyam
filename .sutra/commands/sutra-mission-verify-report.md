@@ -1,11 +1,11 @@
-# sutra mission verify report
+# niyam mission verify report
 
 Verify the cryptographic integrity of an evidence report.
 
 ## Usage
 
 ```bash
-sutra mission verify-report EVIDENCE_FILE
+niyam mission verify-report EVIDENCE_FILE
 ```
 
 ## Arguments

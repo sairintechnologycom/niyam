@@ -1,12 +1,15 @@
-# Sutra
+# Niyam
 
-**Governed AI-development workspaces for Claude Code, Codex CLI, and future coding runtimes.**
+**Governed autonomous development for AI coding agents.**
 
-> One `.sutra/` source of truth. Many AI runtimes. Policy-driven autonomy. Evidence-backed delivery.
+> One `.niyam/` source of truth. Many AI runtimes. Policy-driven autonomy. Evidence-backed delivery.
 
-## What is Sutra?
+> [!NOTE]
+> Niyam was previously developed under the Sutra codename. New projects should use `.niyam/`.
 
-Sutra turns any repository into a governed AI-development workspace with:
+## What is Niyam?
+
+Niyam turns any repository into a governed AI-development workspace with:
 
 - **Reusable agents** — specialized AI roles (backend, frontend, security, QA)
 - **Skills** — composable methodology packs (TDD, code review, planning)
@@ -16,23 +19,23 @@ Sutra turns any repository into a governed AI-development workspace with:
 
 ## Installation
 
-You can install Sutra CLI globally using [pipx](https://github.com/pypa/pipx):
+You can install Niyam CLI globally using [pipx](https://github.com/pypa/pipx):
 
 ```bash
-pipx install sutra-cli
+pipx install niyam-dev
 ```
 
 Alternatively, you can run it on the fly without installing using `uvx`:
 
 ```bash
-uvx --from sutra-cli sutra --help
+uvx --from niyam-dev niyam --help
 ```
 
 For local development installation:
 
 ```bash
-git clone https://github.com/aincloudtools/sutra.git
-cd sutra
+git clone https://github.com/aincloudtools/niyam.git
+cd niyam
 pip install -e .
 ```
 
@@ -41,20 +44,20 @@ pip install -e .
 ```bash
 # Initialize a workspace in your target repository
 cd your-project
-sutra init --profile fullstack --runtime claude
+niyam init --profile fullstack --runtime claude
 
 # Add Codex as a second runtime
-sutra runtime add codex
+niyam runtime add codex
 
 # Detect your stack
-sutra context refresh
+niyam context refresh
 
 # Validate setup
-sutra policy validate
-sutra doctor
+niyam policy validate
+niyam doctor
 
 # Sync changes to runtimes
-sutra sync
+niyam sync
 ```
 
 Then open Claude Code and use:
@@ -68,25 +71,25 @@ Then open Claude Code and use:
 
 | Command | Description |
 |---------|-------------|
-| `sutra init` | Initialize a governed workspace |
-| `sutra sync` | Sync .sutra/ to configured runtimes |
-| `sutra doctor` | Validate workspace integrity |
-| `sutra context refresh` | Scan repo and update context |
-| `sutra context show` | Display current context |
-| `sutra context diff` | Show context changes |
-| `sutra policy validate` | Validate policy files |
-| `sutra guard enable` | Enable all guardrails |
-| `sutra guard disable` | Disable guardrails |
-| `sutra guard careful` | Enable destructive-command warnings |
-| `sutra guard freeze <path>` | Restrict edits to a path |
-| `sutra runtime add <runtime>` | Add a new runtime |
-| `sutra report` | Generate evidence report |
+| `niyam init` | Initialize a governed workspace |
+| `niyam sync` | Sync .niyam/ to configured runtimes |
+| `niyam doctor` | Validate workspace integrity |
+| `niyam context refresh` | Scan repo and update context |
+| `niyam context show` | Display current context |
+| `niyam context diff` | Show context changes |
+| `niyam policy validate` | Validate policy files |
+| `niyam guard enable` | Enable all guardrails |
+| `niyam guard disable` | Disable guardrails |
+| `niyam guard careful` | Enable destructive-command warnings |
+| `niyam guard freeze <path>` | Restrict edits to a path |
+| `niyam runtime add <runtime>` | Add a new runtime |
+| `niyam report` | Generate evidence report |
 
 ## Architecture
 
 ```
-.sutra/              ← Source of truth (you own this)
-├── sutra.yaml       ← Workspace config
+.niyam/              ← Source of truth (you own this)
+├── niyam.yaml       ← Workspace config
 ├── project.yaml     ← Stack and validation
 ├── runtimes.yaml    ← Runtime settings
 ├── context/         ← AI project context
@@ -111,7 +114,7 @@ AGENTS.md            ← Generated for Codex CLI
 
 ## Roadmap
 
-See [ROADMAP.md](file:///Users/bhushan/Documents/Projects/sutra/ROADMAP.md) for the detailed vision, target architecture, and target build phases.
+See [ROADMAP.md](file:///Users/bhushan/Documents/Projects/niyam/ROADMAP.md) for the detailed vision, target architecture, and target build phases.
 
 ## License
 

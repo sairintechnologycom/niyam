@@ -1,0 +1,114 @@
+mission:
+  id: requirements-utils-20260530-115223
+  requirement: scratch/requirements-utils.md
+  created: '2026-05-30T06:22:23.650460Z'
+  status: failed
+  orchestrator: claude
+  parallel: 1
+  worktree: true
+  base_sha: 26a79e94d6de3ea94e8e3c69bd7ab177df4e74b8
+tasks:
+- id: T1
+  title: 'Discovery: Analyze requirement in requirement.md'
+  type: discovery
+  status: failed
+  agent: backend-specialist
+  runtime: null
+  depends_on: []
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T2
+  title: 'TDD: Write failing test cases'
+  type: implementation
+  status: skipped
+  agent: backend-specialist
+  runtime: null
+  depends_on:
+  - T1
+  allowed_files:
+  - tests/**
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: true
+  commit_sha: null
+- id: T3
+  title: 'Implementation: Code the solution'
+  type: implementation
+  status: failed
+  agent: backend-specialist
+  runtime: null
+  depends_on:
+  - T2
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T4
+  title: 'Security: Review changes for vulnerabilities'
+  type: review
+  status: skipped
+  agent: security-reviewer
+  runtime: null
+  depends_on:
+  - T3
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: false
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null
+- id: T5
+  title: 'Validation: Run full verification suite'
+  type: validation
+  status: failed
+  agent: qa-reviewer
+  runtime: null
+  depends_on:
+  - T4
+  allowed_files:
+  - '*'
+  blocked_files: []
+  writes_files: true
+  timeout_seconds: 600
+  risk: medium
+  objective: ''
+  acceptance_criteria: []
+  validation:
+    commands: []
+  approval_required: false
+  tdd_required: null
+  commit_sha: null

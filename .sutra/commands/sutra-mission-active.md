@@ -1,11 +1,11 @@
-# sutra mission active
+# niyam mission active
 
 Print the path or details of the active/latest mission run.
 
 ## Usage
 
 ```bash
-sutra mission active [OPTIONS]
+niyam mission active [OPTIONS]
 ```
 
 ## Options

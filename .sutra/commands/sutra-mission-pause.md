@@ -1,11 +1,11 @@
-# sutra mission pause
+# niyam mission pause
 
 Pause the currently running mission.
 
 ## Usage
 
 ```bash
-sutra mission pause [OPTIONS]
+niyam mission pause [OPTIONS]
 ```
 
 ## Options
