@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
+from niyam import __version__
 from niyam.cli import app
 
 runner = CliRunner()
@@ -16,7 +17,7 @@ class TestCLI:
         """niyam version should print the version."""
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
-        assert "0.3.9" in result.output
+        assert __version__ in result.output
 
     def test_help(self) -> None:
         """niyam --help should show all commands."""
