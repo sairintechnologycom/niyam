@@ -1124,27 +1124,76 @@ Do not perform destructive operations.
         orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
         parallel_limit = mission_meta.get("parallel", 1)
 
-        if shutil.which(orchestrator):
+        configured_runtimes = []
+        try:
+            config = load_niyam_config(repo_root)
+            configured_runtimes = [r.lower() for r in config.runtimes]
+        except Exception:
+            pass
+
+        orchestrators_to_try = [orchestrator.lower()]
+        for r in configured_runtimes:
+            if r not in orchestrators_to_try:
+                orchestrators_to_try.append(r)
+
+        success = False
+        tried_runtimes = []
+
+        for current_orchestrator in orchestrators_to_try:
+            tried_runtimes.append(current_orchestrator)
+            
+            if not shutil.which(current_orchestrator):
+                with _print_lock:
+                    console.print(
+                        f"[{task_id}] [yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
+                    )
+                if len(tried_runtimes) < len(orchestrators_to_try):
+                    with _print_lock:
+                        console.print(f"[{task_id}] [cyan]Attempting fallback runtime...[/]")
+                    continue
+                else:
+                    if parallel_limit > 1 or non_interactive:
+                        with _print_lock:
+                            console.print(f"[{task_id}] To complete this task manually, run:")
+                            console.print(f"  [bold]cat {prompt_path}[/]")
+                    else:
+                        with _print_lock:
+                            console.print(
+                                f"[yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
+                            )
+                            console.print("Please run the task using the prompt at:")
+                            console.print(f"  [bold]cat {prompt_path}[/]")
+                            console.print(
+                                "\nPress Enter once you have executed the prompt and completed the work..."
+                            )
+                        try:
+                            input()
+                        except (KeyboardInterrupt, EOFError):
+                            pass
+                    break
+
             with _print_lock:
-                console.print(f"[{task_id}] [cyan]Invoking {orchestrator} CLI...[/]")
+                console.print(f"[{task_id}] [cyan]Invoking {current_orchestrator} CLI...[/]")
             timeout = task.get("timeout_seconds") or task.get("timeout") or 600
+            run_failed = False
+            exhaustion_detected = False
+            task_log_path = (
+                worktree_path if use_worktree else run_dir
+            ) / f"task-{task_id}-output.log"
+
             try:
                 if parallel_limit == 1 and not non_interactive:
-                    # Sequential: full interactive pass-through
                     subprocess.run(
-                        [orchestrator, str(prompt_path)],
+                        [current_orchestrator, str(prompt_path)],
                         cwd=task_cwd,
                         check=True,
                         timeout=timeout,
                     )
+                    success = True
                 else:
-                    # Parallel or non-interactive: headless execution
-                    task_log_path = (
-                        worktree_path if use_worktree else run_dir
-                    ) / f"task-{task_id}-output.log"
                     with open(task_log_path, "w", encoding="utf-8") as log_f:
                         subprocess.run(
-                            [orchestrator, str(prompt_path)],
+                            [current_orchestrator, str(prompt_path)],
                             cwd=task_cwd,
                             stdin=subprocess.DEVNULL,
                             stdout=log_f,
@@ -1152,68 +1201,84 @@ Do not perform destructive operations.
                             check=True,
                             timeout=timeout,
                         )
+                    success = True
             except subprocess.TimeoutExpired as e:
+                run_failed = True
                 with _print_lock:
                     console.print(
-                        f"[{task_id}] [bold red]Orchestrator timed out after {timeout} seconds: {e}[/]"
+                        f"[{task_id}] [bold red]Orchestrator '{current_orchestrator}' timed out after {timeout} seconds: {e}[/]"
                     )
-                    if parallel_limit > 1 or non_interactive:
-                        console.print(
-                            f"[{task_id}] To complete this task manually, run:"
-                        )
-                        console.print(f"  [bold]cat {prompt_path}[/]")
                 log_execution_event(
                     run_dir,
                     "TASK_TIMEOUT",
                     task_id,
-                    f"Execution timed out after {timeout} seconds.",
+                    f"Execution on '{current_orchestrator}' timed out after {timeout} seconds.",
                 )
-                success = False
             except subprocess.CalledProcessError as e:
-                if parallel_limit > 1 or non_interactive:
-                    with _print_lock:
-                        console.print(
-                            f"[{task_id}] [red]Orchestrator failed in headless execution: {e}[/]"
-                        )
-                        console.print(
-                            f"[{task_id}] To complete this task manually, run:"
-                        )
-                        console.print(f"  [bold]cat {prompt_path}[/]")
-                    success = False
-                else:
-                    with _print_lock:
-                        console.print(
-                            f"[yellow]Warning: {orchestrator} command failed. Asking for manual confirmation.[/]"
-                        )
+                run_failed = True
+                if task_log_path.exists():
                     try:
-                        input(
-                            "Press Enter once you have completed the task manually in Claude/Codex..."
+                        log_content = task_log_path.read_text(encoding="utf-8").lower()
+                        exhaustion_keywords = [
+                            "rate limit", "limit exceeded", "quota exceeded", 
+                            "insufficient funds", "insufficient credit", "exhausted", 
+                            "out of tokens", "token limit", "overloaded"
+                        ]
+                        if any(kw in log_content for kw in exhaustion_keywords):
+                            exhaustion_detected = True
+                    except Exception:
+                        pass
+                
+                if not exhaustion_detected:
+                    err_str = f"{e.stderr or ''} {e.stdout or ''}".lower()
+                    if any(kw in err_str for kw in [
+                        "rate limit", "limit exceeded", "quota exceeded", 
+                        "insufficient funds", "insufficient credit", "exhausted", 
+                        "out of tokens", "token limit", "overloaded"
+                    ]):
+                        exhaustion_detected = True
+
+            if success:
+                task["runtime"] = current_orchestrator
+                break
+
+            if run_failed:
+                if exhaustion_detected and len(tried_runtimes) < len(orchestrators_to_try):
+                    next_rt = orchestrators_to_try[len(tried_runtimes)]
+                    with _print_lock:
+                        console.print(
+                            f"[{task_id}] [yellow]Token/rate limit reached on '{current_orchestrator}'. Trying fallback runtime '{next_rt}'...[/]"
                         )
-                    except (KeyboardInterrupt, EOFError):
-                        success = False
-        else:
-            if parallel_limit > 1 or non_interactive:
-                with _print_lock:
-                    console.print(
-                        f"[{task_id}] [red]Orchestrator '{orchestrator}' CLI not found in PATH.[/]"
+                    log_execution_event(
+                        run_dir,
+                        "TASK_RUNTIME_FALLBACK",
+                        task_id,
+                        f"Rate limit/token exhaustion on '{current_orchestrator}'. Trying fallback '{next_rt}'.",
                     )
-                    console.print(f"[{task_id}] To complete this task manually, run:")
-                    console.print(f"  [bold]cat {prompt_path}[/]")
-                success = False
-            else:
-                with _print_lock:
-                    console.print(
-                        f"[yellow]Orchestrator '{orchestrator}' CLI not found in PATH.[/]"
-                    )
-                    console.print("Please run the task using the prompt at:")
-                    console.print(f"  [bold]cat {prompt_path}[/]")
-                    console.print(
-                        "\nPress Enter once you have executed the prompt and completed the work..."
-                    )
-                try:
-                    input()
-                except (KeyboardInterrupt, EOFError):
-                    success = False
+                    continue
+                else:
+                    if parallel_limit > 1 or non_interactive:
+                        with _print_lock:
+                            console.print(
+                                f"[{task_id}] [red]Orchestrator failed in headless execution: {current_orchestrator}[/]"
+                            )
+                            console.print(
+                                f"[{task_id}] To complete this task manually, run:"
+                            )
+                            console.print(f"  [bold]cat {prompt_path}[/]")
+                    else:
+                        with _print_lock:
+                            console.print(
+                                f"[yellow]Warning: {current_orchestrator} command failed. Asking for manual confirmation.[/]"
+                            )
+                        try:
+                            input(
+                                "Press Enter once you have completed the task manually in Claude/Codex..."
+                            )
+                            success = True
+                        except (KeyboardInterrupt, EOFError):
+                            pass
+                    break
 
     # Mechanical Task Boundary Check
     if success:

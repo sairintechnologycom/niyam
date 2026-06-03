@@ -742,6 +742,23 @@ def next(
 
 
 @app.command()
+def brainstorm(
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option(
+            "--runtime",
+            "-r",
+            help="Runtime override to use for brainstorming.",
+        ),
+    ] = None,
+) -> None:
+    """Brainstorm a new product, generate PRD and ROADMAP, and plan the workspace."""
+    from niyam.core.brainstorm import run_brainstorm
+
+    run_brainstorm(runtime=runtime.value if runtime else None, console=console)
+
+
+@app.command()
 def update() -> None:
     """Update Niyam CLI to the latest version."""
     import sys
