@@ -686,7 +686,7 @@ def next(
         if chain:
             next(chain=chain)
 
-    elif status == "validated" or (status == "planned" and not approved):
+    elif status in ("validated", "approved") or (status == "planned" and not approved):
         if not approved:
             console.print("Next logical step: Approving the plan.")
             try:

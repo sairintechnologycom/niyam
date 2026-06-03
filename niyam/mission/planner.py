@@ -1458,7 +1458,7 @@ def run_mission_approve(
     mission_meta = plan_data.get("mission", {})
     status = mission_meta.get("status", "planned")
 
-    if status != "planned":
+    if status not in ("planned", "validated"):
         console.print(f"[yellow]Mission '{mission_id}' is already {status}.[/]")
         return
 

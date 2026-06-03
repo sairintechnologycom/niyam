@@ -475,6 +475,18 @@ def compute_sha256(file_path: Path) -> str:
 
 def get_snapshot(cwd: Path, is_git: bool) -> dict[str, str]:
     """Get a dictionary mapping relative file paths to their hashes or status."""
+    ignore_dirs = {
+        ".git",
+        ".niyam",
+        "__pycache__",
+        ".venv",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "node_modules",
+        ".antigravitycli",
+    }
+
     if is_git:
         res = subprocess.run(
             ["git", "status", "--porcelain"], cwd=cwd, capture_output=True, text=True
@@ -485,19 +497,12 @@ def get_snapshot(cwd: Path, is_git: bool) -> dict[str, str]:
                 parts = line.strip().split(maxsplit=1)
                 if len(parts) == 2:
                     status, rel_path = parts[0], parts[1]
-                    if not rel_path.startswith(".niyam"):
+                    path_parts = Path(rel_path).parts
+                    if not any(p in ignore_dirs for p in path_parts):
                         snapshot[rel_path] = status
         return snapshot
     else:
         snapshot = {}
-        ignore_dirs = {
-            ".git",
-            ".niyam",
-            "__pycache__",
-            ".venv",
-            "node_modules",
-            ".antigravitycli",
-        }
         for root, dirs, files in os.walk(cwd):
             dirs[:] = [d for d in dirs if d not in ignore_dirs]
             for f in files:
@@ -1182,9 +1187,14 @@ Do not perform destructive operations.
             ) / f"task-{task_id}-output.log"
 
             try:
+                args = [current_orchestrator]
+                if current_orchestrator.lower() == "claude":
+                    args.extend(["--permission-mode", "acceptEdits"])
+                args.append(str(prompt_path))
+
                 if parallel_limit == 1 and not non_interactive:
                     subprocess.run(
-                        [current_orchestrator, str(prompt_path)],
+                        args,
                         cwd=task_cwd,
                         check=True,
                         timeout=timeout,
@@ -1193,7 +1203,7 @@ Do not perform destructive operations.
                 else:
                     with open(task_log_path, "w", encoding="utf-8") as log_f:
                         subprocess.run(
-                            [current_orchestrator, str(prompt_path)],
+                            args,
                             cwd=task_cwd,
                             stdin=subprocess.DEVNULL,
                             stdout=log_f,
