@@ -30,6 +30,18 @@ class TestInit:
         assert (tmp_repo / ".niyam").is_dir()
         assert not (tmp_repo / ".sutra").exists()
 
+        # Check governance documents in root
+        expected_docs = [
+            "01-niyam-governance-prd.md",
+            "02-niyam-technical-architecture.md",
+            "03-niyam-security-access-governance.md",
+            "04-niyam-dashboard-frontend-spec.md",
+            "05-niyam-feature-ticket-list.md",
+            "06-niyam-backward-compatibility-and-migration-plan.md",
+        ]
+        for doc in expected_docs:
+            assert (tmp_repo / doc).is_file()
+
     def test_init_creates_mvp_directories(self, tmp_repo: Path) -> None:
         """niyam init should create required MVP subdirectories."""
         from niyam.core.init import run_init
@@ -196,6 +208,18 @@ class TestInit:
         )
 
         assert not (tmp_repo / ".niyam").exists()
+
+        # Check governance documents are not created in dry run
+        expected_docs = [
+            "01-niyam-governance-prd.md",
+            "02-niyam-technical-architecture.md",
+            "03-niyam-security-access-governance.md",
+            "04-niyam-dashboard-frontend-spec.md",
+            "05-niyam-feature-ticket-list.md",
+            "06-niyam-backward-compatibility-and-migration-plan.md",
+        ]
+        for doc in expected_docs:
+            assert not (tmp_repo / doc).exists()
 
     def test_init_with_claude_runtime(self, tmp_repo: Path) -> None:
         """niyam init --runtime claude should also generate Claude files."""

@@ -73,6 +73,14 @@ def _collect_files_to_create(
             content = source_path.read_text(encoding="utf-8")
             files.append((target, content))
 
+    # Collect the governance suite planning documents to create in the repo root
+    init_docs_dir = TEMPLATES_DIR / "init_docs"
+    if init_docs_dir.exists():
+        for doc_path in sorted(init_docs_dir.glob("*.md")):
+            target = repo_root / doc_path.name
+            content = doc_path.read_text(encoding="utf-8")
+            files.append((target, content))
+
     return files
 
 
