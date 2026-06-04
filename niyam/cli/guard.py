@@ -77,11 +77,22 @@ def guard_run(
             "--capture-output", help="Capture command stdout/stderr output in logs."
         ),
     ] = False,
+    mode: Annotated[
+        Optional[str],
+        typer.Option(
+            "--mode", help="Guard mode: observe, block, warn, approve."
+        ),
+    ] = None,
 ) -> None:
     """Run a shell command under Niyam guard observation."""
     from niyam.policies.guard import run_guard_run
 
-    run_guard_run(cmd_args=ctx.args, capture_output=capture_output, console=console)
+    run_guard_run(
+        cmd_args=ctx.args,
+        capture_output=capture_output,
+        console=console,
+        mode_override=mode,
+    )
 
 
 @guard_app.command("status")

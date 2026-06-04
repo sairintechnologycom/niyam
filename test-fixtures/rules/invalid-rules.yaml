@@ -1,0 +1,4 @@
+rules:
+  - id: INVALID001
+    title: Missing Required Fields Rule
+    category: health

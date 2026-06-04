@@ -46,10 +46,20 @@ class ScanConfig(BaseModel):
     include: list[str] = Field(default_factory=list)
 
 
+class GuardConfig(BaseModel):
+    """Configuration for guard policy mode."""
+
+    mode: str = "observe"
+    blocked_commands: list[str] = Field(default_factory=list)
+    protected_files: list[str] = Field(default_factory=list)
+    approval_required: list[str] = Field(default_factory=list)
+
+
 class GovernanceConfig(BaseModel):
     """Governance and production-readiness configuration."""
 
     scan: ScanConfig = Field(default_factory=ScanConfig)
+    guard: GuardConfig = Field(default_factory=GuardConfig)
 
 
 class NiyamConfig(BaseModel):

@@ -1,0 +1,14 @@
+name: existing-project
+description: 'A legacy project setup'
+stack:
+  languages:
+  - Javascript
+  frameworks:
+  - React
+  package_managers: []
+validation:
+  test: npm test
+source_dirs:
+- src
+test_dirs:
+- tests

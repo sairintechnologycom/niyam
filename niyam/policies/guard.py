@@ -395,7 +395,7 @@ def load_commands_policy(root: Path) -> dict:
     return {}
 
 
-def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console) -> None:
+def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, mode_override: str | None = None) -> None:
     import sys
     import os
     import re
@@ -438,6 +438,131 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console) -
 
     actor_type = os.environ.get("NIYAM_ACTOR_TYPE", "agent")
 
+    # Load config to get policy mode and lists
+    mode = "observe"
+    blocked_commands = []
+    protected_files = []
+    approval_required = []
+
+    try:
+        config = load_niyam_config(root)
+        if config and config.governance and config.governance.guard:
+            mode = config.governance.guard.mode
+            blocked_commands = config.governance.guard.blocked_commands
+            protected_files = config.governance.guard.protected_files
+            approval_required = config.governance.guard.approval_required
+    except Exception:
+        pass
+
+    if mode_override:
+        mode = mode_override
+
+    command_str = " ".join(cmd_args)
+
+    # Redact secret assignments in command
+    redacted_command = re.sub(
+        r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
+        r"\1=REDACTED",
+        command_str,
+    )
+
+    is_blocked = any(blocked in command_str for blocked in blocked_commands)
+    is_protected_file = any(f in command_str for f in protected_files)
+    is_approval = any(appr in command_str for appr in approval_required)
+
+    decision = "allowed"
+
+    # Check Block Mode
+    if mode == "block":
+        if is_blocked or is_protected_file:
+            console.print("[bold red]Blocked:[/] Command violates governance policy.")
+            log_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "session_id": session_id,
+                "actor_type": actor_type,
+                "tool": "shell",
+                "action": "command_execute",
+                "command": redacted_command,
+                "cwd": str(Path.cwd().resolve()),
+                "exit_code": 1,
+                "duration_ms": 0,
+                "mode": "block",
+                "decision": "blocked",
+            }
+            try:
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+            except Exception:
+                pass
+            raise SystemExit(1)
+        elif is_approval:
+            # Requires approval
+            import typer
+            try:
+                allowed = typer.confirm("Approval required for command. Allow execution?", default=False)
+            except Exception:
+                allowed = False
+            if not allowed:
+                console.print("[bold red]Denied:[/] User rejected execution.")
+                log_entry = {
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "session_id": session_id,
+                    "actor_type": actor_type,
+                    "tool": "shell",
+                    "action": "command_execute",
+                    "command": redacted_command,
+                    "cwd": str(Path.cwd().resolve()),
+                    "exit_code": 1,
+                    "duration_ms": 0,
+                    "mode": "block",
+                    "decision": "denied",
+                }
+                try:
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_entry) + "\n")
+                except Exception:
+                    pass
+                raise SystemExit(1)
+            decision = "approved"
+
+    # Check Warn Mode
+    elif mode == "warn":
+        if is_blocked or is_protected_file or is_approval:
+            console.print("[bold yellow]Warning:[/] Command is flagged as dangerous.")
+            decision = "warned"
+
+    # Check Approve Mode
+    elif mode == "approve":
+        if is_blocked or is_protected_file or is_approval:
+            import typer
+            try:
+                allowed = typer.confirm("Approval required for command. Allow execution?", default=False)
+            except Exception:
+                allowed = False
+            if not allowed:
+                console.print("[bold red]Denied:[/] User rejected execution.")
+                log_entry = {
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "session_id": session_id,
+                    "actor_type": actor_type,
+                    "tool": "shell",
+                    "action": "command_execute",
+                    "command": redacted_command,
+                    "cwd": str(Path.cwd().resolve()),
+                    "exit_code": 1,
+                    "duration_ms": 0,
+                    "mode": "approve",
+                    "decision": "denied",
+                }
+                try:
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(log_entry) + "\n")
+                except Exception:
+                    pass
+                raise SystemExit(1)
+            decision = "approved"
+
+    # Run the command
     start_time = time.perf_counter()
     exit_code = 0
     output_data = None
@@ -469,14 +594,6 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console) -
 
     duration_ms = int((time.perf_counter() - start_time) * 1000)
 
-    # Redact secret assignments in command
-    command_str = " ".join(cmd_args)
-    redacted_command = re.sub(
-        r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
-        r"\1=REDACTED",
-        command_str,
-    )
-
     # Store Log
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -488,7 +605,8 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console) -
         "cwd": str(Path.cwd().resolve()),
         "exit_code": exit_code,
         "duration_ms": duration_ms,
-        "mode": "observe",
+        "mode": mode,
+        "decision": decision,
     }
     if capture_output and output_data is not None:
         # Avoid storing secrets from captured output via standard redact

@@ -1,0 +1,11 @@
+rules:
+  - id: CUST001
+    title: Custom File Check
+    category: security
+    severity: critical
+    description: Custom secret file detection
+    recommendation: Do not check in secret.txt
+    match:
+      type: file_exists
+      patterns:
+        - "secret.txt"
