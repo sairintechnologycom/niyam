@@ -57,21 +57,21 @@ app.add_typer(context_app)
 
 guard_app = typer.Typer(
     name="guard",
-    help="Safety guardrails for AI-assisted development.",
+    help="[Experimental] Safety guardrails for AI-assisted development.",
     no_args_is_help=True,
 )
 app.add_typer(guard_app)
 
 mcp_app = typer.Typer(
     name="mcp",
-    help="Manage AI agent tools and MCP servers.",
+    help="[Experimental] Manage AI agent tools and MCP servers.",
     no_args_is_help=True,
 )
 app.add_typer(mcp_app)
 
 cost_app = typer.Typer(
     name="cost",
-    help="Track AI engineering token usage and costs.",
+    help="[Experimental] Track AI engineering token usage and costs.",
     no_args_is_help=True,
 )
 app.add_typer(cost_app)
@@ -134,7 +134,7 @@ app.add_typer(ci_app)
 
 evidence_app = typer.Typer(
     name="evidence",
-    help="Audit-ready evidence and readiness report generation.",
+    help="[Experimental] Audit-ready evidence and readiness report generation.",
     no_args_is_help=True,
 )
 app.add_typer(evidence_app)

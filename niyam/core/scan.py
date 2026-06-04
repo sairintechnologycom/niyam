@@ -63,6 +63,9 @@ class GovernanceRule(BaseModel):
     description: str
     recommendation: str
     match: MatchDefinition
+    confidence: str | None = None
+    remediation_effort: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
     def validate_rule(self) -> None:
         """Additional validation for rule types and constraints."""
@@ -88,9 +91,12 @@ class GovernanceRule(BaseModel):
 def is_text_file(path: Path) -> bool:
     """Check if the file is a text file that should be scanned."""
     name_lower = path.name.lower()
-    if name_lower == "dockerfile" or name_lower.startswith(".env"):
+    if name_lower in ("dockerfile", "jenkinsfile", ".gitignore", ".gitattributes") or name_lower.startswith(".env"):
         return True
-    return path.suffix.lower() in TEXT_EXTENSIONS
+    suffix = path.suffix.lower()
+    if suffix in (".lock", ".sum"):
+        return True
+    return suffix in TEXT_EXTENSIONS
 
 
 def walk_files(root: Path) -> list[Path]:
@@ -180,6 +186,7 @@ def evaluate_rule(
     rule: GovernanceRule, root: Path, files: list[Path]
 ) -> list[dict[str, Any]]:
     """Evaluate a single governance rule against the workspace files."""
+    import hashlib
     findings = []
 
     # 1. Resolve relative paths
@@ -206,19 +213,60 @@ def evaluate_rule(
     mtype = rule.match.type
     patterns = rule.match.patterns
 
+    # Default values logic
+    confidence_val = rule.confidence
+    if not confidence_val:
+        confidence_val = "high" if mtype in ("file_exists", "file_missing", "directory_exists", "directory_missing") else "medium"
+
+    remediation_val = rule.remediation_effort
+    if not remediation_val:
+        if rule.category == "secrets":
+            remediation_val = "medium"
+        elif rule.category in ("dependencies", "docs", "cicd", "health", "ai_risk"):
+            remediation_val = "low"
+        else:
+            remediation_val = "medium"
+
+    tags_val = list(rule.tags)
+    if not tags_val:
+        if rule.category == "secrets":
+            tags_val = ["security", "secrets"]
+        elif rule.category == "dependencies":
+            tags_val = ["maintenance", "dependencies"]
+        elif rule.category == "docs":
+            tags_val = ["documentation"]
+        elif rule.category == "tests":
+            tags_val = ["testing"]
+        elif rule.category == "cicd":
+            tags_val = ["devops", "cicd"]
+        elif rule.category == "health":
+            tags_val = ["ops", "monitoring"]
+        elif rule.category == "ai_risk":
+            tags_val = ["ai", "governance"]
+        else:
+            tags_val = [rule.category]
+
     if mtype in ("file_exists", "filename_pattern"):
         for f in relative_paths:
             for pat in patterns:
                 if fnmatch.fnmatch(f.name, pat) or fnmatch.fnmatch(str(f), pat):
+                    fp_src = f"{rule.id}:{str(f)}:"
+                    fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
                     findings.append(
                         {
+                            "schema_version": "1.0.0",
                             "id": rule.id,
                             "title": rule.title,
                             "category": rule.category,
                             "severity": rule.severity,
+                            "confidence": confidence_val,
                             "file_path": str(f),
+                            "line_number": None,
                             "description": rule.description,
                             "recommendation": rule.recommendation,
+                            "remediation_effort": remediation_val,
+                            "tags": tags_val,
+                            "fingerprint": fingerprint,
                         }
                     )
                     break  # One finding per file
@@ -235,15 +283,23 @@ def evaluate_rule(
                 return []  # If any matching file exists, the dependency is NOT missing
 
         # If none of the files matched the lockfile/check patterns
+        fp_src = f"{rule.id}::"
+        fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
         findings.append(
             {
+                "schema_version": "1.0.0",
                 "id": rule.id,
                 "title": rule.title,
                 "category": rule.category,
                 "severity": rule.severity,
+                "confidence": confidence_val,
                 "file_path": "",
+                "line_number": None,
                 "description": rule.description,
                 "recommendation": rule.recommendation,
+                "remediation_effort": remediation_val,
+                "tags": tags_val,
+                "fingerprint": fingerprint,
             }
         )
 
@@ -267,23 +323,42 @@ def evaluate_rule(
 
                 for pat in patterns:
                     matched = False
+                    line_num = None
                     if mtype == "content_contains":
                         if pat in content:
                             matched = True
+                            lines = content.splitlines()
+                            for idx, line in enumerate(lines, 1):
+                                if pat in line:
+                                    line_num = idx
+                                    break
                     else:  # content_regex
                         if re.search(pat, content):
                             matched = True
+                            lines = content.splitlines()
+                            for idx, line in enumerate(lines, 1):
+                                if re.search(pat, line):
+                                    line_num = idx
+                                    break
 
                     if matched:
+                        fp_src = f"{rule.id}:{str(rel)}:{line_num or ''}"
+                        fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
                         findings.append(
                             {
+                                "schema_version": "1.0.0",
                                 "id": rule.id,
                                 "title": rule.title,
                                 "category": rule.category,
                                 "severity": rule.severity,
+                                "confidence": confidence_val,
                                 "file_path": str(rel),
+                                "line_number": line_num,
                                 "description": rule.description,
                                 "recommendation": rule.recommendation,
+                                "remediation_effort": remediation_val,
+                                "tags": tags_val,
+                                "fingerprint": fingerprint,
                             }
                         )
                         break  # Limit to one finding of this type per file
@@ -294,15 +369,23 @@ def evaluate_rule(
         for pat in patterns:
             dir_path = root / pat
             if dir_path.is_dir():
+                fp_src = f"{rule.id}:{pat}:"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
                 findings.append(
                     {
+                        "schema_version": "1.0.0",
                         "id": rule.id,
                         "title": rule.title,
                         "category": rule.category,
                         "severity": rule.severity,
+                        "confidence": confidence_val,
                         "file_path": pat,
+                        "line_number": None,
                         "description": rule.description,
                         "recommendation": rule.recommendation,
+                        "remediation_effort": remediation_val,
+                        "tags": tags_val,
+                        "fingerprint": fingerprint,
                     }
                 )
 
@@ -310,15 +393,23 @@ def evaluate_rule(
         for pat in patterns:
             dir_path = root / pat
             if not dir_path.is_dir():
+                fp_src = f"{rule.id}::"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
                 findings.append(
                     {
+                        "schema_version": "1.0.0",
                         "id": rule.id,
                         "title": rule.title,
                         "category": rule.category,
                         "severity": rule.severity,
+                        "confidence": confidence_val,
                         "file_path": "",
+                        "line_number": None,
                         "description": f"{rule.description} (Missing directory: {pat})",
                         "recommendation": rule.recommendation,
+                        "remediation_effort": remediation_val,
+                        "tags": tags_val,
+                        "fingerprint": fingerprint,
                     }
                 )
 
@@ -329,7 +420,9 @@ def run_scanner_checks(
     root: Path, profile: str | None = None, custom_rules_path: Path | None = None
 ) -> dict[str, Any]:
     """Run readiness checks using the rule engine and return a report."""
+    from datetime import datetime, timezone
     root = Path(root).resolve()
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # 1. Determine profile and load rules
     if custom_rules_path:
@@ -363,15 +456,67 @@ def run_scanner_checks(
 
     score = max(0, min(100, score))
 
-    # 5. Map Decision
-    if score >= 85:
-        decision = "GO"
-    elif score >= 70:
-        decision = "CONDITIONAL_GO"
-    elif score >= 50:
-        decision = "HIGH_RISK"
-    else:
+    # 5. Check hard blockers and override decision/score
+    force_no_go = False
+    decision_reason = "Scan completed successfully."
+
+    # Look through findings & workspace files for hard blockers
+    for f in findings:
+        fid = f.get("id")
+        fpath = f.get("file_path", "")
+        fdesc = f.get("description", "")
+        
+        # Blocker 1: Committed .env file with possible secrets
+        if fid == "SEC001" or (fpath and Path(fpath).name.startswith(".env")):
+            try:
+                env_path = root / fpath
+                if env_path.is_file():
+                    env_content = env_path.read_text(encoding="utf-8", errors="ignore")
+                    from niyam.governance.common.redaction import contains_secret
+                    if contains_secret(env_content) or any(line.strip() and "=" in line for line in env_content.splitlines()):
+                        force_no_go = True
+                        decision_reason = "Hard blocker triggered: Committed environment configuration file with possible secrets."
+            except Exception:
+                pass
+
+        # Blocker 2: Obvious private key
+        try:
+            if fpath:
+                file_p = root / fpath
+                if file_p.is_file():
+                    content = file_p.read_text(encoding="utf-8", errors="ignore")
+                    if "-----BEGIN" in content and "PRIVATE KEY" in content:
+                        force_no_go = True
+                        decision_reason = "Hard blocker triggered: Obvious private key committed in source code."
+        except Exception:
+            pass
+
+        # Blocker 3: Public cloud exposure pattern
+        try:
+            if fpath:
+                file_p = root / fpath
+                if file_p.is_file():
+                    content = file_p.read_text(encoding="utf-8", errors="ignore")
+                    if "AKIA" in content or "AccountKey=" in content:
+                        force_no_go = True
+                        decision_reason = "Hard blocker triggered: Public cloud exposure pattern detected."
+        except Exception:
+            pass
+
+    if force_no_go:
+        score = min(49, score)
         decision = "NO_GO"
+    else:
+        # Map Decision
+        if score >= 85:
+            decision = "GO"
+        elif score >= 70:
+            decision = "CONDITIONAL_GO"
+        elif score >= 50:
+            decision = "HIGH_RISK"
+        else:
+            decision = "NO_GO"
+            decision_reason = "Readiness score is below 50."
 
     # Check for missing/skipped external scanners
     import shutil
@@ -385,10 +530,24 @@ def run_scanner_checks(
         if not shutil.which(binary):
             skipped_scanners.append(scanner_name)
 
+    # 6. Calculate summary metrics
+    summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    for f in findings:
+        sev = f.get("severity", "info").lower()
+        if sev in summary:
+            summary[sev] += 1
+
     return {
+        "schema_version": "1.0.0",
+        "generated_at": generated_at,
+        "project_path": str(root),
         "profile": profile_name,
         "score": score,
+        "readiness_score": score,
         "decision": decision,
+        "decision_reason": decision_reason,
         "findings": findings,
+        "summary": summary,
+        "redaction_status": {"redacted": True, "engine": "niyam-redaction"},
         "skipped_scanners": skipped_scanners,
     }

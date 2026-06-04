@@ -31,7 +31,7 @@ def generate_evidence(
         ),
     ] = "scan,guard,mcp,cost",
 ) -> None:
-    """Generate human-readable evidence and readiness reports locally."""
+    """[Experimental] Generate human-readable evidence and readiness reports locally."""
     fmt = format.lower()
     if fmt not in ("markdown", "json", "html"):
         console.print(
@@ -40,7 +40,8 @@ def generate_evidence(
         raise typer.Exit(1)
 
     try:
-        report_str = run_generate_evidence(
+        from niyam.governance.evidence.command import execute_generate_evidence
+        report_str = execute_generate_evidence(
             from_scan_json=from_scan, fmt=fmt, output=output, include=include
         )
 

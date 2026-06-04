@@ -164,11 +164,8 @@ def test_run_checkov_installed_with_findings(tmp_path: Path) -> None:
 
 def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None:
     """Main scan entry point run_scanner_checks should successfully compile external scanner findings."""
-    # Write empty files/structures so profile rules pass with some findings
     readme = tmp_path / "README.md"
     readme.write_text("# Mock repo\n")
-    (tmp_path / "uv.lock").write_text("")
-    (tmp_path / ".gitignore").write_text("")
     (tmp_path / "test_main.py").write_text("")
 
     mock_findings = [
@@ -190,7 +187,6 @@ def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None
         assert results["score"] < 100  # Deduction applied
         assert any(f["id"] == "EXT-GITLEAKS-mock" for f in results["findings"])
         # Base score has -16 deduction from missing gitignore and lockfile
-        # Critical gitleaks finding subtracts another 25. 100 - 16 - 25 = 59.
         assert results["score"] == 59
         assert results["decision"] == "HIGH_RISK"
 
