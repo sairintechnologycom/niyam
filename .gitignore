@@ -122,10 +122,12 @@ pip-wheel-metadata/
 .niyam/runs/
 .niyam/worktrees/
 .niyam/evidence/
+.niyam/logs/
 .niyam/hook-cache/
 .niyam/niyam.yaml
 .niyam/project.yaml
 .niyam/runtimes.yaml
+.niyam/pricing.json
 
 # Local antigravity cli config
 .antigravitycli/

@@ -71,9 +71,7 @@ def test_doctor_check_lint_format_failure(niyam_repo: Path) -> None:
     mock_res.stdout = ""
     mock_res.stderr = "Linter syntax error on line 4"
 
-    with patch(
-        "niyam.core.security.safe_run_command", return_value=mock_res
-    ):
+    with patch("niyam.core.security.safe_run_command", return_value=mock_res):
         results = _check_lint_format(niyam_repo)
 
     assert len(results) == 1

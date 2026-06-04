@@ -365,7 +365,6 @@ def hello(
 @app.command()
 def info() -> None:
     """Display system and workspace information."""
-    import sys
     import platform
     from rich.table import Table
     from niyam.core.config import find_niyam_root

@@ -412,6 +412,34 @@ def update_token_ledger(
     with open(ledger_path, "w", encoding="utf-8") as f:
         json.dump(ledger, f, indent=2)
 
+    try:
+        from niyam.core.cost import (
+            get_branch_name,
+            get_repo_name,
+            log_cost_event,
+            CostEvent,
+        )
+
+        repo_root = find_niyam_root(run_dir)
+        if repo_root:
+            cost_event = CostEvent(
+                timestamp=event["timestamp"],
+                session_id=run_dir.name,
+                task_id=task_id,
+                tool_name=runtime,
+                model=runtime,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                estimated_cost=cost,
+                repo=get_repo_name(repo_root),
+                branch=get_branch_name(repo_root),
+                status="success",
+                notes=f"Logged automatically during execution by agent {agent}.",
+            )
+            log_cost_event(cost_event, repo_root)
+    except Exception:
+        pass
+
 
 def run_validation_command(
     cmd: str, run_dir: Path, cwd: Path, console: Console
@@ -1146,7 +1174,7 @@ Do not perform destructive operations.
 
         for current_orchestrator in orchestrators_to_try:
             tried_runtimes.append(current_orchestrator)
-            
+
             if not shutil.which(current_orchestrator):
                 with _print_lock:
                     console.print(
@@ -1154,12 +1182,16 @@ Do not perform destructive operations.
                     )
                 if len(tried_runtimes) < len(orchestrators_to_try):
                     with _print_lock:
-                        console.print(f"[{task_id}] [cyan]Attempting fallback runtime...[/]")
+                        console.print(
+                            f"[{task_id}] [cyan]Attempting fallback runtime...[/]"
+                        )
                     continue
                 else:
                     if parallel_limit > 1 or non_interactive:
                         with _print_lock:
-                            console.print(f"[{task_id}] To complete this task manually, run:")
+                            console.print(
+                                f"[{task_id}] To complete this task manually, run:"
+                            )
                             console.print(f"  [bold]cat {prompt_path}[/]")
                     else:
                         with _print_lock:
@@ -1178,7 +1210,9 @@ Do not perform destructive operations.
                     break
 
             with _print_lock:
-                console.print(f"[{task_id}] [cyan]Invoking {current_orchestrator} CLI...[/]")
+                console.print(
+                    f"[{task_id}] [cyan]Invoking {current_orchestrator} CLI...[/]"
+                )
             timeout = task.get("timeout_seconds") or task.get("timeout") or 600
             run_failed = False
             exhaustion_detected = False
@@ -1230,22 +1264,37 @@ Do not perform destructive operations.
                     try:
                         log_content = task_log_path.read_text(encoding="utf-8").lower()
                         exhaustion_keywords = [
-                            "rate limit", "limit exceeded", "quota exceeded", 
-                            "insufficient funds", "insufficient credit", "exhausted", 
-                            "out of tokens", "token limit", "overloaded"
+                            "rate limit",
+                            "limit exceeded",
+                            "quota exceeded",
+                            "insufficient funds",
+                            "insufficient credit",
+                            "exhausted",
+                            "out of tokens",
+                            "token limit",
+                            "overloaded",
                         ]
                         if any(kw in log_content for kw in exhaustion_keywords):
                             exhaustion_detected = True
                     except Exception:
                         pass
-                
+
                 if not exhaustion_detected:
                     err_str = f"{e.stderr or ''} {e.stdout or ''}".lower()
-                    if any(kw in err_str for kw in [
-                        "rate limit", "limit exceeded", "quota exceeded", 
-                        "insufficient funds", "insufficient credit", "exhausted", 
-                        "out of tokens", "token limit", "overloaded"
-                    ]):
+                    if any(
+                        kw in err_str
+                        for kw in [
+                            "rate limit",
+                            "limit exceeded",
+                            "quota exceeded",
+                            "insufficient funds",
+                            "insufficient credit",
+                            "exhausted",
+                            "out of tokens",
+                            "token limit",
+                            "overloaded",
+                        ]
+                    ):
                         exhaustion_detected = True
 
             if success:
@@ -1253,7 +1302,9 @@ Do not perform destructive operations.
                 break
 
             if run_failed:
-                if exhaustion_detected and len(tried_runtimes) < len(orchestrators_to_try):
+                if exhaustion_detected and len(tried_runtimes) < len(
+                    orchestrators_to_try
+                ):
                     next_rt = orchestrators_to_try[len(tried_runtimes)]
                     with _print_lock:
                         console.print(

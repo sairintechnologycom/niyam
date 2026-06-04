@@ -15,14 +15,17 @@ builtins.typer = typer
 import logging
 from rich.console import Console
 
+
 class NiyamTyper(typer.Typer):
     def __call__(self, *args, **kwargs):
         from niyam.core.errors import NiyamError
+
         try:
             super().__call__(*args, **kwargs)
         except NiyamError as e:
             console.print(f"[bold red]Error:[/] {e}")
             raise SystemExit(e.code)
+
 
 app = NiyamTyper(
     name="niyam",
@@ -31,6 +34,7 @@ app = NiyamTyper(
     rich_markup_mode="rich",
 )
 console = Console()
+
 
 def deprecated_sutra() -> None:
     """Print deprecation warning for legacy sutra command."""
@@ -41,6 +45,7 @@ def deprecated_sutra() -> None:
     console.print("  [cyan]niyam migrate --from-sutra[/]\n")
     console.print("The deprecated `sutra` command will be removed in a future release.")
     raise SystemExit(0)
+
 
 # Subcommand groups
 context_app = typer.Typer(
@@ -56,6 +61,20 @@ guard_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(guard_app)
+
+mcp_app = typer.Typer(
+    name="mcp",
+    help="Manage AI agent tools and MCP servers.",
+    no_args_is_help=True,
+)
+app.add_typer(mcp_app)
+
+cost_app = typer.Typer(
+    name="cost",
+    help="Track AI engineering token usage and costs.",
+    no_args_is_help=True,
+)
+app.add_typer(cost_app)
 
 runtime_app = typer.Typer(
     name="runtime",
@@ -121,7 +140,6 @@ evidence_app = typer.Typer(
 app.add_typer(evidence_app)
 
 
-
 @app.callback()
 def main_callback(
     verbose: bool = typer.Option(
@@ -156,6 +174,8 @@ def main() -> None:
 from niyam.cli import main_cmds  # noqa: F401
 from niyam.cli import context  # noqa: F401
 from niyam.cli import guard  # noqa: F401
+from niyam.cli import mcp  # noqa: F401
+from niyam.cli import cost  # noqa: F401
 from niyam.cli import runtime  # noqa: F401
 from niyam.cli import policy  # noqa: F401
 from niyam.cli import pack  # noqa: F401
@@ -166,5 +186,3 @@ from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
 from niyam.cli import evidence  # noqa: F401
-
-

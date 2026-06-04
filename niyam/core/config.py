@@ -64,7 +64,6 @@ class NiyamConfig(BaseModel):
     governance: Optional[GovernanceConfig] = None
 
 
-
 # ── project.yaml ───────────────────────────────────────────────────────
 
 
@@ -237,7 +236,10 @@ def find_niyam_root(start: Path | None = None) -> Path | None:
     for parent in [current, *current.parents]:
         if (parent / ".sutra").is_dir():
             import sys
-            sys.stderr.write("WARNING: Legacy .sutra/ directory found. Please migrate by running:\n  niyam migrate --from-sutra\n\n")
+
+            sys.stderr.write(
+                "WARNING: Legacy .sutra/ directory found. Please migrate by running:\n  niyam migrate --from-sutra\n\n"
+            )
             return parent
     return None
 

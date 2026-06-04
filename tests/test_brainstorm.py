@@ -76,18 +76,22 @@ def test_run_brainstorm_success(tmp_repo: Path, monkeypatch):
     def mock_run(cmd, *args, **kwargs):
         nonlocal call_count
         call_count += 1
-        
+
         # Determine if it's the first call (questions), second (suggestions), or third (generation)
         prompt = cmd[2] if len(cmd) > 2 else ""
-        
+
         if "generate 3 to 5 critical clarifying questions" in prompt:
             # First call: questions
             stdout = "1. Question One?\n2. Question Two?\n3. Question Three?\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         elif "generate a concise suggested answer" in prompt:
             # Second call: suggestions
             stdout = "1. Suggested Answer One\n2. Suggested Answer Two\n3. Suggested Answer Three\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         else:
             # Third call: generation
             stdout = """# Mock PRD
@@ -99,7 +103,9 @@ Photographers SaaS project description.
 ## Phase 1
 Setup template files.
 """
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
 
     monkeypatch.setattr(subprocess, "run", mock_run)
 
@@ -168,20 +174,23 @@ def test_run_brainstorm_with_repo_context(tmp_repo: Path, monkeypatch):
     console = Console(quiet=True)
 
     # Mock repository scan to return FastAPI framework
-    monkeypatch.setattr("niyam.core.brainstorm._scan_repo", lambda repo_root: {
-        "languages": ["Python"],
-        "frameworks": ["FastAPI"],
-        "package_managers": ["pip"],
-        "validation": {},
-        "source_dirs": [],
-        "test_dirs": [],
-        "ci": [],
-        "dependency_versions": [],
-        "db_schema": [],
-        "api_routes": [],
-        "env_vars": [],
-        "readme_summary": ""
-    })
+    monkeypatch.setattr(
+        "niyam.core.brainstorm._scan_repo",
+        lambda repo_root: {
+            "languages": ["Python"],
+            "frameworks": ["FastAPI"],
+            "package_managers": ["pip"],
+            "validation": {},
+            "source_dirs": [],
+            "test_dirs": [],
+            "ci": [],
+            "dependency_versions": [],
+            "db_schema": [],
+            "api_routes": [],
+            "env_vars": [],
+            "readme_summary": "",
+        },
+    )
 
     monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: "1")
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/claude")
@@ -192,7 +201,12 @@ def test_run_brainstorm_with_repo_context(tmp_repo: Path, monkeypatch):
         # Capture prompts sent to the runtime
         if len(cmd) > 2:
             prompts_received.append(cmd[2])
-        return subprocess.CompletedProcess(cmd, returncode=0, stdout="1. Question?\n\n=== ROADMAP.md ===\n# Content", stderr="")
+        return subprocess.CompletedProcess(
+            cmd,
+            returncode=0,
+            stdout="1. Question?\n\n=== ROADMAP.md ===\n# Content",
+            stderr="",
+        )
 
     monkeypatch.setattr(subprocess, "run", mock_run)
 
@@ -211,7 +225,9 @@ def test_run_brainstorm_interactive_refine(tmp_repo: Path, monkeypatch):
 
     # Mock runtime to be found
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/claude")
-    monkeypatch.setattr("niyam.core.brainstorm.run_mission_plan", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "niyam.core.brainstorm.run_mission_plan", lambda *args, **kwargs: None
+    )
 
     # Capture subprocess runs
     subprocess_calls = []
@@ -221,10 +237,14 @@ def test_run_brainstorm_interactive_refine(tmp_repo: Path, monkeypatch):
         prompt = cmd[2] if len(cmd) > 2 else ""
         if "generate 3 to 5 critical clarifying questions" in prompt:
             stdout = "1. Question One?\n2. Question Two?\n3. Question Three?\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         elif "generate a concise suggested answer" in prompt:
             stdout = "1. S1\n2. S2\n3. S3\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         else:
             stdout = """# Mock PRD
 ## Key Features
@@ -235,18 +255,24 @@ def test_run_brainstorm_interactive_refine(tmp_repo: Path, monkeypatch):
 ## Phase 1
 - Step A
 """
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
 
     monkeypatch.setattr(subprocess, "run", mock_run)
 
     # Stateful prompts
-    prompts_queue = iter([
-        "1",                           # Niche choice
-        "refine",                      # First preview choice
-        "Make features more detailed", # Refinement feedback
-        "accept"                       # Second preview choice
-    ])
-    monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts_queue))
+    prompts_queue = iter(
+        [
+            "1",  # Niche choice
+            "refine",  # First preview choice
+            "Make features more detailed",  # Refinement feedback
+            "accept",  # Second preview choice
+        ]
+    )
+    monkeypatch.setattr(
+        "rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts_queue)
+    )
 
     # Stateful inputs for Q&A (first is for multiline raw notes step, then answers to Qs)
     inputs_queue = iter(["done", "", "", ""])
@@ -254,6 +280,7 @@ def test_run_brainstorm_interactive_refine(tmp_repo: Path, monkeypatch):
 
     # Temporarily remove pytest from sys.modules to simulate interactive mode
     import sys
+
     pytest_module = sys.modules.pop("pytest", None)
     try:
         run_brainstorm(runtime="claude", console=console)
@@ -283,7 +310,9 @@ def test_run_brainstorm_interactive_skip(tmp_repo: Path, monkeypatch):
     console = Console(quiet=True)
 
     monkeypatch.setattr(shutil, "which", lambda cmd: "/usr/bin/claude")
-    monkeypatch.setattr("niyam.core.brainstorm.run_mission_plan", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "niyam.core.brainstorm.run_mission_plan", lambda *args, **kwargs: None
+    )
 
     subprocess_calls = []
 
@@ -292,10 +321,14 @@ def test_run_brainstorm_interactive_skip(tmp_repo: Path, monkeypatch):
         prompt = cmd[2] if len(cmd) > 2 else ""
         if "generate 3 to 5 critical clarifying questions" in prompt:
             stdout = "1. Question One?\n2. Question Two?\n3. Question Three?\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         elif "generate a concise suggested answer" in prompt:
             stdout = "1. S1\n2. S2\n3. S3\n"
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
         else:
             stdout = """# Mock PRD
 ## Key Features
@@ -305,16 +338,22 @@ def test_run_brainstorm_interactive_skip(tmp_repo: Path, monkeypatch):
 ## Phase 1
 - Step A
 """
-            return subprocess.CompletedProcess(cmd, returncode=0, stdout=stdout, stderr="")
+            return subprocess.CompletedProcess(
+                cmd, returncode=0, stdout=stdout, stderr=""
+            )
 
     monkeypatch.setattr(subprocess, "run", mock_run)
 
     # Stateful prompts
-    prompts_queue = iter([
-        "1",                           # Niche choice
-        "skip"                         # Choose to skip
-    ])
-    monkeypatch.setattr("rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts_queue))
+    prompts_queue = iter(
+        [
+            "1",  # Niche choice
+            "skip",  # Choose to skip
+        ]
+    )
+    monkeypatch.setattr(
+        "rich.prompt.Prompt.ask", lambda *args, **kwargs: next(prompts_queue)
+    )
 
     # Stateful inputs for Q&A (first is for multiline raw notes step, then answers to Qs)
     inputs_queue = iter(["done", "", "", ""])
@@ -322,6 +361,7 @@ def test_run_brainstorm_interactive_skip(tmp_repo: Path, monkeypatch):
 
     # Temporarily remove pytest from sys.modules to simulate interactive mode
     import sys
+
     pytest_module = sys.modules.pop("pytest", None)
     try:
         run_brainstorm(runtime="claude", console=console)
@@ -337,4 +377,3 @@ def test_run_brainstorm_interactive_skip(tmp_repo: Path, monkeypatch):
 
     assert (tmp_repo / "PRD.md").exists()
     assert (tmp_repo / "ROADMAP.md").exists()
-

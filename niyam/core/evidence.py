@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,15 +20,23 @@ MARKDOWN_TEMPLATE = """# Niyam Governance & Production Readiness Evidence Report
 **Project:** {{ metadata.project_name }}
 **Branch:** `{{ metadata.branch }}`
 **Last Commit:** `{{ metadata.commit_sha }}` by {{ metadata.commit_author }}
-**Scan Profile:** `{{ scan.profile }}`
 **Generated At:** {{ metadata.timestamp }}
 
 ---
 
 ## 1. Executive Summary
-This document serves as an audit-ready evidence record for the repository readiness. It provides a formal assessment of security, configuration, validation, and AI engineering governance metrics.
+This document serves as an audit-ready evidence record for the repository readiness and AI agent governance.
 
-## 2. Readiness Assessment Summary
+Included sections:
+{%- if "scan" in include %} * Production Readiness{% endif %}
+{%- if "guard" in include %} * Agent Governance Activity{% endif %}
+{%- if "mcp" in include %} * Tool/MCP Risk Posture{% endif %}
+{%- if "cost" in include %} * AI Engineering Cost Summary{% endif %}
+
+---
+
+{% if "scan" in include %}
+## 2. Production Readiness
 
 | Metric | Status / Value |
 | --- | --- |
@@ -42,9 +51,7 @@ This document serves as an audit-ready evidence record for the repository readin
 * **Low:** {{ scan.breakdown.low }}
 * **Info:** {{ scan.breakdown.info }}
 
----
-
-## 3. Launch Decision details
+### Launch Decision details
 Based on the readiness score of **{{ scan.score }}**, the automated gate recommends:
 {% if scan.decision == "GO" %}
 🟢 **GO**: The project meets all standard readiness guidelines and is safe for production deployment.
@@ -57,61 +64,113 @@ Based on the readiness score of **{{ scan.score }}**, the automated gate recomme
 {% endif %}
 
 ---
-
-## 4. Critical & High Severity Findings
-{% if scan.critical_high_findings %}
-| ID | Severity | Category | Description | File Path |
-| --- | --- | --- | --- | --- |
-{% for f in scan.critical_high_findings -%}
-| {{ f.id }} | **{{ f.severity.upper() }}** | {{ f.category }} | {{ f.description }} | `{{ f.file_path or 'Global' }}` |
-{% endfor %}
-{% else %}
-✓ No critical or high severity findings detected in the scan.
 {% endif %}
 
----
+{% if "guard" in include %}
+## 3. Agent Governance Activity
 
-## 5. Recommended Remediation Plan
-{% if scan.findings %}
-{% for f in scan.findings -%}
-* **[{{ f.id }}] {{ f.title }}** ({{ f.severity.upper() }}):
-  * *Finding:* {{ f.description }}
-  * *Remediation:* {{ f.recommendation }}
-{% endfor %}
-{% else %}
-✓ No remediation actions required.
-{% endif %}
-
----
-
-## 6. AI Governance & Audit Trail
-
-### Active Policies
-* **Frozen Paths:** {{ governance.frozen_paths or 'None' }}
 * **Guardrails Status:** {{ governance.guard_status }}
+* **Careful Mode:** {{ governance.careful_mode }}
+* **Frozen Paths:** {{ governance.frozen_paths or 'None' }}
 
-### Recent Execution Logs (Audit Trail)
-{% if audit_trail %}
-| Mission ID | Date / Time | Orchestrator | Status | Cost (USD) |
+### Recent Observed Actions (Guard Logs)
+{% if guard_logs %}
+| Timestamp | Actor | Command | Exit Code | Duration (ms) |
 | --- | --- | --- | --- | --- |
-{% for run in audit_trail -%}
-| `{{ run.id }}` | {{ run.created }} | {{ run.orchestrator }} | `{{ run.status }}` | {% if run.cost_usd is not none %}${{ "%.4f"|format(run.cost_usd) }}{% else %}-$0.00{% endif %} |
+{% for log in guard_logs -%}
+| {{ log.timestamp }} | {{ log.actor_type }} | `{{ log.command }}` | {{ log.exit_code }} | {{ log.duration_ms }} |
 {% endfor %}
 {% else %}
-No recent execution history found.
+✓ No recent observed actions logged.
+{% endif %}
+
+---
+{% endif %}
+
+{% if "mcp" in include %}
+## 4. Tool/MCP Risk Posture
+
+* **Total Registered Tools:** {{ mcp.total }}
+* **Approved Tools:** {{ mcp.approved }}
+* **Unapproved Tools:** {{ mcp.unapproved }}
+
+### Registered Tools Risk Breakdown
+{% if mcp.tools %}
+| Name | Type | Risk Level | Approved | Owner |
+| --- | --- | --- | --- | --- |
+{% for t in mcp.tools -%}
+| {{ t.name }} | {{ t.type }} | **{{ t.risk_level.upper() }}** | {{ 'Yes' if t.approved else 'No' }} | {{ t.owner or 'N/A' }} |
+{% endfor %}
+{% else %}
+No registered tools found.
+{% endif %}
+
+---
+{% endif %}
+
+{% if "cost" in include %}
+## 5. AI Engineering Cost Summary
+
+* **Total Estimated Cost:** **${{ "%.4f"|format(cost.total_cost) }}**
+* **Total Input Tokens:** {{ "{:,}".format(cost.total_input_tokens) }}
+* **Total Output Tokens:** {{ "{:,}".format(cost.total_output_tokens) }}
+
+### Cost Breakdown by Day
+{% if cost.by_day %}
+| Day | Estimated Cost |
+| --- | --- |
+{% for day, val in cost.by_day.items()|sort -%}
+| {{ day }} | ${{ "%.4f"|format(val) }} |
+{% endfor %}
+{% else %}
+No cost data logged.
+{% endif %}
+
+---
+{% endif %}
+
+## 6. Policy Violations or Blocked Actions
+{% if "guard" in include and violations %}
+| Timestamp | Command | Exit Code | Notes |
+| --- | --- | --- | --- |
+{% for v in violations -%}
+| {{ v.timestamp }} | `{{ v.command }}` | {{ v.exit_code }} | Command failed or flagged as non-zero. |
+{% endfor %}
+{% else %}
+✓ No policy violations or blocked actions detected.
 {% endif %}
 
 ---
 
-## 7. Risk Acceptance Sign-off
-*This section must be completed if launching with a score of less than 85.*
+## 7. Recommended Next Actions
+{%- set remediation_needed = false %}
+{%- if "scan" in include and scan.findings %}{% set remediation_needed = true %}{% endif %}
+{%- if "mcp" in include and mcp.unapproved_high %}{% set remediation_needed = true %}{% endif %}
 
-- [ ] **Lead Engineer Approval:**
-  - Name: __________________________
-  - Date: __________________________
-- [ ] **Security Officer Approval:**
-  - Name: __________________________
-  - Date: __________________________
+{% if remediation_needed %}
+Remediation actions are recommended below:
+{% if "scan" in include %}
+{% for f in scan.findings -%}
+* **[Readiness] [{{ f.id }}] {{ f.title }}** ({{ f.severity.upper() }}): {{ f.recommendation }}
+{% endfor %}
+{% endif %}
+{% if "mcp" in include %}
+{% for t in mcp.unapproved_high -%}
+* **[Tool Governance] Approve High-Risk Tool**: Tool `{{ t.name }}` has **{{ t.risk_level.upper() }}** risk and needs review/approval.
+{% endfor %}
+{% endif %}
+{% else %}
+✓ All security and readiness checks are in a healthy state. No immediate next actions required.
+{% endif %}
+
+---
+
+## 8. Audit Appendix
+This appendix contains cryptographic metadata and environment info for verification.
+
+* **Git Last Commit:** `{{ metadata.commit_sha }}`
+* **Git Author:** {{ metadata.commit_author }}
+* **Timestamp (UTC):** {{ metadata.timestamp }}
 """
 
 # Premium HTML template with CSS styling
@@ -240,17 +299,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="container">
-        <h1>Niyam Evidence & Production Readiness Report</h1>
+        <h1>Niyam Evidence & Governance Report</h1>
         
         <div class="meta-list">
             <div class="meta-item"><span>Project Name:</span> {{ metadata.project_name }}</div>
             <div class="meta-item"><span>Git Branch:</span> {{ metadata.branch }}</div>
             <div class="meta-item"><span>Commit SHA:</span> {{ metadata.commit_sha }}</div>
             <div class="meta-item"><span>Commit Author:</span> {{ metadata.commit_author }}</div>
-            <div class="meta-item"><span>Scan Profile:</span> {{ scan.profile }}</div>
             <div class="meta-item"><span>Timestamp:</span> {{ metadata.timestamp }}</div>
         </div>
 
+        <h2>1. Executive Summary</h2>
+        <p>This report documents the security checks and compliance validation status for production release. Included sections:
+        {%- if "scan" in include %} Production Readiness;{% endif %}
+        {%- if "guard" in include %} Agent Governance;{% endif %}
+        {%- if "mcp" in include %} Tool/MCP Risk Posture;{% endif %}
+        {%- if "cost" in include %} Cost Tracking MVP;{% endif %}
+        </p>
+
+        {% if "scan" in include %}
+        <h2>2. Production Readiness</h2>
         <div class="score-card">
             <div>
                 <div style="font-size: 0.9rem; color: #64748b; font-weight: bold;">READINESS SCORE</div>
@@ -266,89 +334,159 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </span>
             </div>
         </div>
-
-        <h2>1. Executive Summary</h2>
-        <p>This report documents the security checks and compliance validation status for production release. The repository scan score of <strong>{{ scan.score }}</strong> denotes a <strong>{{ scan.decision }}</strong> launch state recommendation.</p>
-
-        <h2>2. Critical & High Findings</h2>
-        {% if scan.critical_high_findings %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Severity</th>
-                        <th>Category</th>
-                        <th>Description</th>
-                        <th>File Path</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for f in scan.critical_high_findings %}
-                        <tr>
-                            <td>{{ f.id }}</td>
-                            <td><span class="badge badge-nogo">{{ f.severity.upper() }}</span></td>
-                            <td>{{ f.category }}</td>
-                            <td>{{ f.description }}</td>
-                            <td><code>{{ f.file_path or 'Global' }}</code></td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p style="color: #16a34a; font-weight: bold;">✓ No critical or high severity findings were detected.</p>
         {% endif %}
 
-        <h2>3. Recommended Remediation Plan</h2>
-        {% if scan.findings %}
-            {% for f in scan.findings %}
-                <div class="remediation-item severity-{{ f.severity }}">
-                    <strong>[{{ f.id }}] {{ f.title }}</strong> ({{ f.severity.upper() }})<br>
-                    <p style="margin: 8px 0 4px 0;"><em>Finding:</em> {{ f.description }}</p>
-                    <p style="margin: 0; color: #2563eb;"><em>Recommendation:</em> {{ f.recommendation }}</p>
-                </div>
-            {% endfor %}
-        {% else %}
-            <p>✓ All checks passed successfully. No remediation actions required.</p>
-        {% endif %}
-
-        <h2>4. Audit & AI Governance Trail</h2>
-        <h3>Policies Config</h3>
+        {% if "guard" in include %}
+        <h2>3. Agent Governance Activity</h2>
         <ul>
             <li><strong>Guardrails Enabled:</strong> {{ governance.guard_status }}</li>
+            <li><strong>Careful Mode:</strong> {{ governance.careful_mode }}</li>
             <li><strong>Frozen Paths:</strong> {{ governance.frozen_paths or 'None' }}</li>
         </ul>
         
-        <h3>Recent Run History</h3>
-        {% if audit_trail %}
+        <h3>Recent Observed Actions</h3>
+        {% if guard_logs %}
             <table>
                 <thead>
                     <tr>
-                        <th>Mission ID</th>
                         <th>Timestamp</th>
-                        <th>Orchestrator</th>
-                        <th>Status</th>
-                        <th>Token Cost</th>
+                        <th>Actor</th>
+                        <th>Command</th>
+                        <th>Exit Code</th>
+                        <th>Duration (ms)</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for run in audit_trail %}
+                    {% for log in guard_logs %}
                         <tr>
-                            <td><code>{{ run.id }}</code></td>
-                            <td>{{ run.created }}</td>
-                            <td>{{ run.orchestrator }}</td>
-                            <td><code>{{ run.status }}</code></td>
-                            <td>{% if run.cost_usd is not none %}${{ "%.4f"|format(run.cost_usd) }}{% else %}-$0.00{% endif %}</td>
+                            <td>{{ log.timestamp }}</td>
+                            <td>{{ log.actor_type }}</td>
+                            <td><code>{{ log.command }}</code></td>
+                            <td>{{ log.exit_code }}</td>
+                            <td>{{ log.duration_ms }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
-            <p>No recent execution logs found.</p>
+            <p>✓ No recent observed actions logged.</p>
+        {% endif %}
+        {% endif %}
+
+        {% if "mcp" in include %}
+        <h2>4. Tool/MCP Risk Posture</h2>
+        <ul>
+            <li><strong>Total Registered Tools:</strong> {{ mcp.total }}</li>
+            <li><strong>Approved Tools:</strong> {{ mcp.approved }}</li>
+            <li><strong>Unapproved Tools:</strong> {{ mcp.unapproved }}</li>
+        </ul>
+        {% if mcp.tools %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Risk Level</th>
+                        <th>Approved</th>
+                        <th>Owner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in mcp.tools %}
+                        <tr>
+                            <td>{{ t.name }}</td>
+                            <td>{{ t.type }}</td>
+                            <td><strong>{{ t.risk_level }}</strong></td>
+                            <td>{{ 'Yes' if t.approved else 'No' }}</td>
+                            <td>{{ t.owner or 'N/A' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        {% endif %}
+
+        {% if "cost" in include %}
+        <h2>5. AI Engineering Cost Summary</h2>
+        <ul>
+            <li><strong>Total Estimated Cost:</strong> ${{ "%.4f"|format(cost.total_cost) }}</li>
+            <li><strong>Total Input Tokens:</strong> {{ "{:,}".format(cost.total_input_tokens) }}</li>
+            <li><strong>Total Output Tokens:</strong> {{ "{:,}".format(cost.total_output_tokens) }}</li>
+        </ul>
+        {% if cost.by_day %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Estimated Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day, val in cost.by_day.items()|sort %}
+                        <tr>
+                            <td>{{ day }}</td>
+                            <td>${{ "%.4f"|format(val) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        {% endif %}
+
+        <h2>6. Policy Violations or Blocked Actions</h2>
+        {% if "guard" in include and violations %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Command</th>
+                        <th>Exit Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in violations %}
+                        <tr>
+                            <td>{{ v.timestamp }}</td>
+                            <td><code>{{ v.command }}</code></td>
+                            <td>{{ v.exit_code }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #16a34a; font-weight: bold;">✓ No policy violations or blocked actions detected.</p>
+        {% endif %}
+
+        <h2>7. Recommended Next Actions</h2>
+        {% set remediation_needed = false %}
+        {% if "scan" in include and scan.findings %}{% set remediation_needed = true %}{% endif %}
+        {% if "mcp" in include and mcp.unapproved_high %}{% set remediation_needed = true %}{% endif %}
+
+        {% if remediation_needed %}
+            {% if "scan" in include %}
+                {% for f in scan.findings %}
+                    <div class="remediation-item severity-{{ f.severity }}">
+                        <strong>[Readiness] [{{ f.id }}] {{ f.title }}</strong> ({{ f.severity.upper() }})<br>
+                        <p style="margin: 8px 0 4px 0;">{{ f.description }}</p>
+                        <p style="margin: 0; color: #2563eb;">Recommendation: {{ f.recommendation }}</p>
+                    </div>
+                {% endfor %}
+            {% endif %}
+            {% if "mcp" in include %}
+                {% for t in mcp.unapproved_high %}
+                    <div class="remediation-item severity-high">
+                        <strong>[Tool Governance] Approve High-Risk Tool: {{ t.name }}</strong> ({{ t.risk_level.upper() }})<br>
+                        <p style="margin: 8px 0 4px 0;">Tool has high/critical risk and has not been approved.</p>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% else %}
+            <p style="color: #16a34a; font-weight: bold;">✓ All governance checks are healthy. No next actions required.</p>
         {% endif %}
 
         <div class="sign-off-box">
-            <h3>5. Risk Sign-off & Approvals</h3>
-            <p>Signing below acknowledges acceptance of the readiness score and launch risks.</p>
+            <h3>8. Audit Sign-off</h3>
+            <p>Git Commit SHA: <code>{{ metadata.commit_sha }}</code> | Author: {{ metadata.commit_author }} | UTC: {{ metadata.timestamp }}</p>
             <div class="sign-line">
                 <div>
                     Lead Engineer Approval:
@@ -365,70 +503,94 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+
+def redact_secrets_recursive(data: Any) -> Any:
+    """Recursively search and redact secrets in dictionaries, lists, and strings."""
+    if isinstance(data, str):
+        # Match pattern containing api_key, password, private_key, token, etc.
+        pattern = r"(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*[\"']?[a-zA-Z0-9_\-\.]{8,}[\"']?"
+        return re.sub(pattern, r"\1=REDACTED", data)
+    elif isinstance(data, dict):
+        return {k: redact_secrets_recursive(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [redact_secrets_recursive(x) for x in data]
+    return data
+
+
 def _get_git_metadata(repo_root: Path) -> dict[str, str]:
     """Retrieve current branch, commit hash, and author using git command-line tool."""
     metadata = {
         "branch": "unknown",
         "commit_sha": "unknown",
-        "commit_author": "unknown"
+        "commit_author": "unknown",
     }
-    
+
     try:
         # Branch
         res_branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=repo_root, capture_output=True, text=True, check=False
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if res_branch.returncode == 0:
             metadata["branch"] = res_branch.stdout.strip()
-            
+
         # Commit Hash
         res_sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=repo_root, capture_output=True, text=True, check=False
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if res_sha.returncode == 0:
             metadata["commit_sha"] = res_sha.stdout.strip()
-            
+
         # Commit Author
         res_author = subprocess.run(
             ["git", "log", "-1", "--format=%an"],
-            cwd=repo_root, capture_output=True, text=True, check=False
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if res_author.returncode == 0:
             metadata["commit_author"] = res_author.stdout.strip()
     except Exception:
         pass
-        
+
     return metadata
+
 
 def _get_audit_trail(repo_root: Path) -> list[dict[str, Any]]:
     """Scan the runs folder to retrieve audit trail history."""
     runs_dir = repo_root / ".niyam" / "runs"
     trail = []
-    
+
     if runs_dir.is_dir():
         import yaml
-        
+
         # Sort run subdirectories by creation time
         subdirs = sorted(
             [d for d in runs_dir.iterdir() if d.is_dir()],
             key=lambda d: d.stat().st_mtime,
-            reverse=True
+            reverse=True,
         )
-        
+
         for d in subdirs[:5]:  # limit to last 5 runs
             plan_file = d / "mission-plan.yaml"
             ledger_file = d / "token-ledger.json"
-            
+
             run_info = {
                 "id": d.name,
                 "created": "unknown",
                 "orchestrator": "unknown",
                 "status": "unknown",
-                "cost_usd": None
+                "cost_usd": None,
             }
-            
+
             if plan_file.exists():
                 try:
                     with open(plan_file, encoding="utf-8") as f:
@@ -439,29 +601,106 @@ def _get_audit_trail(repo_root: Path) -> list[dict[str, Any]]:
                     run_info["status"] = mission.get("status", "unknown")
                 except Exception:
                     pass
-                    
+
             if ledger_file.exists():
                 try:
                     with open(ledger_file, encoding="utf-8") as f:
                         ledger_data = json.load(f) or {}
                     events = ledger_data.get("events", [])
-                    run_info["cost_usd"] = sum(float(e.get("cost_usd", 0.0)) for e in events)
+                    run_info["cost_usd"] = sum(
+                        float(e.get("cost_usd", 0.0)) for e in events
+                    )
                 except Exception:
                     pass
-                    
+
             trail.append(run_info)
-            
+
     return trail
+
+
+def _get_guard_logs(repo_root: Path) -> list[dict[str, Any]]:
+    """Load latest guard observed commands logs."""
+    path = repo_root / ".niyam" / "logs" / "guard-actions.jsonl"
+    if not path.exists():
+        return []
+    logs = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        logs.append(json.loads(line))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return logs[-10:]
+
+
+def _get_violations(guard_logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Extract failed or problematic actions from guard logs."""
+    violations = []
+    for log in guard_logs:
+        if log.get("exit_code", 0) != 0:
+            violations.append(log)
+    return violations
+
+
+def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
+    """Retrieve MCP/Tool registry analytics."""
+    try:
+        from niyam.core.mcp import load_mcp_registry
+
+        registry = load_mcp_registry(repo_root)
+        tools_list = list(registry.tools.values())
+    except Exception:
+        tools_list = []
+
+    total = len(tools_list)
+    approved = sum(1 for t in tools_list if t.approved)
+    unapproved = total - approved
+    unapproved_high = [
+        t for t in tools_list if not t.approved and t.risk_level in ("high", "critical")
+    ]
+
+    return {
+        "total": total,
+        "approved": approved,
+        "unapproved": unapproved,
+        "tools": [t.model_dump() for t in tools_list],
+        "unapproved_high": [t.model_dump() for t in unapproved_high],
+    }
+
+
+def _get_cost_data(repo_root: Path) -> dict[str, Any]:
+    """Retrieve FinOps cost usage tracking details."""
+    try:
+        from niyam.core.cost import load_cost_events, generate_cost_metrics
+
+        events = load_cost_events(repo_root)
+        metrics = generate_cost_metrics(events)
+    except Exception:
+        metrics = {
+            "total_cost": 0.0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "by_day": {},
+        }
+    return metrics
+
 
 def run_generate_evidence(
     from_scan_json: str | None = None,
     fmt: str = "markdown",
-    output: str | None = None
+    output: str | None = None,
+    include: str = "scan,guard,mcp,cost",
 ) -> str:
     """Generate evidence report locally and return the formatted output string."""
     root = find_niyam_root()
     if root is None:
         root = Path.cwd()
+
+    include_list = [s.strip() for s in include.split(",")]
 
     # Load scan results
     if from_scan_json:
@@ -479,10 +718,19 @@ def run_generate_evidence(
 
     # 1. Compile project config metadata
     project_name = "Niyam Project"
+    guard_status = "Disabled"
+    careful_mode = "Disabled"
+    frozen_paths = ""
     try:
         config = load_niyam_config(root)
-        if config and config.project_name:
-            project_name = config.project_name
+        if config:
+            if config.project_name:
+                project_name = config.project_name
+            if config.guard:
+                guard_status = "Enabled" if config.guard.enabled else "Disabled"
+                careful_mode = "Enabled" if config.guard.careful else "Disabled"
+                if config.guard.frozen_paths:
+                    frozen_paths = ", ".join(config.guard.frozen_paths)
     except Exception:
         pass
 
@@ -492,36 +740,50 @@ def run_generate_evidence(
     # 2. Findings breakdown & critical/high counts
     findings = scan_results.get("findings", [])
     critical_high = [f for f in findings if f.get("severity") in ("critical", "high")]
-    
+
     breakdown = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
         sev = f.get("severity", "info").lower()
         if sev in breakdown:
             breakdown[sev] += 1
 
-    # 3. Governance config
-    guard_status = "Disabled"
-    frozen_paths = ""
-    try:
-        config = load_niyam_config(root)
-        if config and config.guard:
-            guard_status = "Enabled" if config.guard.enabled else "Disabled"
-            if config.guard.frozen_paths:
-                frozen_paths = ", ".join(config.guard.frozen_paths)
-    except Exception:
-        pass
+    # 3. Dynamic loaders for sections
+    guard_logs = _get_guard_logs(root) if "guard" in include_list else []
+    violations = _get_violations(guard_logs) if "guard" in include_list else []
+    mcp_data = (
+        _get_mcp_data(root)
+        if "mcp" in include_list
+        else {
+            "total": 0,
+            "approved": 0,
+            "unapproved": 0,
+            "tools": [],
+            "unapproved_high": [],
+        }
+    )
+    cost_data = (
+        _get_cost_data(root)
+        if "cost" in include_list
+        else {
+            "total_cost": 0.0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "by_day": {},
+        }
+    )
 
     # 4. Audit trail run logs
     audit_trail = _get_audit_trail(root)
 
     # Prepare Jinja2 context
     context = {
+        "include": include_list,
         "metadata": {
             "project_name": project_name,
             "branch": git_meta["branch"],
             "commit_sha": git_meta["commit_sha"],
             "commit_author": git_meta["commit_author"],
-            "timestamp": timestamp
+            "timestamp": timestamp,
         },
         "scan": {
             "profile": scan_results.get("profile", "unknown"),
@@ -530,16 +792,24 @@ def run_generate_evidence(
             "findings_count": len(findings),
             "findings": findings,
             "critical_high_findings": critical_high,
-            "breakdown": breakdown
+            "breakdown": breakdown,
         },
         "governance": {
             "guard_status": guard_status,
-            "frozen_paths": frozen_paths
+            "careful_mode": careful_mode,
+            "frozen_paths": frozen_paths,
         },
-        "audit_trail": audit_trail
+        "guard_logs": guard_logs,
+        "violations": violations,
+        "mcp": mcp_data,
+        "cost": cost_data,
+        "audit_trail": audit_trail,
     }
 
-    # 5. Render report
+    # 5. Redact secrets recursively across the context dictionary
+    context = redact_secrets_recursive(context)
+
+    # 6. Render report
     if fmt == "json":
         report_str = json.dumps(context, indent=2)
     elif fmt == "html":
@@ -549,7 +819,7 @@ def run_generate_evidence(
         template = Template(MARKDOWN_TEMPLATE)
         report_str = template.render(context)
 
-    # 6. Output to file if requested
+    # 7. Output to file if requested
     if output:
         output_path = Path(output).resolve()
         try:

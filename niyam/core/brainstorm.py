@@ -53,7 +53,7 @@ def get_multiline_input(console: Console, prompt_msg: str, default: str) -> str:
     except KeyboardInterrupt:
         console.print("\n[red]Aborted.[/]")
         raise SystemExit(1)
-    
+
     content = "\n".join(lines).strip()
     return content if content else default
 
@@ -76,9 +76,7 @@ def _generate_suggested_answers(
     if not shutil.which(runtime):
         return suggestions
 
-    numbered_questions = "\n".join(
-        f"{i}. {q}" for i, q in enumerate(questions, 1)
-    )
+    numbered_questions = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
     prompt = f"""You are the Niyam product architect. Based on the context below, generate a concise suggested answer for each clarifying question. Use the existing repository stack and developer notes to inform your suggestions.
 
 {repo_context_str}
@@ -139,7 +137,11 @@ def _extract_section(content: str, keywords: list[str]) -> str:
                 in_section = False
         elif in_section:
             # Format bullets nicely
-            if stripped.startswith("-") or stripped.startswith("*") or stripped.startswith("•"):
+            if (
+                stripped.startswith("-")
+                or stripped.startswith("*")
+                or stripped.startswith("•")
+            ):
                 target_lines.append(f"  [green]•[/] {stripped.lstrip('-*•').strip()}")
             elif stripped:
                 target_lines.append(f"    {stripped}")
@@ -149,8 +151,12 @@ def _extract_section(content: str, keywords: list[str]) -> str:
 def _build_preview(prd_content: str, roadmap_content: str) -> Panel:
     """Build a beautiful console preview panel of the generated PRD and Roadmap."""
     features = _extract_section(prd_content, ["feature", "scope", "mvp"])
-    tech_stack = _extract_section(prd_content, ["tech stack", "technology", "recommendation"])
-    phases = _extract_section(roadmap_content, ["phase 1", "phase 2", "phase 3", "milestone"])
+    tech_stack = _extract_section(
+        prd_content, ["tech stack", "technology", "recommendation"]
+    )
+    phases = _extract_section(
+        roadmap_content, ["phase 1", "phase 2", "phase 3", "milestone"]
+    )
 
     preview_parts = []
     if features:
@@ -189,7 +195,9 @@ def _generate_prd_and_roadmap(
     """Call runtime to generate PRD and Roadmap content, optionally applying refinements."""
     refinement_section = ""
     if refinement_notes:
-        refinement_section = f"\nUser Refinement Feedback/Adjustments:\n{refinement_notes}\n"
+        refinement_section = (
+            f"\nUser Refinement Feedback/Adjustments:\n{refinement_notes}\n"
+        )
 
     prompt_generation = f"""You are the Niyam product architect. Based on the product concept, existing repository context, developer notes, clarifying Q&A, and any user feedback below, generate a Product Requirements Document (PRD) and a Product Roadmap.
 
@@ -227,7 +235,9 @@ Please output the PRD contents first, then the divider "=== ROADMAP.md ===", and
             cmd.append("--skip-trust")
 
         try:
-            with console.status(f"[cyan]Generating PRD and Roadmap with {runtime}...[/]"):
+            with console.status(
+                f"[cyan]Generating PRD and Roadmap with {runtime}...[/]"
+            ):
                 res = subprocess.run(
                     cmd,
                     stdin=subprocess.DEVNULL,
@@ -237,16 +247,24 @@ Please output the PRD contents first, then the divider "=== ROADMAP.md ===", and
                 )
             if res.returncode == 0:
                 raw_gen = (res.stdout or "").strip()
-                parts = re.split(r"===\s*ROADMAP\.md\s*===", raw_gen, flags=re.IGNORECASE)
+                parts = re.split(
+                    r"===\s*ROADMAP\.md\s*===", raw_gen, flags=re.IGNORECASE
+                )
                 if len(parts) >= 2:
                     prd_content = clean_markdown(parts[0])
                     roadmap_content = clean_markdown(parts[1])
                     success = True
                 else:
-                    parts_roadmap = re.split(r"(#+\s*Roadmap|#+\s*Product\s*Roadmap)", raw_gen, flags=re.IGNORECASE)
+                    parts_roadmap = re.split(
+                        r"(#+\s*Roadmap|#+\s*Product\s*Roadmap)",
+                        raw_gen,
+                        flags=re.IGNORECASE,
+                    )
                     if len(parts_roadmap) >= 3:
                         prd_content = clean_markdown(parts_roadmap[0])
-                        roadmap_content = clean_markdown(parts_roadmap[1] + "\n" + parts_roadmap[2])
+                        roadmap_content = clean_markdown(
+                            parts_roadmap[1] + "\n" + parts_roadmap[2]
+                        )
                         success = True
         except Exception as e:
             console.print(f"[yellow]Failed to call runtime CLI for generation: {e}[/]")
@@ -279,22 +297,30 @@ def run_brainstorm(runtime: str | None, console: Console) -> None:
         if roadmap_path.exists():
             existing_files.append("ROADMAP.md")
         files_str = " and ".join(existing_files)
-        console.print(f"\n[yellow]⚠️ Warning: {files_str} already exist(s) in this directory.[/]")
+        console.print(
+            f"\n[yellow]⚠️ Warning: {files_str} already exist(s) in this directory.[/]"
+        )
         if not Confirm.ask("Do you want to overwrite them?", default=False):
-            console.print("[red]Aborted brainstorm to prevent overwriting existing files.[/]")
+            console.print(
+                "[red]Aborted brainstorm to prevent overwriting existing files.[/]"
+            )
             raise SystemExit(0)
 
     # 1. Confirm/Choose Runtime
     if not runtime:
         # Detect available runtimes in PATH
-        detected_runtimes = [rt for rt in ["claude", "gemini", "codex"] if shutil.which(rt)]
+        detected_runtimes = [
+            rt for rt in ["claude", "gemini", "codex"] if shutil.which(rt)
+        ]
         default_rt = detected_runtimes[0] if detected_runtimes else "claude"
 
         console.print("\n[cyan]1. Configure Brainstorming Runtime Engine[/]")
         if detected_runtimes:
             console.print(f"Detected runtimes in PATH: {', '.join(detected_runtimes)}")
         else:
-            console.print("[yellow]⚠️ No runtimes detected in PATH. Defaulting to 'claude'.[/]")
+            console.print(
+                "[yellow]⚠️ No runtimes detected in PATH. Defaulting to 'claude'.[/]"
+            )
 
         runtime = Prompt.ask(
             "Which runtime should we use for brainstorming?",
@@ -313,9 +339,13 @@ def run_brainstorm(runtime: str | None, console: Console) -> None:
     scan_result = _scan_repo(repo_root)
     detected_items = []
     if scan_result["languages"]:
-        detected_items.append(f"Languages: [bold]{', '.join(scan_result['languages'])}[/]")
+        detected_items.append(
+            f"Languages: [bold]{', '.join(scan_result['languages'])}[/]"
+        )
     if scan_result["frameworks"]:
-        detected_items.append(f"Frameworks: [bold]{', '.join(scan_result['frameworks'])}[/]")
+        detected_items.append(
+            f"Frameworks: [bold]{', '.join(scan_result['frameworks'])}[/]"
+        )
     if detected_items:
         console.print(f"[green]✓ Detected stack:[/] {', '.join(detected_items)}")
     else:
@@ -325,11 +355,17 @@ def run_brainstorm(runtime: str | None, console: Console) -> None:
     if scan_result.get("languages"):
         repo_context_lines.append(f"- Languages: {', '.join(scan_result['languages'])}")
     if scan_result.get("frameworks"):
-        repo_context_lines.append(f"- Frameworks: {', '.join(scan_result['frameworks'])}")
+        repo_context_lines.append(
+            f"- Frameworks: {', '.join(scan_result['frameworks'])}"
+        )
     if scan_result.get("package_managers"):
-        repo_context_lines.append(f"- Package Managers: {', '.join(scan_result['package_managers'])}")
+        repo_context_lines.append(
+            f"- Package Managers: {', '.join(scan_result['package_managers'])}"
+        )
     if scan_result.get("source_dirs"):
-        repo_context_lines.append(f"- Source Directories: {', '.join(scan_result['source_dirs'])}")
+        repo_context_lines.append(
+            f"- Source Directories: {', '.join(scan_result['source_dirs'])}"
+        )
     if scan_result.get("db_schema"):
         repo_context_lines.append("- Database Schema Info:")
         for db in scan_result["db_schema"]:
@@ -339,12 +375,18 @@ def run_brainstorm(runtime: str | None, console: Console) -> None:
         for route in scan_result["api_routes"]:
             repo_context_lines.append(f"  * {route}")
     if scan_result.get("env_vars"):
-        repo_context_lines.append(f"- Environment Variables: {', '.join(scan_result['env_vars'])}")
+        repo_context_lines.append(
+            f"- Environment Variables: {', '.join(scan_result['env_vars'])}"
+        )
 
     if repo_context_lines:
-        repo_context_str = "Existing Repository Context:\n" + "\n".join(repo_context_lines)
+        repo_context_str = "Existing Repository Context:\n" + "\n".join(
+            repo_context_lines
+        )
     else:
-        repo_context_str = "Existing Repository Context: Empty directory or no stack detected."
+        repo_context_str = (
+            "Existing Repository Context: Empty directory or no stack detected."
+        )
 
     # 2. Select Niche / Product Idea
     console.print("\n[cyan]2. Select Niche or Product Idea[/]")
@@ -387,11 +429,13 @@ def run_brainstorm(runtime: str | None, console: Console) -> None:
             f"\n[cyan]3. Describe your vision for [bold]{niche_str}[/][/]\n"
             "Provide any raw notes, desired features, or PRD ideas below.\n"
             "Type 'done' on a new line when finished, or press Enter immediately to use default.",
-            "A basic web application with scheduling and payment integrations."
+            "A basic web application with scheduling and payment integrations.",
         )
 
     # 4. Generate Brainstorming Questions via AI
-    console.print(f"\n[cyan]4. Deep analyzing product concept with {runtime} to generate clarifying questions...[/]")
+    console.print(
+        f"\n[cyan]4. Deep analyzing product concept with {runtime} to generate clarifying questions...[/]"
+    )
     prompt_questions = f"""You are the Niyam product architect. The developer wants to start a new project or build on top of an existing one.
 
 {repo_context_str}
@@ -435,7 +479,7 @@ Format your output as a numbered list of questions. Do not output any other text
         questions = [
             "What is the single most important feature or flow of the MVP?",
             "Who is the primary end user (e.g. business owner or client)?",
-            "What tech stack do you prefer (e.g. HTML/JS, React, Python FastAPI)?"
+            "What tech stack do you prefer (e.g. HTML/JS, React, Python FastAPI)?",
         ]
 
     # 5. Generate suggested answers and gather user input
@@ -477,12 +521,22 @@ Format your output as a numbered list of questions. Do not output any other text
 
     while iteration < max_iterations:
         if iteration > 0:
-            console.print(f"\n[cyan]Regenerating PRD and Roadmap (Attempt {iteration + 1}/{max_iterations})...[/]")
+            console.print(
+                f"\n[cyan]Regenerating PRD and Roadmap (Attempt {iteration + 1}/{max_iterations})...[/]"
+            )
         else:
-            console.print(f"\n[cyan]6. Generating PRD.md and ROADMAP.md using {runtime}...[/]")
-        
+            console.print(
+                f"\n[cyan]6. Generating PRD.md and ROADMAP.md using {runtime}...[/]"
+            )
+
         prd_content, roadmap_content, success = _generate_prd_and_roadmap(
-            runtime, repo_context_str, niche_str, raw_notes, q_and_a_str, refinement_notes, console
+            runtime,
+            repo_context_str,
+            niche_str,
+            raw_notes,
+            q_and_a_str,
+            refinement_notes,
+            console,
         )
 
         if not success:
@@ -494,26 +548,38 @@ Format your output as a numbered list of questions. Do not output any other text
         # Display preview to user
         console.print(_build_preview(prd_content, roadmap_content))
 
-        choice = Prompt.ask(
-            "\nWould you like to accept, refine, or skip?",
-            choices=["accept", "refine", "skip"],
-            default="accept",
-        ).strip().lower()
+        choice = (
+            Prompt.ask(
+                "\nWould you like to accept, refine, or skip?",
+                choices=["accept", "refine", "skip"],
+                default="accept",
+            )
+            .strip()
+            .lower()
+        )
 
         if choice == "accept":
             break
         elif choice == "skip":
-            console.print("[yellow]Skipping further edits. Writing current content to disk...[/]")
+            console.print(
+                "[yellow]Skipping further edits. Writing current content to disk...[/]"
+            )
             break
         elif choice == "refine":
             iteration += 1
             if iteration >= max_iterations:
-                console.print("[yellow]Maximum refinement attempts reached. Proceeding with current version.[/]")
+                console.print(
+                    "[yellow]Maximum refinement attempts reached. Proceeding with current version.[/]"
+                )
                 break
-            
-            refinement_notes = Prompt.ask("Enter refinement feedback / changes to apply").strip()
+
+            refinement_notes = Prompt.ask(
+                "Enter refinement feedback / changes to apply"
+            ).strip()
             if not refinement_notes:
-                refinement_notes = "Please refine and detailed the requirements based on feedback."
+                refinement_notes = (
+                    "Please refine and detailed the requirements based on feedback."
+                )
 
     if not success:
         console.print("[dim]Falling back to template PRD and Roadmap...[/]")
@@ -597,20 +663,20 @@ A starter template for {niche_str} to organize booking, payments, and client man
         panel_title = "[bold green]Success[/]"
         panel_border = "green"
         panel_text = (
-            f"[bold green]✓ Brainstorming & Bootstrap Completed Successfully![/]\n\n"
-            f"  [dim]•[/] Generated [bold]PRD.md[/] & [bold]ROADMAP.md[/]\n"
-            f"  [dim]•[/] Initialized Niyam workspace and planned task contracts.\n\n"
-            f"You can now run [bold cyan]niyam next[/] or [bold cyan]niyam status[/] to start building!"
+            "[bold green]✓ Brainstorming & Bootstrap Completed Successfully![/]\n\n"
+            "  [dim]•[/] Generated [bold]PRD.md[/] & [bold]ROADMAP.md[/]\n"
+            "  [dim]•[/] Initialized Niyam workspace and planned task contracts.\n\n"
+            "You can now run [bold cyan]niyam next[/] or [bold cyan]niyam status[/] to start building!"
         )
     else:
         panel_title = "[bold yellow]Completed with Warnings[/]"
         panel_border = "yellow"
         panel_text = (
-            f"[bold yellow]⚠️ Brainstorming Completed with Warnings[/]\n\n"
-            f"  [dim]•[/] Generated [bold]PRD.md[/] & [bold]ROADMAP.md[/]\n"
-            f"  [dim]•[/] Initialized Niyam workspace.\n"
-            f"  [red]• Failed to automatically generate implementation plans.[/]\n\n"
-            f"You can try generating plans manually using [bold cyan]niyam plan PRD.md[/]."
+            "[bold yellow]⚠️ Brainstorming Completed with Warnings[/]\n\n"
+            "  [dim]•[/] Generated [bold]PRD.md[/] & [bold]ROADMAP.md[/]\n"
+            "  [dim]•[/] Initialized Niyam workspace.\n"
+            "  [red]• Failed to automatically generate implementation plans.[/]\n\n"
+            "You can try generating plans manually using [bold cyan]niyam plan PRD.md[/]."
         )
 
     console.print(

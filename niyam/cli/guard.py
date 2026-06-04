@@ -63,3 +63,43 @@ def guard_freeze(
     from niyam.policies.guard import run_guard_freeze
 
     run_guard_freeze(path=path, console=console, dry_run=dry_run)
+
+
+@guard_app.command(
+    "run",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def guard_run(
+    ctx: typer.Context,
+    capture_output: Annotated[
+        bool,
+        typer.Option(
+            "--capture-output", help="Capture command stdout/stderr output in logs."
+        ),
+    ] = False,
+) -> None:
+    """Run a shell command under Niyam guard observation."""
+    from niyam.policies.guard import run_guard_run
+
+    run_guard_run(cmd_args=ctx.args, capture_output=capture_output, console=console)
+
+
+@guard_app.command("status")
+def guard_status() -> None:
+    """Display the current Niyam guard configuration and observation metrics."""
+    from niyam.policies.guard import run_guard_status_metrics
+
+    run_guard_status_metrics(console=console)
+
+
+@guard_app.command("logs")
+def guard_logs(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-l", help="Number of logs to display."),
+    ] = 10,
+) -> None:
+    """Show recent observed actions logged by Niyam guard."""
+    from niyam.policies.guard import run_guard_show_logs
+
+    run_guard_show_logs(limit=limit, console=console)

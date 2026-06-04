@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-import yaml
 from rich.console import Console
 
 from niyam.core.config import get_niyam_dir, load_niyam_config, save_niyam_config
@@ -33,7 +30,7 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
     # Set up task directories and plan
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     plan_data = {
         "mission": {
             "id": "test-mission",
@@ -44,7 +41,7 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
             "parallel": 1,
             "worktree": False,
         },
-        "tasks": []
+        "tasks": [],
     }
     save_plan(run_dir, plan_data)
 
@@ -68,13 +65,19 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
             if "claude" in cmd_name:
                 # Mock quota exceeded error in parallel mode redirect log
                 log_path = run_dir / "task-T1-output.log"
-                log_path.write_text("Fatal: quota exceeded on current plan.", encoding="utf-8")
+                log_path.write_text(
+                    "Fatal: quota exceeded on current plan.", encoding="utf-8"
+                )
                 raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
             else:
                 # Mock success for gemini
                 log_path = run_dir / "task-T1-output.log"
-                log_path.write_text("Code generation completed successfully.", encoding="utf-8")
-                return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
+                log_path.write_text(
+                    "Code generation completed successfully.", encoding="utf-8"
+                )
+                return subprocess.CompletedProcess(
+                    cmd, returncode=0, stdout="", stderr=""
+                )
         return original_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", mock_run)
@@ -115,7 +118,7 @@ def test_executor_fallback_no_runtimes(niyam_repo: Path, monkeypatch):
 
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     plan_data = {
         "mission": {
             "id": "test-mission",
@@ -126,7 +129,7 @@ def test_executor_fallback_no_runtimes(niyam_repo: Path, monkeypatch):
             "parallel": 1,
             "worktree": False,
         },
-        "tasks": []
+        "tasks": [],
     }
     save_plan(run_dir, plan_data)
 
@@ -187,7 +190,7 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
 
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     plan_data = {
         "mission": {
             "id": "test-mission",
@@ -198,7 +201,7 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
             "parallel": 1,
             "worktree": False,
         },
-        "tasks": []
+        "tasks": [],
     }
     save_plan(run_dir, plan_data)
 
@@ -221,7 +224,9 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
             subprocess_runs.append(cmd)
             log_path = run_dir / "task-T1-output.log"
             # Standard code syntax error or linter failure, no quota keywords
-            log_path.write_text("SyntaxError: invalid syntax in models.py line 45", encoding="utf-8")
+            log_path.write_text(
+                "SyntaxError: invalid syntax in models.py line 45", encoding="utf-8"
+            )
             raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
         return original_run(cmd, *args, **kwargs)
 

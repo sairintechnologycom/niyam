@@ -1,0 +1,25 @@
+# Niyam workspace configuration example
+version: "0.4.0"
+project_name: "my-sample-app"
+profile: "fullstack"
+runtimes:
+  - "claude"
+  - "gemini"
+packs: []
+guard:
+  enabled: true
+  careful: true
+  frozen_paths:
+    - "src/components"
+    - "src/utils"
+  remote_policy_url: null
+governance:
+  scan:
+    profile: "team"
+    fail_on:
+      - "critical"
+      - "high"
+    include:
+      - "secrets"
+      - "dependencies"
+      - "tests"

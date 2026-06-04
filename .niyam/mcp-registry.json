@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "tools": {
+    "web-search": {
+      "name": "web-search",
+      "type": "api",
+      "command_or_url": null,
+      "owner": null,
+      "risk_level": "low",
+      "approved": true,
+      "capabilities": [],
+      "data_access": null,
+      "notes": null
+    }
+  }
+}

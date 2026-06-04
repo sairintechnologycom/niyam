@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "tools": {
+    "filesystem": {
+      "name": "filesystem",
+      "type": "mcp_server",
+      "command_or_url": "npx -y @modelcontextprotocol/server-filesystem /path/to/project",
+      "owner": "Niyam Team",
+      "risk_level": "high",
+      "approved": true,
+      "capabilities": [
+        "read_file",
+        "write_file",
+        "list_dir"
+      ],
+      "data_access": "Local project files",
+      "notes": "Allows the agent to read and edit codebase files."
+    },
+    "shell-executor": {
+      "name": "shell-executor",
+      "type": "cli",
+      "command_or_url": "/bin/bash",
+      "owner": "System",
+      "risk_level": "critical",
+      "approved": false,
+      "capabilities": [
+        "execute_command"
+      ],
+      "data_access": "Arbitrary terminal command execution",
+      "notes": "Blocked by default. Requires manual operator approval."
+    },
+    "slack-api": {
+      "name": "slack-api",
+      "type": "api",
+      "command_or_url": "https://api.slack.com/methods",
+      "owner": "DevOps Team",
+      "risk_level": "medium",
+      "approved": true,
+      "capabilities": [
+        "post_message",
+        "read_history"
+      ],
+      "data_access": "Workspace slack channels",
+      "notes": "Used for publishing release updates."
+    },
+    "web-search": {
+      "name": "web-search",
+      "type": "api",
+      "command_or_url": "https://api.tavily.com",
+      "owner": "Search Specialist",
+      "risk_level": "low",
+      "approved": true,
+      "capabilities": [
+        "search"
+      ],
+      "data_access": "Public web endpoints",
+      "notes": "Used for looking up public library documentation."
+    }
+  }
+}

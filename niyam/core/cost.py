@@ -1,0 +1,228 @@
+"""Core module for Niyam cost tracking and token auditing."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Optional
+from pydantic import BaseModel
+
+from niyam.core.config import find_niyam_root
+
+
+class CostEvent(BaseModel):
+    """Pydantic model representing logged token usage and cost metadata."""
+
+    timestamp: str
+    session_id: str
+    task_id: str
+    tool_name: str
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost: float = 0.0
+    repo: str
+    branch: str
+    status: str
+    notes: Optional[str] = None
+
+
+def get_pricing_path(root: Path | None = None) -> Path:
+    """Get path to local configurable model pricing JSON file."""
+    if root is None:
+        root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+    return root / ".niyam" / "pricing.json"
+
+
+DEFAULT_PRICING = {
+    "claude-sonnet": {"input_cost_per_million": 3.00, "output_cost_per_million": 15.00},
+    "claude-3-5-sonnet": {
+        "input_cost_per_million": 3.00,
+        "output_cost_per_million": 15.00,
+    },
+    "claude-opus": {"input_cost_per_million": 15.00, "output_cost_per_million": 75.00},
+    "claude-haiku": {"input_cost_per_million": 0.25, "output_cost_per_million": 1.25},
+    "gpt-4o": {"input_cost_per_million": 5.00, "output_cost_per_million": 15.00},
+    "gemini-pro": {"input_cost_per_million": 3.50, "output_cost_per_million": 10.50},
+    "gemini-flash": {"input_cost_per_million": 0.075, "output_cost_per_million": 0.30},
+    "unknown": {"input_cost_per_million": 0.0, "output_cost_per_million": 0.0},
+}
+
+
+def load_pricing(root: Path | None = None) -> dict:
+    """Load configurable model pricing rates, creating default configuration if missing."""
+    path = get_pricing_path(root)
+    if not path.exists():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(DEFAULT_PRICING, f, indent=2)
+        except Exception:
+            pass
+        return DEFAULT_PRICING
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return DEFAULT_PRICING
+
+
+def calculate_cost(
+    model: str, input_tokens: int, output_tokens: int, pricing: dict
+) -> float:
+    """Calculate estimated cost (USD) using the model pricing table rates."""
+    model_key = model.lower().strip()
+    rates = pricing.get(model_key)
+    if not rates:
+        # Loose match search
+        for k, v in pricing.items():
+            if k in model_key or model_key in k:
+                rates = v
+                break
+    if not rates:
+        rates = pricing.get(
+            "unknown", {"input_cost_per_million": 0.0, "output_cost_per_million": 0.0}
+        )
+
+    input_rate = rates.get("input_cost_per_million", 0.0)
+    output_rate = rates.get("output_cost_per_million", 0.0)
+
+    cost = (input_tokens * input_rate / 1_000_000.0) + (
+        output_tokens * output_rate / 1_000_000.0
+    )
+    return round(cost, 6)
+
+
+def get_repo_name(root: Path) -> str:
+    """Retrieve git repository name or fall back to directory name."""
+    import subprocess
+
+    try:
+        res = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            url = res.stdout.strip()
+            name = url.split("/")[-1]
+            if name.endswith(".git"):
+                name = name[:-4]
+            return name
+    except Exception:
+        pass
+    return root.name
+
+
+def get_branch_name(root: Path) -> str:
+    """Retrieve current Git branch name or fall back to main."""
+    import subprocess
+
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return "main"
+
+
+def log_cost_event(event: CostEvent, root: Path | None = None) -> None:
+    """Log a cost event locally to JSONL file."""
+    if root is None:
+        root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+    log_dir = root / ".niyam" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    path = log_dir / "cost-events.jsonl"
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(event.model_dump_json() + "\n")
+
+
+def load_cost_events(root: Path | None = None) -> list[CostEvent]:
+    """Load all logged cost events from local JSONL file."""
+    if root is None:
+        root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+    path = root / ".niyam" / "logs" / "cost-events.jsonl"
+    if not path.exists():
+        return []
+    events = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                try:
+                    events.append(CostEvent.model_validate_json(line))
+                except Exception:
+                    pass
+    return events
+
+
+def generate_cost_metrics(events: list[CostEvent]) -> dict:
+    """Aggregate logged cost events into day, repo, task, and session summaries."""
+    metrics = {
+        "total_cost": 0.0,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "by_day": {},
+        "by_repo": {},
+        "by_task": {},
+        "by_session": {},
+        "failed_repeated_cost": 0.0,
+        "failed_repeated_count": 0,
+        "success_cost": 0.0,
+        "success_count": 0,
+    }
+
+    for event in events:
+        cost = event.estimated_cost
+        metrics["total_cost"] += cost
+        metrics["total_input_tokens"] += event.input_tokens
+        metrics["total_output_tokens"] += event.output_tokens
+
+        # Day grouping (YYYY-MM-DD)
+        day = event.timestamp.split("T")[0]
+        if day not in metrics["by_day"]:
+            metrics["by_day"][day] = 0.0
+        metrics["by_day"][day] += cost
+
+        # Repo grouping
+        repo = event.repo
+        if repo not in metrics["by_repo"]:
+            metrics["by_repo"][repo] = 0.0
+        metrics["by_repo"][repo] += cost
+
+        # Task grouping
+        task = event.task_id
+        if task not in metrics["by_task"]:
+            metrics["by_task"][task] = 0.0
+        metrics["by_task"][task] += cost
+
+        # Session grouping
+        session = event.session_id
+        if session not in metrics["by_session"]:
+            metrics["by_session"][session] = 0.0
+        metrics["by_session"][session] += cost
+
+        # Status checks (failed/repeated)
+        status = event.status.lower()
+        if "fail" in status or "repeat" in status:
+            metrics["failed_repeated_cost"] += cost
+            metrics["failed_repeated_count"] += 1
+        else:
+            metrics["success_cost"] += cost
+            metrics["success_count"] += 1
+
+    return metrics

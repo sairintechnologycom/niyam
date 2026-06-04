@@ -393,3 +393,230 @@ def load_commands_policy(root: Path) -> dict:
         except Exception:
             pass
     return {}
+
+
+def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console) -> None:
+    import sys
+    import os
+    import re
+    import time
+    import json
+    from datetime import datetime, timezone
+    import subprocess
+
+    if not cmd_args:
+        console.print(
+            "[bold red]Error:[/] No command specified. Usage: niyam guard run -- <command>"
+        )
+        raise SystemExit(1)
+
+    root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+
+    logs_dir = root / ".niyam" / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = logs_dir / "guard-actions.jsonl"
+
+    # Session ID calculation
+    session_id = os.environ.get("NIYAM_SESSION_ID")
+    if not session_id:
+        try:
+            res = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                session_id = res.stdout.strip()
+        except Exception:
+            pass
+    if not session_id:
+        session_id = "default-session"
+
+    actor_type = os.environ.get("NIYAM_ACTOR_TYPE", "agent")
+
+    start_time = time.perf_counter()
+    exit_code = 0
+    output_data = None
+
+    try:
+        if capture_output:
+            res = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
+            exit_code = res.returncode
+            if res.stdout:
+                sys.stdout.write(res.stdout)
+                sys.stdout.flush()
+            if res.stderr:
+                sys.stderr.write(res.stderr)
+                sys.stderr.flush()
+            output_data = f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+        else:
+            res = subprocess.run(cmd_args, check=False)
+            exit_code = res.returncode
+    except FileNotFoundError:
+        console.print(
+            f"[bold red]Error:[/] Command executable '{cmd_args[0]}' not found."
+        )
+        exit_code = 127
+        output_data = f"Command '{cmd_args[0]}' not found."
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] Execution failed: {e}")
+        exit_code = 1
+        output_data = str(e)
+
+    duration_ms = int((time.perf_counter() - start_time) * 1000)
+
+    # Redact secret assignments in command
+    command_str = " ".join(cmd_args)
+    redacted_command = re.sub(
+        r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
+        r"\1=REDACTED",
+        command_str,
+    )
+
+    # Store Log
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "session_id": session_id,
+        "actor_type": actor_type,
+        "tool": "shell",
+        "action": "command_execute",
+        "command": redacted_command,
+        "cwd": str(Path.cwd().resolve()),
+        "exit_code": exit_code,
+        "duration_ms": duration_ms,
+        "mode": "observe",
+    }
+    if capture_output and output_data is not None:
+        # Avoid storing secrets from captured output via standard redact
+        redacted_output = re.sub(
+            r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
+            r"\1=REDACTED",
+            output_data,
+        )
+        log_entry["output"] = redacted_output
+
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as e:
+        console.print(f"[dim yellow]Warning: Failed to write guard log: {e}[/]")
+
+    raise SystemExit(exit_code)
+
+
+def run_guard_status_metrics(console: Console) -> None:
+    from niyam.core.config import find_niyam_root, load_niyam_config
+    import json
+
+    root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+
+    config = None
+    try:
+        config = load_niyam_config(root)
+    except Exception:
+        pass
+
+    enabled = config.guard.enabled if config else False
+    careful = config.guard.careful if config else False
+    frozen = config.guard.frozen_paths if config else []
+
+    log_file = root / ".niyam" / "logs" / "guard-actions.jsonl"
+    total_logs = 0
+    success_logs = 0
+    failed_logs = 0
+
+    if log_file.exists():
+        try:
+            with open(log_file, encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            total_logs += 1
+                            if data.get("exit_code") == 0:
+                                success_logs += 1
+                            else:
+                                failed_logs += 1
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    from rich.panel import Panel
+
+    status_content = (
+        f"Guard Mode: {'[bold green]Enabled[/]' if enabled else '[yellow]Disabled[/]'}\n"
+        f"Careful Mode: {'[bold green]Enabled[/]' if careful else '[yellow]Disabled[/]'}\n"
+        f"Frozen Paths: {', '.join(frozen) if frozen else 'None'}\n\n"
+        f"[bold]Observation Metrics (Observe Mode):[/]\n"
+        f"  Total Actions Logged: [bold cyan]{total_logs}[/]\n"
+        f"  Successful Actions (Exit Code 0): [bold green]{success_logs}[/]\n"
+        f"  Failed Actions (Exit Code != 0): [bold red]{failed_logs}[/]"
+    )
+    console.print(
+        Panel(
+            status_content,
+            title="[bold]Niyam Guard & Observation Status[/]",
+            border_style="cyan" if enabled else "yellow",
+        )
+    )
+
+
+def run_guard_show_logs(limit: int, console: Console) -> None:
+    from niyam.core.config import find_niyam_root
+    from rich.table import Table
+    import json
+
+    root = find_niyam_root()
+    if root is None:
+        root = Path.cwd()
+
+    log_file = root / ".niyam" / "logs" / "guard-actions.jsonl"
+    if not log_file.exists():
+        console.print("[yellow]No guard logs found.[/]")
+        return
+
+    entries = []
+    try:
+        with open(log_file, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        pass
+    except Exception as e:
+        console.print(f"[bold red]Error reading logs:[/] {e}")
+        return
+
+    # Take the last limit elements
+    show_entries = entries[-limit:]
+
+    table = Table(title=f"Recent Observed Actions (Showing last {len(show_entries)})")
+    table.add_column("Timestamp", style="dim")
+    table.add_column("Actor", style="magenta")
+    table.add_column("Command", style="cyan")
+    table.add_column("Duration (ms)", justify="right")
+    table.add_column("Exit Code", justify="center")
+
+    for entry in show_entries:
+        ts = entry.get("timestamp", "")
+        if len(ts) > 19:
+            ts = ts[:19].replace("T", " ")
+        actor = entry.get("actor_type", "unknown")
+        cmd = entry.get("command", "")
+        if len(cmd) > 50:
+            cmd = cmd[:47] + "..."
+        dur = str(entry.get("duration_ms", 0))
+        code = str(entry.get("exit_code", 0))
+        code_style = "[bold green]0[/]" if code == "0" else f"[bold red]{code}[/]"
+
+        table.add_row(ts, actor, cmd, dur, code_style)
+
+    console.print(table)
