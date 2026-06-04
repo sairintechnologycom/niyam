@@ -38,6 +38,20 @@ class GuardState(BaseModel):
 # ── niyam.yaml ─────────────────────────────────────────────────────────
 
 
+class ScanConfig(BaseModel):
+    """Configuration for local repository scanning."""
+
+    profile: str = "startup"
+    fail_on: list[str] = Field(default_factory=list)
+    include: list[str] = Field(default_factory=list)
+
+
+class GovernanceConfig(BaseModel):
+    """Governance and production-readiness configuration."""
+
+    scan: ScanConfig = Field(default_factory=ScanConfig)
+
+
 class NiyamConfig(BaseModel):
     """Top-level Niyam workspace configuration."""
 
@@ -47,6 +61,8 @@ class NiyamConfig(BaseModel):
     runtimes: list[str] = Field(default_factory=list)
     packs: list[str] = Field(default_factory=list)
     guard: GuardState = Field(default_factory=GuardState)
+    governance: Optional[GovernanceConfig] = None
+
 
 
 # ── project.yaml ───────────────────────────────────────────────────────

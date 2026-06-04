@@ -156,3 +156,5 @@ from niyam.cli import mission  # noqa: F401
 from niyam.cli import review  # noqa: F401
 from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
+from niyam.cli import scan  # noqa: F401
+

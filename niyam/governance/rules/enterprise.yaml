@@ -1,0 +1,161 @@
+rules:
+  - id: SEC001
+    title: Unprotected Environment Configuration File
+    category: secrets
+    severity: critical
+    description: Environment files can contain database credentials and secrets and should not be committed.
+    recommendation: Remove credentials from the repo and gitignore env files.
+    match:
+      type: filename_pattern
+      patterns:
+        - ".env"
+        - ".env.local"
+        - ".env.production"
+        - ".env.development"
+
+  - id: SEC002
+    title: Hardcoded Secrets Detected
+    category: secrets
+    severity: critical
+    description: Found a pattern matching standard secrets (like AWS keys, tokens, generic assignments).
+    recommendation: Move secret keys to environment variables or secret vaults.
+    match:
+      type: content_regex
+      patterns:
+        - '(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'
+        - 'xox[baprs]-[0-9]{12}-[0-9]{12}-[a-zA-Z0-9]{24}'
+        - 'gh[pous]_[a-zA-Z0-9]{36,255}'
+        - 'sk-proj-[a-zA-Z0-9]{20,}'
+        - '-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----'
+        - '[a-zA-Z0-9]+://[^:]+:[^@\s]+@[a-zA-Z0-9.-]+'
+
+  - id: DEP001
+    title: Missing Dependency Lockfile
+    category: dependencies
+    severity: high
+    description: Found package manifest but no corresponding lockfile (e.g. package-lock.json, uv.lock).
+    recommendation: Generate and commit the dependency lockfile to ensure reproducible builds.
+    match:
+      type: file_missing
+      patterns:
+        - "package-lock.json"
+        - "yarn.lock"
+        - "pnpm-lock.yaml"
+        - "bun.lockb"
+        - "uv.lock"
+        - "poetry.lock"
+        - "Pipfile.lock"
+        - "requirements.lock"
+        - "Cargo.lock"
+        - "go.sum"
+
+  - id: ENV002
+    title: Missing .gitignore File
+    category: env_config
+    severity: critical
+    description: No .gitignore file was found in the repository root.
+    recommendation: Create a .gitignore to prevent local secrets and build artifacts from being committed.
+    match:
+      type: file_missing
+      patterns:
+        - ".gitignore"
+
+  - id: HLT001
+    title: Missing Health Endpoint
+    category: health
+    severity: medium
+    description: No health check route (e.g. /health, /healthz, /ping) was found in the application source.
+    recommendation: Implement a simple health route returning 200 OK.
+    match:
+      type: content_regex
+      patterns:
+        - "/health"
+        - "/healthz"
+        - "/ping"
+      files:
+        - "*.py"
+        - "*.js"
+        - "*.ts"
+        - "*.go"
+        - "*.java"
+
+  - id: DOC001
+    title: Missing README File
+    category: docs
+    severity: medium
+    description: No README file was found in the workspace root.
+    recommendation: Add a README.md explaining installation and operational commands.
+    match:
+      type: file_missing
+      patterns:
+        - "README*"
+
+  - id: TST001
+    title: Missing Test Suite
+    category: tests
+    severity: high
+    description: No test directories or test files were detected in the project.
+    recommendation: Create a tests/ directory and implement validation tests.
+    match:
+      type: file_missing
+      patterns:
+        - "test_*.py"
+        - "*_test.py"
+        - "*.test.js"
+        - "*.test.ts"
+        - "*.spec.js"
+        - "*.spec.ts"
+        - "*Test.java"
+        - "*_test.go"
+
+  - id: CICD001
+    title: Missing CI/CD Workflow
+    category: cicd
+    severity: medium
+    description: No CI/CD configuration (GitHub Actions, GitLab CI, etc.) was detected.
+    recommendation: Configure a CI/CD workflow to run testing and validation checks on PR.
+    match:
+      type: file_missing
+      patterns:
+        - ".github/workflows/*"
+        - ".gitlab-ci.yml"
+        - "azure-pipelines.yml"
+        - ".circleci/config.yml"
+        - "Jenkinsfile"
+
+  - id: AI001
+    title: Commented-out Assertions Detected
+    category: ai_risk
+    severity: high
+    description: Detected commented-out test assertions, which might hide failing test cases.
+    recommendation: Uncomment the assertions or remove them if obsolete.
+    match:
+      type: content_regex
+      patterns:
+        - '^\s*(#|//)\s*(assert|pytest|expect|self\.assert)\b'
+      files:
+        - "*.py"
+        - "*.js"
+        - "*.ts"
+        - "*.go"
+        - "*.java"
+
+  - id: AI002
+    title: AI Stub or Placeholder Found
+    category: ai_risk
+    severity: high
+    description: Found temporary stub or placeholder like pass # TODO or NotImplementedError.
+    recommendation: Complete the implementation or raise a domainspecific exception.
+    match:
+      type: content_regex
+      patterns:
+        - 'pass\s*#\s*TODO'
+        - 'raise\s+NotImplementedError\b'
+        - '//\s*placeholder\b'
+        - 'TODO:\s*implement'
+      files:
+        - "*.py"
+        - "*.js"
+        - "*.ts"
+        - "*.go"
+        - "*.java"
