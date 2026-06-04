@@ -946,6 +946,84 @@ def get_mock_change_path(allowed_files: list[str], task_id: str) -> str:
 # ── Task Execution Thread Runner ───────────────────────────────────────
 
 
+def check_overlap(files1: list[str], files2: list[str]) -> bool:
+    """Check if two sets of allowed files/globs overlap.
+
+    If either set contains '*' or 'all', it overlaps with everything.
+    Otherwise, we check if any glob pattern in files1 matches any pattern in files2 or vice versa.
+    """
+    if not files1 or not files2:
+        return False
+
+    f1 = [f.strip() for f in files1]
+    f2 = [f.strip() for f in files2]
+
+    if "*" in f1 or "all" in f1 or "*" in f2 or "all" in f2:
+        return True
+
+    for p1 in f1:
+        for p2 in f2:
+            if p1 == p2:
+                return True
+            if fnmatch.fnmatch(p1, p2) or fnmatch.fnmatch(p2, p1):
+                return True
+    return False
+
+
+def apply_path_freeze(frozen_paths: list[str], repo_root: Path) -> dict[Path, int]:
+    """Change permissions of frozen files/directories to read-only.
+
+    Returns a dict mapping Path objects to their original permission mode.
+    """
+    import stat
+    original_modes = {}
+
+    for path_str in frozen_paths:
+        try:
+            # Resolve the path relative to repo_root
+            path = (repo_root / path_str).resolve()
+            if not path.exists():
+                continue
+
+            # Helper to make a single file or directory read-only
+            def make_read_only(p: Path):
+                if p in original_modes:
+                    return
+                try:
+                    mode = p.stat().st_mode
+                    original_modes[p] = mode
+                    # Remove write flags for user, group, and others
+                    new_mode = mode & ~stat.S_IWRITE & ~stat.S_IWGRP & ~stat.S_IWOTH
+                    p.chmod(new_mode)
+                except Exception:
+                    pass
+
+            if path.is_dir():
+                # For directories, make the dir itself and all contents read-only
+                make_read_only(path)
+                for item in path.rglob("*"):
+                    make_read_only(item)
+            else:
+                make_read_only(path)
+        except Exception:
+            pass
+
+    return original_modes
+
+
+def restore_path_freeze(original_modes: dict[Path, int]) -> None:
+    """Restore original permissions for paths."""
+    for path, mode in original_modes.items():
+        try:
+            if path.exists():
+                path.chmod(mode)
+        except Exception:
+            pass
+
+
+# ── Task Execution Thread Runner ───────────────────────────────────────
+
+
 def run_hooks(stage: str, context: dict, niyam_dir: Path, console: Console) -> None:
     """Run lifecycle hooks for a given stage."""
     hooks_file = niyam_dir / "hooks.yaml"
@@ -1001,12 +1079,19 @@ def run_hooks(stage: str, context: dict, niyam_dir: Path, console: Console) -> N
             console.print(f"[dim]Executing hook: {cmd}[/]")
 
         try:
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            from niyam.core.security import CommandSecurityError, safe_run_command
+            repo_root = niyam_dir.parent
+            res = safe_run_command(cmd, cwd=repo_root, capture_output=True, text=True)
             if res.returncode != 0:
                 with _print_lock:
                     console.print(
                         f"[yellow]Warning: hook execution returned exit code {res.returncode}[/]\n{res.stderr or res.stdout}"
                     )
+        except CommandSecurityError as e:
+            with _print_lock:
+                console.print(
+                    f"[bold red]🛑 Hook command blocked by security policy:[/] {e}"
+                )
         except Exception as e:
             with _print_lock:
                 console.print(f"[yellow]Warning: hook execution failed: {e}[/]")
@@ -1152,194 +1237,208 @@ Do not perform destructive operations.
 
             dummy_file.write_text(content, encoding="utf-8")
     else:
-        plan_data = load_plan(run_dir)
-        mission_meta = plan_data.get("mission", {})
-        orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
-        parallel_limit = mission_meta.get("parallel", 1)
-
-        configured_runtimes = []
+        original_modes = {}
+        frozen_paths = []
         try:
             config = load_niyam_config(repo_root)
-            configured_runtimes = [r.lower() for r in config.runtimes]
+            frozen_paths = config.guard.frozen_paths
         except Exception:
             pass
+        if frozen_paths:
+            original_modes = apply_path_freeze(frozen_paths, task_cwd)
 
-        orchestrators_to_try = [orchestrator.lower()]
-        for r in configured_runtimes:
-            if r not in orchestrators_to_try:
-                orchestrators_to_try.append(r)
+        try:
+            plan_data = load_plan(run_dir)
+            mission_meta = plan_data.get("mission", {})
+            orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
+            parallel_limit = mission_meta.get("parallel", 1)
 
-        success = False
-        tried_runtimes = []
+            configured_runtimes = []
+            try:
+                config = load_niyam_config(repo_root)
+                configured_runtimes = [r.lower() for r in config.runtimes]
+            except Exception:
+                pass
 
-        for current_orchestrator in orchestrators_to_try:
-            tried_runtimes.append(current_orchestrator)
+            orchestrators_to_try = [orchestrator.lower()]
+            for r in configured_runtimes:
+                if r not in orchestrators_to_try:
+                    orchestrators_to_try.append(r)
 
-            if not shutil.which(current_orchestrator):
-                with _print_lock:
-                    console.print(
-                        f"[{task_id}] [yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
-                    )
-                if len(tried_runtimes) < len(orchestrators_to_try):
+            success = False
+            tried_runtimes = []
+
+            for current_orchestrator in orchestrators_to_try:
+                tried_runtimes.append(current_orchestrator)
+
+                if not shutil.which(current_orchestrator):
                     with _print_lock:
                         console.print(
-                            f"[{task_id}] [cyan]Attempting fallback runtime...[/]"
+                            f"[{task_id}] [yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
                         )
-                    continue
-                else:
-                    if parallel_limit > 1 or non_interactive:
+                    if len(tried_runtimes) < len(orchestrators_to_try):
                         with _print_lock:
                             console.print(
-                                f"[{task_id}] To complete this task manually, run:"
+                                f"[{task_id}] [cyan]Attempting fallback runtime...[/]"
                             )
-                            console.print(f"  [bold]cat {prompt_path}[/]")
+                        continue
                     else:
-                        with _print_lock:
-                            console.print(
-                                f"[yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
-                            )
-                            console.print("Please run the task using the prompt at:")
-                            console.print(f"  [bold]cat {prompt_path}[/]")
-                            console.print(
-                                "\nPress Enter once you have executed the prompt and completed the work..."
-                            )
-                        try:
-                            input()
-                        except (KeyboardInterrupt, EOFError):
-                            pass
-                    break
+                        if parallel_limit > 1 or non_interactive:
+                            with _print_lock:
+                                console.print(
+                                    f"[{task_id}] To complete this task manually, run:"
+                                )
+                                console.print(f"  [bold]cat {prompt_path}[/]")
+                        else:
+                            with _print_lock:
+                                console.print(
+                                    f"[yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
+                                )
+                                console.print("Please run the task using the prompt at:")
+                                console.print(f"  [bold]cat {prompt_path}[/]")
+                                console.print(
+                                    "\nPress Enter once you have executed the prompt and completed the work..."
+                                )
+                            try:
+                                input()
+                            except (KeyboardInterrupt, EOFError):
+                                pass
+                        break
 
-            with _print_lock:
-                console.print(
-                    f"[{task_id}] [cyan]Invoking {current_orchestrator} CLI...[/]"
-                )
-            timeout = task.get("timeout_seconds") or task.get("timeout") or 600
-            run_failed = False
-            exhaustion_detected = False
-            task_log_path = (
-                worktree_path if use_worktree else run_dir
-            ) / f"task-{task_id}-output.log"
-
-            try:
-                args = [current_orchestrator]
-                if current_orchestrator.lower() == "claude":
-                    args.extend(["--permission-mode", "acceptEdits"])
-                args.append(str(prompt_path))
-
-                if parallel_limit == 1 and not non_interactive:
-                    subprocess.run(
-                        args,
-                        cwd=task_cwd,
-                        check=True,
-                        timeout=timeout,
+                with _print_lock:
+                    console.print(
+                        f"[{task_id}] [cyan]Invoking {current_orchestrator} CLI...[/]"
                     )
-                    success = True
-                else:
-                    with open(task_log_path, "w", encoding="utf-8") as log_f:
+                timeout = task.get("timeout_seconds") or task.get("timeout") or 600
+                run_failed = False
+                exhaustion_detected = False
+                task_log_path = (
+                    worktree_path if use_worktree else run_dir
+                ) / f"task-{task_id}-output.log"
+
+                try:
+                    args = [current_orchestrator]
+                    if current_orchestrator.lower() == "claude":
+                        args.extend(["--permission-mode", "acceptEdits"])
+                    args.append(str(prompt_path))
+
+                    if parallel_limit == 1 and not non_interactive:
                         subprocess.run(
                             args,
                             cwd=task_cwd,
-                            stdin=subprocess.DEVNULL,
-                            stdout=log_f,
-                            stderr=log_f,
                             check=True,
                             timeout=timeout,
                         )
-                    success = True
-            except subprocess.TimeoutExpired as e:
-                run_failed = True
-                with _print_lock:
-                    console.print(
-                        f"[{task_id}] [bold red]Orchestrator '{current_orchestrator}' timed out after {timeout} seconds: {e}[/]"
-                    )
-                log_execution_event(
-                    run_dir,
-                    "TASK_TIMEOUT",
-                    task_id,
-                    f"Execution on '{current_orchestrator}' timed out after {timeout} seconds.",
-                )
-            except subprocess.CalledProcessError as e:
-                run_failed = True
-                if task_log_path.exists():
-                    try:
-                        log_content = task_log_path.read_text(encoding="utf-8").lower()
-                        exhaustion_keywords = [
-                            "rate limit",
-                            "limit exceeded",
-                            "quota exceeded",
-                            "insufficient funds",
-                            "insufficient credit",
-                            "exhausted",
-                            "out of tokens",
-                            "token limit",
-                            "overloaded",
-                        ]
-                        if any(kw in log_content for kw in exhaustion_keywords):
-                            exhaustion_detected = True
-                    except Exception:
-                        pass
-
-                if not exhaustion_detected:
-                    err_str = f"{e.stderr or ''} {e.stdout or ''}".lower()
-                    if any(
-                        kw in err_str
-                        for kw in [
-                            "rate limit",
-                            "limit exceeded",
-                            "quota exceeded",
-                            "insufficient funds",
-                            "insufficient credit",
-                            "exhausted",
-                            "out of tokens",
-                            "token limit",
-                            "overloaded",
-                        ]
-                    ):
-                        exhaustion_detected = True
-
-            if success:
-                task["runtime"] = current_orchestrator
-                break
-
-            if run_failed:
-                if exhaustion_detected and len(tried_runtimes) < len(
-                    orchestrators_to_try
-                ):
-                    next_rt = orchestrators_to_try[len(tried_runtimes)]
+                        success = True
+                    else:
+                        with open(task_log_path, "w", encoding="utf-8") as log_f:
+                            subprocess.run(
+                                args,
+                                cwd=task_cwd,
+                                stdin=subprocess.DEVNULL,
+                                stdout=log_f,
+                                stderr=log_f,
+                                check=True,
+                                timeout=timeout,
+                            )
+                        success = True
+                except subprocess.TimeoutExpired as e:
+                    run_failed = True
                     with _print_lock:
                         console.print(
-                            f"[{task_id}] [yellow]Token/rate limit reached on '{current_orchestrator}'. Trying fallback runtime '{next_rt}'...[/]"
+                            f"[{task_id}] [bold red]Orchestrator '{current_orchestrator}' timed out after {timeout} seconds: {e}[/]"
                         )
                     log_execution_event(
                         run_dir,
-                        "TASK_RUNTIME_FALLBACK",
+                        "TASK_TIMEOUT",
                         task_id,
-                        f"Rate limit/token exhaustion on '{current_orchestrator}'. Trying fallback '{next_rt}'.",
+                        f"Execution on '{current_orchestrator}' timed out after {timeout} seconds.",
                     )
-                    continue
-                else:
-                    if parallel_limit > 1 or non_interactive:
-                        with _print_lock:
-                            console.print(
-                                f"[{task_id}] [red]Orchestrator failed in headless execution: {current_orchestrator}[/]"
-                            )
-                            console.print(
-                                f"[{task_id}] To complete this task manually, run:"
-                            )
-                            console.print(f"  [bold]cat {prompt_path}[/]")
-                    else:
-                        with _print_lock:
-                            console.print(
-                                f"[yellow]Warning: {current_orchestrator} command failed. Asking for manual confirmation.[/]"
-                            )
+                except subprocess.CalledProcessError as e:
+                    run_failed = True
+                    if task_log_path.exists():
                         try:
-                            input(
-                                "Press Enter once you have completed the task manually in Claude/Codex..."
-                            )
-                            success = True
-                        except (KeyboardInterrupt, EOFError):
+                            log_content = task_log_path.read_text(encoding="utf-8").lower()
+                            exhaustion_keywords = [
+                                "rate limit",
+                                "limit exceeded",
+                                "quota exceeded",
+                                "insufficient funds",
+                                "insufficient credit",
+                                "exhausted",
+                                "out of tokens",
+                                "token limit",
+                                "overloaded",
+                            ]
+                            if any(kw in log_content for kw in exhaustion_keywords):
+                                exhaustion_detected = True
+                        except Exception:
                             pass
+
+                    if not exhaustion_detected:
+                        err_str = f"{e.stderr or ''} {e.stdout or ''}".lower()
+                        if any(
+                            kw in err_str
+                            for kw in [
+                                "rate limit",
+                                "limit exceeded",
+                                "quota exceeded",
+                                "insufficient funds",
+                                "insufficient credit",
+                                "exhausted",
+                                "out of tokens",
+                                "token limit",
+                                "overloaded",
+                            ]
+                        ):
+                            exhaustion_detected = True
+
+                if success:
+                    task["runtime"] = current_orchestrator
                     break
+
+                if run_failed:
+                    if exhaustion_detected and len(tried_runtimes) < len(
+                        orchestrators_to_try
+                    ):
+                        next_rt = orchestrators_to_try[len(tried_runtimes)]
+                        with _print_lock:
+                            console.print(
+                                f"[{task_id}] [yellow]Token/rate limit reached on '{current_orchestrator}'. Trying fallback runtime '{next_rt}'...[/]"
+                            )
+                        log_execution_event(
+                            run_dir,
+                            "TASK_RUNTIME_FALLBACK",
+                            task_id,
+                            f"Rate limit/token exhaustion on '{current_orchestrator}'. Trying fallback '{next_rt}'.",
+                        )
+                        continue
+                    else:
+                        if parallel_limit > 1 or non_interactive:
+                            with _print_lock:
+                                console.print(
+                                    f"[{task_id}] [red]Orchestrator failed in headless execution: {current_orchestrator}[/]"
+                                )
+                                console.print(
+                                    f"[{task_id}] To complete this task manually, run:"
+                                )
+                                console.print(f"  [bold]cat {prompt_path}[/]")
+                        else:
+                            with _print_lock:
+                                console.print(
+                                    f"[yellow]Warning: {current_orchestrator} command failed. Asking for manual confirmation.[/]"
+                                )
+                            try:
+                                input(
+                                    "Press Enter once you have completed the task manually in Claude/Codex..."
+                                )
+                                success = True
+                            except (KeyboardInterrupt, EOFError):
+                                pass
+                        break
+        finally:
+            if original_modes:
+                restore_path_freeze(original_modes)
 
     # Mechanical Task Boundary Check
     if success:
@@ -1893,6 +1992,18 @@ def run_mission_start(
             # Submit ready tasks up to concurrency capacity
             for t in ready_tasks:
                 if len(running_tasks) < parallel_limit:
+                    # Prevent parallel execution of tasks with overlapping file write scopes to avoid git conflicts
+                    t_files = t.get("files_allowed") or t.get("allowed_files") or ["*"]
+                    has_overlap = False
+                    for active_id in running_tasks:
+                        active_task = task_by_id[active_id]
+                        active_files = active_task.get("files_allowed") or active_task.get("allowed_files") or ["*"]
+                        if check_overlap(t_files, active_files):
+                            has_overlap = True
+                            break
+                    if has_overlap:
+                        continue
+
                     t_id = t["id"]
                     running_tasks.add(t_id)
                     t["status"] = "running"

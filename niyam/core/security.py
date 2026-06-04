@@ -65,6 +65,15 @@ ALLOWED_VALIDATION_EXECUTABLES: set[str] = {
     "wc",
     "diff",
     "test",
+    # Development, Packaging and Repo Utils
+    "git",
+    "pip",
+    "uv",
+    "poetry",
+    "mkdir",
+    "rm",
+    "cp",
+    "mv",
 }
 
 
@@ -127,6 +136,47 @@ def safe_run_command(
     before execution. This prevents shell injection attacks from malicious
     project.yaml or mission-plan.yaml files.
     """
+    redirection_mode = None
+    redirection_file = None
+    exec_cmd = cmd
+
+    if ">>" in cmd:
+        parts_split = cmd.split(">>", 1)
+        exec_cmd = parts_split[0].strip()
+        redirection_file = parts_split[1].strip()
+        redirection_mode = "a"
+    elif ">" in cmd:
+        parts_split = cmd.split(">", 1)
+        exec_cmd = parts_split[0].strip()
+        redirection_file = parts_split[1].strip()
+        redirection_mode = "w"
+
+    if redirection_file and redirection_mode:
+        # Strip quotes if present
+        if (redirection_file.startswith("'") and redirection_file.endswith("'")) or \
+           (redirection_file.startswith('"') and redirection_file.endswith('"')):
+            redirection_file = redirection_file[1:-1]
+        
+        dest_path = validate_path_within_repo(redirection_file, cwd)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        parts = validate_command(exec_cmd)
+        
+        sub_kwargs = kwargs.copy()
+        if capture_output:
+            sub_kwargs["stderr"] = subprocess.PIPE
+            
+        with open(dest_path, redirection_mode, encoding="utf-8") as f:
+            res = subprocess.run(
+                parts,
+                cwd=cwd,
+                stdout=f,
+                timeout=timeout,
+                text=text,
+                **sub_kwargs,
+            )
+        return res
+
     parts = validate_command(cmd)
     return subprocess.run(
         parts,
