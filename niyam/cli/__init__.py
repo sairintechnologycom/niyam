@@ -113,6 +113,14 @@ ci_app = typer.Typer(
 )
 app.add_typer(ci_app)
 
+evidence_app = typer.Typer(
+    name="evidence",
+    help="Audit-ready evidence and readiness report generation.",
+    no_args_is_help=True,
+)
+app.add_typer(evidence_app)
+
+
 
 @app.callback()
 def main_callback(
@@ -157,4 +165,6 @@ from niyam.cli import review  # noqa: F401
 from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
+from niyam.cli import evidence  # noqa: F401
+
 
