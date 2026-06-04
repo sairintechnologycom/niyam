@@ -175,7 +175,7 @@ rules:
   - id: CUST001
     title: Custom Rule
     category: secrets
-    severity: critical
+    severity: high
     description: Custom secret check
     recommendation: Fix it
     match:

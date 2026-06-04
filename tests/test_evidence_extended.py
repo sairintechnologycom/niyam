@@ -64,7 +64,7 @@ def test_generate_evidence_from_scan_json(sample_scan_json: Path) -> None:
     report = run_generate_evidence(from_scan_json=str(sample_scan_json), fmt="markdown")
 
     assert "75/100" in report
-    assert "CONDITIONAL_GO" in report
+    assert "CONDITIONAL GO" in report
     assert "SEC001" in report
     assert "DOC001" in report
 
@@ -132,7 +132,7 @@ def test_evidence_cli_generate_command(sample_scan_json: Path, tmp_path: Path) -
 
     assert result.exit_code == 0
     assert output_file.exists()
-    assert "CONDITIONAL_GO" in output_file.read_text(encoding="utf-8")
+    assert "CONDITIONAL GO" in output_file.read_text(encoding="utf-8")
 
 
 def test_evidence_only_scan(sample_scan_json: Path) -> None:
@@ -140,10 +140,11 @@ def test_evidence_only_scan(sample_scan_json: Path) -> None:
     report = run_generate_evidence(
         from_scan_json=str(sample_scan_json), fmt="markdown", include="scan"
     )
-    assert "2. Production Readiness" in report
-    assert "3. Agent Governance Activity" not in report
-    assert "4. Tool/MCP Risk Posture" not in report
-    assert "5. AI Engineering Cost Summary" not in report
+    assert "3. Readiness Score" in report
+    assert "4. Launch Decision" in report
+    assert "9. AI-Assisted Development Governance Notes" in report
+    # Under scan-only, no guard details should be rendered
+    assert "Agent Governance / Guardrails" not in report
 
 
 def test_evidence_scan_and_guard(sample_scan_json: Path, tmp_path: Path) -> None:
@@ -173,11 +174,9 @@ def test_evidence_scan_and_guard(sample_scan_json: Path, tmp_path: Path) -> None
     report = run_generate_evidence(
         from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,guard"
     )
-    assert "2. Production Readiness" in report
-    assert "3. Agent Governance Activity" in report
+    assert "3. Readiness Score" in report
+    assert "9. AI-Assisted Development Governance Notes" in report
     assert "npm test" in report
-    assert "4. Tool/MCP Risk Posture" not in report
-    assert "5. AI Engineering Cost Summary" not in report
 
 
 def test_evidence_all_sections(sample_scan_json: Path, tmp_path: Path) -> None:
@@ -254,11 +253,9 @@ def test_evidence_all_sections(sample_scan_json: Path, tmp_path: Path) -> None:
         fmt="markdown",
         include="scan,guard,mcp,cost",
     )
-    assert "2. Production Readiness" in report
-    assert "3. Agent Governance Activity" in report
-    assert "4. Tool/MCP Risk Posture" in report
+    assert "3. Readiness Score" in report
+    assert "9. AI-Assisted Development Governance Notes" in report
     assert "mock-tool" in report
-    assert "5. AI Engineering Cost Summary" in report
     assert "$0.0006" in report
 
 
@@ -289,5 +286,44 @@ def test_evidence_redacts_secrets(sample_scan_json: Path, tmp_path: Path) -> Non
     report = run_generate_evidence(
         from_scan_json=str(sample_scan_json), fmt="markdown", include="guard"
     )
-    assert "api_key=REDACTED" in report
+    assert "api_key=[REDACTED_SECRET]" in report
     assert "sb-1234567890abcdef" not in report
+
+
+def test_evidence_reports_exact_10_sections_and_11_schema_keys(sample_scan_json: Path) -> None:
+    """Verify that the generated report has the 10 standard sections and JSON has the 11 schema keys."""
+    # Generate markdown and verify the 10 sections
+    report_md = run_generate_evidence(from_scan_json=str(sample_scan_json), fmt="markdown")
+    expected_sections = [
+        "1. Executive Summary",
+        "2. Project Metadata",
+        "3. Readiness Score",
+        "4. Launch Decision",
+        "5. Decision Reason",
+        "6. Critical and High Findings",
+        "7. Risk Register",
+        "8. Recommended Remediation Plan",
+        "9. AI-Assisted Development Governance Notes",
+        "10. Appendix Summary"
+    ]
+    for section in expected_sections:
+        assert section in report_md
+
+    # Generate JSON and verify the 11 schema keys
+    report_json = run_generate_evidence(from_scan_json=str(sample_scan_json), fmt="json")
+    data = json.loads(report_json)
+    expected_keys = [
+        "schema_version",
+        "generated_at",
+        "source",
+        "project",
+        "readiness_score",
+        "decision",
+        "decision_reason",
+        "risk_summary",
+        "findings_summary",
+        "remediation_plan",
+        "redaction_status"
+    ]
+    for key in expected_keys:
+        assert key in data

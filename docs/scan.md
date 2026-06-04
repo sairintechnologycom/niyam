@@ -118,16 +118,57 @@ Niyam's repository scanner returns standardized exit codes:
 
 ---
 
-## 6. Hard Blockers (Force NO_GO)
+## 6. Deterministic Readiness Scoring
 
-Certain critical findings act as hard blockers, immediately dropping the readiness score to $\le 49$ and overriding the decision to `NO_GO`:
-1. **Committed environment files with possible secrets:** A committed `.env` or configuration file that is not empty and matches credential markers.
-2. **Obvious Private Keys:** A committed file containing a PEM-encoded private key (`-----BEGIN ... PRIVATE KEY-----`).
-3. **Public Cloud Exposure:** Hardcoded identifiers resembling public cloud credential patterns (such as AWS key IDs `AKIA...` or Azure connection strings containing `AccountKey=`).
+Niyam uses a deterministic scoring engine to assess readiness across 8 distinct dimensions, weighted by profile strictness (Startup, Team, and Enterprise):
+
+| Dimension | Category Mapping | Startup Weight | Team Weight | Enterprise Weight |
+| --- | --- | --- | --- | --- |
+| **Secrets and credentials** | `secrets` | 20% | 25% | 30% |
+| **Authentication and authorization** | `auth`, `authentication`, `authorization` | 15% | 15% | 20% |
+| **Dependencies and supply chain** | `dependencies` | 15% | 10% | 10% |
+| **Cloud/IaC exposure** | `iac`, `cloud`, `env_config` | 15% | 15% | 15% |
+| **Production operations** | `health`, `cicd`, `tests`, `ops` | 10% | 10% | 10% |
+| **AI-specific risks** | `ai_risk`, `ai` | 10% | 10% | 5% |
+| **Data protection** | `data_protection`, `data`, `privacy` | 10% | 10% | 7% |
+| **Documentation and runbook** | `docs`, `documentation` | 5% | 5% | 3% |
+| **Total** | | **100%** | **100%** | **100%** |
+
+Deductions are calculated per-finding based on severity:
+- `critical`: 25 points deduction
+- `high`: 15 points deduction
+- `medium`: 8 points deduction
+- `low`: 3 points deduction
+- `info`: 0 points deduction
+
+The score for each dimension is calculated as `max(0, weight - sum(deductions))`, and the total readiness score is the sum of all dimension scores (clamped between 0 and 100).
 
 ---
 
-## 7. Security & Redaction Behavior
+## 7. Decision Engine & Thresholds
+
+Based on the final readiness score, Niyam maps the repository state to a launch readiness decision:
+
+* **`85–100`**: `GO` — The repository meets all major quality and safety standards.
+* **`70–84`**: `CONDITIONAL_GO` — Mild risks detected. Suitable to proceed with caution.
+* **`50–69`**: `HIGH_RISK` — Moderate or multiple safety issues. Not recommended for automated production release.
+* **`0–49`**: `NO_GO` — Critical safety/security risks present. Blocking launch.
+
+---
+
+## 8. Hard Blocker Rules (Overrides)
+
+Certain blocker rules bypass the numeric score and enforce a maximum decision and score caps:
+
+1. **Critical Secrets finding:** Any critical severity secrets leak forces decision to `NO_GO` (score capped at $\le 49$).
+2. **Private Key exposure:** Any private key detected in code/files forces decision to `NO_GO` (score capped at $\le 49$).
+3. **Missing Authentication on API (Enterprise profile):** If profile is `enterprise` and an unauthenticated API endpoint/route is detected, it forces decision to `NO_GO` (score capped at $\le 49$).
+4. **High/Critical public IaC exposure:** Any high/critical public exposure finding in IaC/cloud configs forces decision to `HIGH_RISK` or `NO_GO` (score capped at $\le 69$ or $\le 49$).
+5. **More than 3 High findings:** If there are more than 3 high severity findings of any category, the decision is capped at `HIGH_RISK` maximum (score capped at $\le 69$).
+
+---
+
+## 9. Security & Redaction Behavior
 
 * **100% Offline by Default:** The rule engine evaluates checks completely locally. It does not call remote API endpoints.
 * **Auto-Sanitization:** All outputs (stdout console summaries, JSON, and Markdown reports) pass through Niyam's central redaction utility. Before any output is written, hardcoded secrets (API keys, connection strings, private keys, passwords) are automatically replaced with `[REDACTED_SECRET]` to prevent leaks in logs, reports, or CI/CD logs.

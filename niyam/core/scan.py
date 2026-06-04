@@ -450,73 +450,12 @@ def run_scanner_checks(
         pass
 
     # 4. Calculate score
-    score = 100
-    for finding in findings:
-        score -= DEDUCTIONS.get(finding["severity"], 0)
-
-    score = max(0, min(100, score))
+    from niyam.governance.scoring import calculate_readiness_score
+    score, scoring_breakdown, _ = calculate_readiness_score(findings, profile=profile_name)
 
     # 5. Check hard blockers and override decision/score
-    force_no_go = False
-    decision_reason = "Scan completed successfully."
-
-    # Look through findings & workspace files for hard blockers
-    for f in findings:
-        fid = f.get("id")
-        fpath = f.get("file_path", "")
-        fdesc = f.get("description", "")
-        
-        # Blocker 1: Committed .env file with possible secrets
-        if fid == "SEC001" or (fpath and Path(fpath).name.startswith(".env")):
-            try:
-                env_path = root / fpath
-                if env_path.is_file():
-                    env_content = env_path.read_text(encoding="utf-8", errors="ignore")
-                    from niyam.governance.common.redaction import contains_secret
-                    if contains_secret(env_content) or any(line.strip() and "=" in line for line in env_content.splitlines()):
-                        force_no_go = True
-                        decision_reason = "Hard blocker triggered: Committed environment configuration file with possible secrets."
-            except Exception:
-                pass
-
-        # Blocker 2: Obvious private key
-        try:
-            if fpath:
-                file_p = root / fpath
-                if file_p.is_file():
-                    content = file_p.read_text(encoding="utf-8", errors="ignore")
-                    if "-----BEGIN" in content and "PRIVATE KEY" in content:
-                        force_no_go = True
-                        decision_reason = "Hard blocker triggered: Obvious private key committed in source code."
-        except Exception:
-            pass
-
-        # Blocker 3: Public cloud exposure pattern
-        try:
-            if fpath:
-                file_p = root / fpath
-                if file_p.is_file():
-                    content = file_p.read_text(encoding="utf-8", errors="ignore")
-                    if "AKIA" in content or "AccountKey=" in content:
-                        force_no_go = True
-                        decision_reason = "Hard blocker triggered: Public cloud exposure pattern detected."
-        except Exception:
-            pass
-
-    if force_no_go:
-        score = min(49, score)
-        decision = "NO_GO"
-    else:
-        # Map Decision
-        if score >= 85:
-            decision = "GO"
-        elif score >= 70:
-            decision = "CONDITIONAL_GO"
-        elif score >= 50:
-            decision = "HIGH_RISK"
-        else:
-            decision = "NO_GO"
-            decision_reason = "Readiness score is below 50."
+    from niyam.governance.decision import evaluate_decision
+    decision, decision_reason, score = evaluate_decision(findings, score, profile=profile_name, project_root=root)
 
     # Check for missing/skipped external scanners
     import shutil
@@ -548,6 +487,7 @@ def run_scanner_checks(
         "decision_reason": decision_reason,
         "findings": findings,
         "summary": summary,
+        "scoring_breakdown": scoring_breakdown,
         "redaction_status": {"redacted": True, "engine": "niyam-redaction"},
         "skipped_scanners": skipped_scanners,
     }

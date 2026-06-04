@@ -12,165 +12,104 @@ from typing import Any
 from jinja2 import Template
 
 from niyam.core.config import find_niyam_root, load_niyam_config
-from niyam.core.scan import run_scanner_checks
 
 # Markdown template
 MARKDOWN_TEMPLATE = """# Niyam Governance & Production Readiness Evidence Report
 
-**Project:** {{ metadata.project_name }}
-**Branch:** `{{ metadata.branch }}`
-**Last Commit:** `{{ metadata.commit_sha }}` by {{ metadata.commit_author }}
-**Generated At:** {{ metadata.timestamp }}
-
----
-
 ## 1. Executive Summary
-This document serves as an audit-ready evidence record for the repository readiness and AI agent governance.
+This document serves as an audit-ready evidence record for the repository readiness and AI agent governance. It aggregates static analysis, dependency health, and runtime agent execution safety logs.
 
-Included sections:
-{%- if "scan" in include %} * Production Readiness{% endif %}
-{%- if "guard" in include %} * Agent Governance Activity{% endif %}
-{%- if "mcp" in include %} * Tool/MCP Risk Posture{% endif %}
-{%- if "cost" in include %} * AI Engineering Cost Summary{% endif %}
-
----
+## 2. Project Metadata
+* **Project Name:** {{ project }}
+* **Generated At:** {{ generated_at }}
+* **Git Branch / Commit:** `{{ source }}`
 
 {% if "scan" in include %}
-## 2. Production Readiness
+## 3. Readiness Score
+* **Readiness Score:** **{{ readiness_score }}/100**
 
-| Metric | Status / Value |
-| --- | --- |
-| **Readiness Score** | **{{ scan.score }}/100** |
-| **Launch Decision** | **{{ scan.decision }}** |
-| **Total Findings** | {{ scan.findings_count }} |
+## 4. Launch Decision
+* **Launch Decision:** **{{ decision.replace('_', ' ') }}**
 
-### Findings Breakdown
-* **Critical:** {{ scan.breakdown.critical }}
-* **High:** {{ scan.breakdown.high }}
-* **Medium:** {{ scan.breakdown.medium }}
-* **Low:** {{ scan.breakdown.low }}
-* **Info:** {{ scan.breakdown.info }}
+## 5. Decision Reason
+* **Decision Reason:** *{{ decision_reason }}*
 
-### Launch Decision details
-Based on the readiness score of **{{ scan.score }}**, the automated gate recommends:
-{% if scan.decision == "GO" %}
-🟢 **GO**: The project meets all standard readiness guidelines and is safe for production deployment.
-{% elif scan.decision == "CONDITIONAL_GO" %}
-🟡 **CONDITIONAL GO**: Minor issues were identified. The project is launchable, but the remediation plan should be addressed in the next iteration.
-{% elif scan.decision == "HIGH_RISK" %}
-🟠 **HIGH RISK**: Several high-severity or medium-severity issues remain. Launch is discouraged without explicit risk sign-off.
+## 6. Critical and High Findings
+{% if scan.critical_high_findings %}
+| ID | Title | Category | Severity | File Path |
+| --- | --- | --- | --- | --- |
+{% for f in scan.critical_high_findings -%}
+| {{ f.id }} | {{ f.title }} | {{ f.category }} | **{{ f.severity.upper() }}** | `{{ f.file_path or 'Global' }}` |
+{% endfor %}
 {% else %}
-🔴 **NO GO**: Critical security or policy violations detected. Immediate remediation is required before build promotion.
+✓ No Critical or High findings detected in the repository scan.
 {% endif %}
 
----
+## 7. Risk Register
+{% if risk_summary %}
+| Severity | Count |
+| --- | --- |
+| Critical | {{ risk_summary.critical }} |
+| High | {{ risk_summary.high }} |
+| Medium | {{ risk_summary.medium }} |
+| Low | {{ risk_summary.low }} |
+| Info | {{ risk_summary.info }} |
+{% else %}
+No risk register data available.
 {% endif %}
 
-{% if "guard" in include %}
-## 3. Agent Governance Activity
+## 8. Recommended Remediation Plan
+{% if remediation_plan %}
+Remediation actions are recommended below:
+{% for item in remediation_plan -%}
+* **[{{ item.id }}] {{ item.title }}** ({{ item.severity.upper() }}): {{ item.recommendation }}
+{% endfor %}
+{% else %}
+✓ No remediation actions required.
+{% endif %}
+{% endif %}
 
-* **Guardrails Status:** {{ governance.guard_status }}
-* **Careful Mode:** {{ governance.careful_mode }}
-* **Frozen Paths:** {{ governance.frozen_paths or 'None' }}
-
-### Recent Observed Actions (Guard Logs)
+## 9. AI-Assisted Development Governance Notes
+* **AI-Risk Placeholders / Commented Assertions:** Checked.
+{% if "guard" in include -%}
+* **Agent Governance / Guardrails Status:** {{ governance.guard_status }}
 {% if guard_logs %}
+### Recent Observed Actions (Agent Governance)
 | Timestamp | Actor | Command | Exit Code | Duration (ms) |
 | --- | --- | --- | --- | --- |
 {% for log in guard_logs -%}
 | {{ log.timestamp }} | {{ log.actor_type }} | `{{ log.command }}` | {{ log.exit_code }} | {{ log.duration_ms }} |
 {% endfor %}
-{% else %}
-✓ No recent observed actions logged.
 {% endif %}
-
----
+{% if violations %}
+### Policy Violations (Agent Governance)
+| Timestamp | Command | Exit Code |
+| --- | --- | --- |
+{% for v in violations -%}
+| {{ v.timestamp }} | `{{ v.command }}` | {{ v.exit_code }} |
+{% endfor %}
 {% endif %}
-
-{% if "mcp" in include %}
-## 4. Tool/MCP Risk Posture
-
-* **Total Registered Tools:** {{ mcp.total }}
-* **Approved Tools:** {{ mcp.approved }}
-* **Unapproved Tools:** {{ mcp.unapproved }}
-
-### Registered Tools Risk Breakdown
+{%- endif %}
+{%- if "mcp" in include -%}
+* **MCP / Tool Approval Posture:** {{ mcp.approved }}/{{ mcp.total }} tools approved.
 {% if mcp.tools %}
+### Registered Tools (MCP)
 | Name | Type | Risk Level | Approved | Owner |
 | --- | --- | --- | --- | --- |
 {% for t in mcp.tools -%}
 | {{ t.name }} | {{ t.type }} | **{{ t.risk_level.upper() }}** | {{ 'Yes' if t.approved else 'No' }} | {{ t.owner or 'N/A' }} |
 {% endfor %}
-{% else %}
-No registered tools found.
 {% endif %}
+{%- endif %}
+{%- if "cost" in include and cost.total_cost is not none -%}
+* **AI Engineering Cost Summary:** Estimated Cost: ${{ "%.4f"|format(cost.total_cost) }} (Input tokens: {{ cost.total_input_tokens }}, Output tokens: {{ cost.total_output_tokens }})
+{%- endif %}
 
----
-{% endif %}
-
-{% if "cost" in include %}
-## 5. AI Engineering Cost Summary
-
-* **Total Estimated Cost:** **${{ "%.4f"|format(cost.total_cost) }}**
-* **Total Input Tokens:** {{ "{:,}".format(cost.total_input_tokens) }}
-* **Total Output Tokens:** {{ "{:,}".format(cost.total_output_tokens) }}
-
-### Cost Breakdown by Day
-{% if cost.by_day %}
-| Day | Estimated Cost |
-| --- | --- |
-{% for day, val in cost.by_day.items()|sort -%}
-| {{ day }} | ${{ "%.4f"|format(val) }} |
-{% endfor %}
-{% else %}
-No cost data logged.
-{% endif %}
-
----
-{% endif %}
-
-## 6. Policy Violations or Blocked Actions
-{% if "guard" in include and violations %}
-| Timestamp | Command | Exit Code | Notes |
-| --- | --- | --- | --- |
-{% for v in violations -%}
-| {{ v.timestamp }} | `{{ v.command }}` | {{ v.exit_code }} | Command failed or flagged as non-zero. |
-{% endfor %}
-{% else %}
-✓ No policy violations or blocked actions detected.
-{% endif %}
-
----
-
-## 7. Recommended Next Actions
-{%- set remediation_needed = false %}
-{%- if "scan" in include and scan.findings %}{% set remediation_needed = true %}{% endif %}
-{%- if "mcp" in include and mcp.unapproved_high %}{% set remediation_needed = true %}{% endif %}
-
-{% if remediation_needed %}
-Remediation actions are recommended below:
-{% if "scan" in include %}
-{% for f in scan.findings -%}
-* **[Readiness] [{{ f.id }}] {{ f.title }}** ({{ f.severity.upper() }}): {{ f.recommendation }}
-{% endfor %}
-{% endif %}
-{% if "mcp" in include %}
-{% for t in mcp.unapproved_high -%}
-* **[Tool Governance] Approve High-Risk Tool**: Tool `{{ t.name }}` has **{{ t.risk_level.upper() }}** risk and needs review/approval.
-{% endfor %}
-{% endif %}
-{% else %}
-✓ All security and readiness checks are in a healthy state. No immediate next actions required.
-{% endif %}
-
----
-
-## 8. Audit Appendix
-This appendix contains cryptographic metadata and environment info for verification.
-
-* **Git Last Commit:** `{{ metadata.commit_sha }}`
-* **Git Author:** {{ metadata.commit_author }}
-* **Timestamp (UTC):** {{ metadata.timestamp }}
+## 10. Appendix Summary
+* **Redaction Status:** Redacted: {{ redaction_status.redacted }} (Engine: {{ redaction_status.engine }})
+* **Branch:** `{{ metadata.branch }}`
+* **Commit SHA:** `{{ metadata.commit_sha }}`
+* **Commit Author:** {{ metadata.commit_author }}
 """
 
 # Premium HTML template with CSS styling
@@ -707,14 +646,22 @@ def run_generate_evidence(
         scan_json_path = Path(from_scan_json).resolve()
         if not scan_json_path.exists():
             raise FileNotFoundError(f"Scan JSON file not found at: {from_scan_json}")
-        try:
-            with open(scan_json_path, encoding="utf-8") as f:
-                scan_results = json.load(f)
-        except Exception as e:
-            raise ValueError(f"Failed to parse scan JSON file: {e}")
     else:
-        # Generate checks dynamically
-        scan_results = run_scanner_checks(root)
+        # Search for default scan report under .niyam/reports/scan.json
+        scan_json_path = root / ".niyam" / "reports" / "scan.json"
+        if not scan_json_path.exists():
+            # Check fallback to .sutra/reports/scan.json
+            scan_json_path = root / ".sutra" / "reports" / "scan.json"
+            if not scan_json_path.exists():
+                raise FileNotFoundError(
+                    "No scan report input found. Please specify --from or run niyam scan first."
+                )
+
+    try:
+        with open(scan_json_path, encoding="utf-8") as f:
+            scan_results = json.load(f)
+    except Exception as e:
+        raise ValueError(f"Failed to parse scan JSON file: {e}")
 
     # 1. Compile project config metadata
     project_name = "Niyam Project"
@@ -775,8 +722,52 @@ def run_generate_evidence(
     # 4. Audit trail run logs
     audit_trail = _get_audit_trail(root)
 
-    # Prepare Jinja2 context
+    # Map context to the required evidence output schema keys
+    source_str = f"Branch: {git_meta['branch']}, Commit: {git_meta['commit_sha']}"
+
+    risk_summary = {
+        "total_findings": len(findings),
+        "critical": breakdown.get("critical", 0),
+        "high": breakdown.get("high", 0),
+        "medium": breakdown.get("medium", 0),
+        "low": breakdown.get("low", 0),
+        "info": breakdown.get("info", 0)
+    }
+
+    findings_summary = [
+        {
+            "id": f.get("id"),
+            "severity": f.get("severity"),
+            "category": f.get("category"),
+            "title": f.get("title"),
+            "file_path": f.get("file_path")
+        }
+        for f in findings
+    ]
+
+    remediation_plan = [
+        {
+            "id": f.get("id"),
+            "title": f.get("title"),
+            "severity": f.get("severity"),
+            "recommendation": f.get("recommendation")
+        }
+        for f in findings
+    ]
+
+    # Prepare Jinja2 context and new output schema keys
     context = {
+        "schema_version": "1.0.0",
+        "generated_at": timestamp,
+        "source": source_str,
+        "project": project_name,
+        "readiness_score": scan_results.get("score", 0),
+        "decision": scan_results.get("decision", "NO_GO"),
+        "decision_reason": scan_results.get("decision_reason", "Scan completed successfully."),
+        "risk_summary": risk_summary,
+        "findings_summary": findings_summary,
+        "remediation_plan": remediation_plan,
+        "redaction_status": {"redacted": True, "engine": "niyam-redaction"},
         "include": include_list,
         "metadata": {
             "project_name": project_name,
@@ -806,8 +797,9 @@ def run_generate_evidence(
         "audit_trail": audit_trail,
     }
 
-    # 5. Redact secrets recursively across the context dictionary
-    context = redact_secrets_recursive(context)
+    # 5. Redact secrets recursively across the context dictionary using the shared redaction utility
+    from niyam.governance.common.redaction import redact_secrets, redact_text
+    context = redact_secrets(context)
 
     # 6. Render report
     if fmt == "json":
@@ -818,6 +810,9 @@ def run_generate_evidence(
     else:  # markdown
         template = Template(MARKDOWN_TEMPLATE)
         report_str = template.render(context)
+
+    # Apply secondary redaction on final text to double check safety
+    report_str = redact_text(report_str)
 
     # 7. Output to file if requested
     if output:

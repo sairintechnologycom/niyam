@@ -1,78 +1,60 @@
-# Sample Niyam Governance & Production Readiness Evidence Report
-
-**Project:** My-Sample-App
-**Branch:** `main`
-**Last Commit:** `a7b8c9d` by Developer
-**Scan Profile:** `team`
-**Generated At:** 2026-06-04 10:45 UTC
-
----
+# Niyam Governance & Production Readiness Evidence Report
 
 ## 1. Executive Summary
-This document serves as an audit-ready evidence record for the repository readiness. It provides a formal assessment of security, configuration, validation, and AI engineering governance metrics.
+This document serves as an audit-ready evidence record for the repository readiness and AI agent governance. It aggregates static analysis, dependency health, and runtime agent execution safety logs.
 
-## 2. Readiness Assessment Summary
+## 2. Project Metadata
+* **Project Name:** My-Sample-App
+* **Generated At:** 2026-06-04 10:45 UTC
+* **Git Branch / Commit:** `Branch: main, Commit: a7b8c9d`
 
-| Metric | Status / Value |
+## 3. Readiness Score
+* **Readiness Score:** **89/100**
+
+## 4. Launch Decision
+* **Launch Decision:** **CONDITIONAL GO**
+
+## 5. Decision Reason
+* **Decision Reason:** *Minor dependency and documentation findings detected. The codebase is clean of security vulnerabilities and secrets.*
+
+## 6. Critical and High Findings
+✓ No Critical or High findings detected in the repository scan.
+
+## 7. Risk Register
+| Severity | Count |
 | --- | --- |
-| **Readiness Score** | **89/100** |
-| **Launch Decision** | **GO** |
-| **Total Findings** | 2 |
+| Critical | 0 |
+| High | 0 |
+| Medium | 1 |
+| Low | 1 |
+| Info | 0 |
 
-### Findings Breakdown
-* **Critical:** 0
-* **High:** 0
-* **Medium:** 1
-* **Low:** 1
-* **Info:** 0
+## 8. Recommended Remediation Plan
+Remediation actions are recommended below:
+* **[DEP001] Missing Dependency Lockfile** (MEDIUM): Found 'package.json' but no corresponding lockfile. Run installation to generate one.
+* **[TST001] Missing Test Suite** (LOW): No test directory or test files detected in the project. Create a tests/ directory and implement validation tests.
 
----
+## 9. AI-Assisted Development Governance Notes
+* **AI-Risk Placeholders / Commented Assertions:** Checked.
+* **Agent Governance / Guardrails Status:** Enabled
 
-## 3. Launch Decision details
-Based on the readiness score of **89**, the automated gate recommends:
-
-🟢 **GO**: The project meets all standard readiness guidelines and is safe for production deployment.
-
----
-
-## 4. Critical & High Severity Findings
-
-✓ No critical or high severity findings detected in the scan.
-
----
-
-## 5. Recommended Remediation Plan
-
-* **[DEP001] Missing Dependency Lockfile** (MEDIUM):
-  * *Finding:* Found 'package.json' but no corresponding lockfile (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb).
-  * *Remediation:* Install dependencies to generate a lockfile and commit it to source control.
-* **[TST001] Missing Test Suite** (LOW):
-  * *Finding:* No test directory or test files (e.g., test_*.py, *.test.js) were detected in the project.
-  * *Remediation:* Create a tests/ directory and implement validation tests to confirm app functionality.
-
----
-
-## 6. AI Governance & Audit Trail
-
-### Active Policies
-* **Frozen Paths:** src/components, src/utils
-* **Guardrails Status:** Enabled
-
-### Recent Execution Logs (Audit Trail)
-
-| Mission ID | Date / Time | Orchestrator | Status | Cost (USD) |
+### Recent Observed Actions (Agent Governance)
+| Timestamp | Actor | Command | Exit Code | Duration (ms) |
 | --- | --- | --- | --- | --- |
-| `ADD-AUTH-0604` | 2026-06-04T10:15:30Z | claude | `completed` | $0.0450 |
-| `FIX-NAVBAR-0603` | 2026-06-03T15:22:11Z | gemini | `completed` | $0.0080 |
+| 2026-06-04T10:15:30Z | agent | `pytest` | 0 | 1850 |
+| 2026-06-04T10:12:11Z | agent | `npm run build` | 0 | 4500 |
 
----
+### Registered Tools (MCP)
+| Name | Type | Risk Level | Approved | Owner |
+| --- | --- | --- | --- | --- |
+| shell | cli | **CRITICAL** | Yes | niyam-core |
+| view_file | mcp | **LOW** | Yes | niyam-core |
 
-## 7. Risk Acceptance Sign-off
-*This section must be completed if launching with a score of less than 85.*
+* **AI Engineering Cost Summary:** Estimated Cost: $0.0530 (Input tokens: 15400, Output tokens: 3200)
 
-- [ ] **Lead Engineer Approval:**
-  - Name: __________________________
-  - Date: __________________________
-- [ ] **Security Officer Approval:**
-  - Name: __________________________
-  - Date: __________________________
+## 10. Appendix Summary
+* **Redaction Status:** Redacted: True (Engine: niyam-redaction)
+* **Branch:** `main`
+* **Commit SHA:** `a7b8c9d`
+* **Commit Author:** Developer-One
+

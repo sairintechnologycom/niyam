@@ -186,9 +186,9 @@ def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None
         assert results is not None
         assert results["score"] < 100  # Deduction applied
         assert any(f["id"] == "EXT-GITLEAKS-mock" for f in results["findings"])
-        # Base score has -16 deduction from missing gitignore and lockfile
-        assert results["score"] == 59
-        assert results["decision"] == "HIGH_RISK"
+        # With new scoring, critical secret blocks and overrides score to 49 and decision to NO_GO
+        assert results["score"] == 49
+        assert results["decision"] == "NO_GO"
 
 
 def test_scanner_checks_reports_skipped_scanners(tmp_path: Path) -> None:

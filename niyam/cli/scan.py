@@ -11,18 +11,19 @@ from rich.panel import Panel
 from rich.table import Table
 
 from niyam.cli import app, console
-from niyam.core.scan import run_scanner_checks
 
 
 def generate_markdown_report(results: dict) -> str:
     """Generate a clean markdown report from scan results."""
     from datetime import datetime, timezone
+    from niyam.governance.scoring import PROFILE_WEIGHTS, DIMENSION_LABELS
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     score = results["score"]
     decision = results["decision"]
     profile = results["profile"]
+    decision_reason = results.get("decision_reason", "Scan completed successfully.")
 
     # Decision formatting
     decision_emojis = {
@@ -40,12 +41,33 @@ def generate_markdown_report(results: dict) -> str:
         f"**Scan Profile:** `{profile}`",
         f"**Readiness Score:** `{score}/100`",
         f"**Decision:** {decision_str}",
+    ]
+    if decision_reason and decision_reason != "Scan completed successfully.":
+        lines.append(f"**Decision Reason:** *{decision_reason}*")
+    
+    lines.extend([
+        "",
+        "## Readiness Score Breakdown",
+        "",
+        "| Dimension | Weight | Score |",
+        "| --- | --- | --- |",
+    ])
+
+    weights = PROFILE_WEIGHTS.get(profile.lower(), PROFILE_WEIGHTS["startup"])
+    scoring_bd = results.get("scoring_breakdown", {})
+    for dim, weight in weights.items():
+        label = DIMENSION_LABELS.get(dim, dim.replace("_", " ").title())
+        score_val = scoring_bd.get(dim, weight)
+        lines.append(f"| {label} | {weight}% | {score_val}/{weight} |")
+
+    lines.extend([
+        f"| **Total** | **100%** | **{score}/100** |",
         "",
         "---",
         "",
         "## Summary of Findings",
         "",
-    ]
+    ])
 
     findings = results["findings"]
     if not findings:
