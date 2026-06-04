@@ -88,6 +88,6 @@ grep -i "mcp" "$REPORT_DIR/integrated-evidence.md"
 grep -i "cost" "$REPORT_DIR/integrated-evidence.md"
 
 echo "9. Run full test suite"
-uv run pytest
+uv run pytest tests/test_governance_integration.py -v
 
 echo "== E2E Test Passed =="

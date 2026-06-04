@@ -27,7 +27,12 @@ EVIDENCE_DIR = "evidence"
 
 
 class GuardState(BaseModel):
-    """Current guard mode configuration."""
+    """Legacy guard state configuration.
+    
+    Controls simple enable/disable toggles, destructive warning careful mode,
+    path freezing restrictions, and remote policy URL endpoint. Used primarily
+    by 'niyam guard enable/disable/careful/freeze' commands.
+    """
 
     enabled: bool = False
     careful: bool = False
@@ -47,7 +52,12 @@ class ScanConfig(BaseModel):
 
 
 class GuardConfig(BaseModel):
-    """Configuration for guard policy mode."""
+    """Configuration for new governance guard policies.
+    
+    Defines active governance policy enforcement mode (observe, block, warn, approve),
+    along with lists of blocked commands, protected files, and commands requiring human approval.
+    Used by the modern governance 'niyam guard run' engine.
+    """
 
     mode: str = "observe"
     blocked_commands: list[str] = Field(default_factory=list)

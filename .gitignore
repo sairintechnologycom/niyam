@@ -128,6 +128,9 @@ pip-wheel-metadata/
 .niyam/project.yaml
 .niyam/runtimes.yaml
 .niyam/pricing.json
+.niyam/cache/
+.niyam/mcp-registry.json
+.niyam/reports/
 
 # Local antigravity cli config
 .antigravitycli/

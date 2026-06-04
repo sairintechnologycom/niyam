@@ -395,6 +395,106 @@ def load_commands_policy(root: Path) -> dict:
     return {}
 
 
+def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
+    """Matches a command pattern against executed command arguments.
+    
+    Uses token-aware matching for executable names and sequences,
+    and fallback word-boundary regex matching for SQL/query patterns,
+    excluding safe commands (like echo, cat, git commit, etc.).
+    """
+    import os
+    import re
+
+    if not cmd_args:
+        return False
+
+    pattern_tokens = pattern.strip().split()
+    if not pattern_tokens:
+        return False
+
+    # 1. Main executable matching (token-aware)
+    # Get the basename of the executed command (e.g. '/bin/rm' -> 'rm')
+    exe = cmd_args[0]
+    exe_basename = os.path.basename(exe)
+    first_token = pattern_tokens[0]
+
+    if exe_basename == first_token or exe == first_token:
+        # Check if the remaining pattern tokens are present in command arguments in order
+        rem_pattern = pattern_tokens[1:]
+        rem_args = cmd_args[1:]
+        
+        idx = 0
+        for token in rem_pattern:
+            try:
+                idx = rem_args.index(token, idx)
+                idx += 1
+            except ValueError:
+                return False
+        return True
+
+    # 2. SQL / Query substring matching (excluding safe commands)
+    # List of safe commands where we shouldn't match sub-patterns (e.g. echo "rm -rf")
+    safe_executables = {"echo", "printf", "cat", "less", "more", "grep", "git"}
+    if exe_basename in safe_executables:
+        return False
+
+    command_str_normalized = " ".join(cmd_args)
+    pattern_normalized = " ".join(pattern_tokens)
+    
+    # Word-boundary check case-insensitively
+    pattern_regex = r'\b' + re.escape(pattern_normalized) + r'\b'
+    return bool(re.search(pattern_regex, command_str_normalized, re.IGNORECASE))
+
+
+def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) -> bool:
+    """Determines if any file path operand in the command points to a protected file."""
+    from pathlib import Path
+
+    if not cmd_args or not protected_files:
+        return False
+
+    for arg in cmd_args[1:]:
+        # Skip options/flags
+        if arg.startswith("-"):
+            continue
+        
+        arg_path = Path(arg)
+        for f in protected_files:
+            f_path = Path(f)
+            # Exact match
+            if arg == f:
+                return True
+            # Subpath match: check if the parts of protected path are a suffix of the arg path
+            if len(f_path.parts) <= len(arg_path.parts):
+                if arg_path.parts[-len(f_path.parts):] == f_path.parts:
+                    return True
+    return False
+
+
+def _prompt_confirm(console: Console, prompt: str) -> bool:
+    """Prompt user for confirmation, handling CI/non-interactive environments safely."""
+    import sys
+    import os
+    import typer
+
+    # Check if we are running in tests (which mock stdin)
+    if os.environ.get("NIYAM_TEST_NON_INTERACTIVE") == "1":
+        is_interactive = False
+    elif os.environ.get("NIYAM_TEST") == "1" or os.environ.get("PYTEST_CURRENT_TEST") is not None:
+        is_interactive = True
+    else:
+        is_interactive = sys.stdin.isatty() and not os.environ.get("CI")
+
+    if not is_interactive:
+        console.print("[bold red]Denied:[/] Non-interactive/CI environment detected. Auto-denying approval request.")
+        return False
+
+    try:
+        return typer.confirm(prompt, default=False)
+    except Exception:
+        return False
+
+
 def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, mode_override: str | None = None) -> None:
     import sys
     import os
@@ -457,6 +557,14 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
     if mode_override:
         mode = mode_override
 
+    # Validate mode is valid
+    valid_modes = {"observe", "block", "warn", "approve"}
+    if mode not in valid_modes:
+        console.print(
+            f"[bold red]Error:[/] Invalid guard mode '{mode}'. Choose from: observe, block, warn, approve."
+        )
+        raise SystemExit(1)
+
     command_str = " ".join(cmd_args)
 
     # Redact secret assignments in command
@@ -466,9 +574,9 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         command_str,
     )
 
-    is_blocked = any(blocked in command_str for blocked in blocked_commands)
-    is_protected_file = any(f in command_str for f in protected_files)
-    is_approval = any(appr in command_str for appr in approval_required)
+    is_blocked = any(_match_command_pattern(cmd_args, blocked) for blocked in blocked_commands)
+    is_protected_file = _is_protected_file_match(cmd_args, protected_files)
+    is_approval = any(_match_command_pattern(cmd_args, appr) for appr in approval_required)
 
     decision = "allowed"
 
@@ -497,11 +605,7 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
             raise SystemExit(1)
         elif is_approval:
             # Requires approval
-            import typer
-            try:
-                allowed = typer.confirm("Approval required for command. Allow execution?", default=False)
-            except Exception:
-                allowed = False
+            allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
             if not allowed:
                 console.print("[bold red]Denied:[/] User rejected execution.")
                 log_entry = {
@@ -534,11 +638,7 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
     # Check Approve Mode
     elif mode == "approve":
         if is_blocked or is_protected_file or is_approval:
-            import typer
-            try:
-                allowed = typer.confirm("Approval required for command. Allow execution?", default=False)
-            except Exception:
-                allowed = False
+            allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
             if not allowed:
                 console.print("[bold red]Denied:[/] User rejected execution.")
                 log_entry = {
@@ -608,7 +708,7 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         "mode": mode,
         "decision": decision,
     }
-    if capture_output and output_data is not None:
+    if output_data is not None:
         # Avoid storing secrets from captured output via standard redact
         redacted_output = re.sub(
             r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',

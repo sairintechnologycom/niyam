@@ -47,7 +47,7 @@ def clean_niyam_env(tmp_path: Path, monkeypatch) -> None:
                 "mode": "block",
                 "blocked_commands": ["rm -rf", "terraform destroy", "kubectl delete"],
                 "protected_files": [".env", ".env.local", "secrets.json"],
-                "approval_required": ["terraform apply", "az ad", "aws iam"]
+                "approval_required": ["terraform apply", "az ad", "aws iam", "echo approve"]
             }
         }
     }
@@ -506,7 +506,7 @@ def test_guard_policy_blocks_dangerous_command(tmp_path: Path) -> None:
 def test_guard_policy_warns_configured_command() -> None:
     """Command matching warn policy outputs warning and runs."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "echo", "rm -rf warning"])
+    result = runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "rm", "-rf", "nonexistent_warning_dir"])
     assert result.exit_code == 0
     assert "Warning:" in result.stdout
 
@@ -532,17 +532,17 @@ def test_guard_policy_requires_approval(tmp_path: Path) -> None:
     # 2. Allow approval
     result_allow = runner.invoke(
         app, 
-        ["guard", "run", "--capture-output", "--mode", "block", "--", "echo", "terraform apply approved"],
+        ["guard", "run", "--capture-output", "--mode", "block", "--", "echo", "approve"],
         input="y\n"
     )
     assert result_allow.exit_code == 0
-    assert "terraform apply approved" in result_allow.stdout
+    assert "approve" in result_allow.stdout
 
 
 def test_guard_policy_logs_decision(tmp_path: Path) -> None:
     """Guard logs store the policy decision classification."""
     runner = CliRunner()
-    runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "echo", "rm -rf warning"])
+    runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "rm", "-rf", "warning"])
     
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
@@ -568,6 +568,40 @@ def test_guard_default_mode_is_observe(tmp_path: Path) -> None:
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
     assert entry["mode"] == "observe"
+
+
+def test_guard_invalid_mode() -> None:
+    """Verify that passing an invalid guard mode results in an error exit code."""
+    runner = CliRunner()
+    result = runner.invoke(app, ["guard", "run", "--mode", "invalid", "--", "echo", "hello"])
+    assert result.exit_code == 1
+    assert "Invalid guard mode" in result.stdout
+
+
+def test_guard_non_interactive_auto_deny(tmp_path: Path, monkeypatch) -> None:
+    """Verify that approval commands are auto-denied in non-interactive/CI environments."""
+    monkeypatch.setenv("CI", "1")
+    monkeypatch.setenv("NIYAM_TEST_NON_INTERACTIVE", "1")
+    monkeypatch.delenv("NIYAM_TEST", raising=False)
+    
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["guard", "run", "--mode", "block", "--", "echo", "approve"]
+    )
+    assert result.exit_code == 1
+    assert "Denied: Non-interactive/CI environment detected" in result.stdout
+
+
+def test_guard_substring_file_operand_no_match() -> None:
+    """Verify that protected files matching only as substrings of arguments are allowed."""
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["guard", "run", "--mode", "block", "--", "touch", ".env.example"]
+    )
+    assert result.exit_code == 0
+    assert "Blocked:" not in result.stdout
 
 
 # ==========================================
