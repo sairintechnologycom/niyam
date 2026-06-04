@@ -349,6 +349,13 @@ def run_scanner_checks(
     for rule in rules:
         findings.extend(evaluate_rule(rule, root, files))
 
+    # Run external security scanners (gitleaks, semgrep, trivy, checkov)
+    try:
+        from niyam.core.external_scanners import run_all_external_scanners
+        findings.extend(run_all_external_scanners(root))
+    except Exception:
+        pass
+
     # 4. Calculate score
     score = 100
     for finding in findings:
@@ -366,9 +373,22 @@ def run_scanner_checks(
     else:
         decision = "NO_GO"
 
+    # Check for missing/skipped external scanners
+    import shutil
+    skipped_scanners = []
+    for scanner_name, binary in [
+        ("gitleaks", "gitleaks"),
+        ("semgrep", "semgrep"),
+        ("trivy", "trivy"),
+        ("checkov", "checkov"),
+    ]:
+        if not shutil.which(binary):
+            skipped_scanners.append(scanner_name)
+
     return {
         "profile": profile_name,
         "score": score,
         "decision": decision,
         "findings": findings,
+        "skipped_scanners": skipped_scanners,
     }

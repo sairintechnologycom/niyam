@@ -189,5 +189,19 @@ def scan_command(
         )
     )
 
+    # Print warnings for skipped external scanners
+    skipped = results.get("skipped_scanners", [])
+    if skipped:
+        console.print("\n[bold yellow]⚠ Missing External Scanners (Skipped):[/]")
+        install_help = {
+            "gitleaks": "brew install gitleaks (secrets scanning)",
+            "semgrep": "brew install semgrep (code vulnerability scan)",
+            "trivy": "brew install trivy (dependency check)",
+            "checkov": "pip install checkov (IaC scanning)",
+        }
+        for name in skipped:
+            help_str = install_help.get(name, f"install {name}")
+            console.print(f"  [dim]• {name} - Run: {help_str}[/]")
+
     if report_file:
         console.print(f"\n[green]✓ Report written to {report_file}[/]")
