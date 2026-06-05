@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from niyam.core.config import find_niyam_root
+from niyam.governance.common.redaction import redact_secrets
 
 
 class MCPTool(BaseModel):
@@ -65,7 +66,6 @@ def save_mcp_registry(registry: MCPRegistry, root: Path | None = None) -> None:
     path = get_mcp_registry_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     
-    from niyam.governance.common.redaction import redact_secrets
     redacted_data = redact_secrets(registry.model_dump())
     
     with open(path, "w", encoding="utf-8") as f:

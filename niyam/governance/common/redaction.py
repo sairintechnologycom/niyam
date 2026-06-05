@@ -12,7 +12,7 @@ PATTERNS = {
         r"-----BEGIN\s+([A-Z0-9\s_]+)\s+PRIVATE\s+KEY-----[\s\S]*?-----END\s+\1\s+PRIVATE\s+KEY-----"
     ),
     "openai": re.compile(
-        r"\bsk-[a-zA-Z0-9]{48}\b|\bsk-proj-[a-zA-Z0-9_\-]{32,}\b|\bsk-(?:proj-)?[a-zA-Z0-9_\-]{24,}\b"
+        r"\bsk-(?:proj-)?[a-zA-Z0-9_\-]{24,}\b"
     ),
     "anthropic": re.compile(r"\bsk-ant-[a-zA-Z0-9_\-]{24,}\b"),
     "github": re.compile(
@@ -27,6 +27,11 @@ PATTERNS = {
     "generic_assignment": re.compile(
         r"(?i)(password|passwd|api_key|apikey|secret_key|private_key|token|auth_token|pass)(\s*)([=:]|\bis\b)(\s*)(['\"]?)([a-zA-Z0-9_\-\.\@\#\!\$\%\^\&\*\(\)\+\/\?\:\=\~\[\]\{\}\<\>\\\|]{8,128})(\5)"
     ),
+}
+
+SENSITIVE_KEYS = {
+    "password", "passwd", "api_key", "apikey", "secret_key", 
+    "private_key", "token", "auth_token", "pass", "secret"
 }
 
 def get_secret_fingerprint(secret: str) -> str:
@@ -123,23 +128,12 @@ def redact_text(value: str, with_fingerprint: bool = False) -> str:
 
     return value
 
-def redact_dict(value: dict[str, Any], with_fingerprint: bool = False) -> dict[str, Any]:
+def redact_dict(value: dict[str, Any], with_fingerprint: bool = False, is_sensitive: bool = False) -> dict[str, Any]:
     """Recursively search and redact secrets in dictionaries."""
     redacted = {}
-    sensitive_keys = {"password", "passwd", "api_key", "apikey", "secret_key", "private_key", "token", "auth_token", "pass", "secret"}
     for k, v in value.items():
-        if isinstance(v, str) and k.lower() in sensitive_keys:
-            # Unconditionally redact sensitive dictionary keys
-            if v.strip():
-                if with_fingerprint:
-                    fp = get_secret_fingerprint(v)
-                    redacted[k] = f"[REDACTED_SECRET_{fp}]"
-                else:
-                    redacted[k] = "[REDACTED_SECRET]"
-            else:
-                redacted[k] = v
-        else:
-            redacted[k] = redact_secrets(v, with_fingerprint=with_fingerprint)
+        item_is_sensitive = is_sensitive or (k.lower() in SENSITIVE_KEYS)
+        redacted[k] = redact_secrets(v, with_fingerprint=with_fingerprint, is_sensitive=item_is_sensitive)
     return redacted
 
 def contains_secret(value: str) -> bool:
@@ -148,12 +142,19 @@ def contains_secret(value: str) -> bool:
         return False
     return any(p.search(value) is not None for p in PATTERNS.values())
 
-def redact_secrets(data: Any, with_fingerprint: bool = False) -> Any:
-    """Redacts secrets recursively from strings, dictionaries, lists or other data types (Experimental)."""
+def redact_secrets(data: Any, with_fingerprint: bool = False, is_sensitive: bool = False) -> Any:
+    """Redacts secrets recursively from strings, dictionaries, lists or other data types."""
     if isinstance(data, str):
+        if is_sensitive:
+            if data.strip():
+                if with_fingerprint:
+                    fp = get_secret_fingerprint(data)
+                    return f"[REDACTED_SECRET_{fp}]"
+                return "[REDACTED_SECRET]"
+            return data
         return redact_text(data, with_fingerprint=with_fingerprint)
     elif isinstance(data, dict):
-        return redact_dict(data, with_fingerprint=with_fingerprint)
+        return redact_dict(data, with_fingerprint=with_fingerprint, is_sensitive=is_sensitive)
     elif isinstance(data, list):
-        return [redact_secrets(item, with_fingerprint=with_fingerprint) for item in data]
+        return [redact_secrets(item, with_fingerprint=with_fingerprint, is_sensitive=is_sensitive) for item in data]
     return data

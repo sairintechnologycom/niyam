@@ -158,3 +158,21 @@ def test_code_quality_review_findings() -> None:
     assert redacted_direct["secret"] == "[REDACTED_SECRET]"
     assert redacted_direct["auth_token"] == "[REDACTED_SECRET]"
 
+
+def test_nested_bypass_scenarios() -> None:
+    # A list of custom secrets under a sensitive key is fully redacted.
+    # A nested dictionary under a sensitive key is fully redacted.
+    data = {
+        "api_key": [
+            "custom_secret_1",
+            "custom_secret_2",
+            {"nested_key": "custom_secret_3"}
+        ]
+    }
+    redacted = redact_secrets(data)
+    assert redacted["api_key"] == [
+        "[REDACTED_SECRET]",
+        "[REDACTED_SECRET]",
+        {"nested_key": "[REDACTED_SECRET]"}
+    ]
+
