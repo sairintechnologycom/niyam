@@ -295,3 +295,25 @@ def test_mcp_tool_model_fields():
     assert data["created_at"] == "2026-06-05T10:00:00Z"
     assert data["updated_at"] == "2026-06-05T10:00:00Z"
 
+
+def test_mcp_tool_validation_error():
+    from pydantic import ValidationError
+    from niyam.core.mcp import MCPTool
+
+    # Invalid type
+    with pytest.raises(ValidationError):
+        MCPTool(
+            name="invalid-type-tool",
+            type="invalid_type",  # type Literal
+            risk_level="low",
+        )
+
+    # Invalid risk_level
+    with pytest.raises(ValidationError):
+        MCPTool(
+            name="invalid-risk-tool",
+            type="mcp_server",
+            risk_level="invalid_risk",  # risk_level Literal
+        )
+
+

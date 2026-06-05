@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal
 from pydantic import BaseModel, Field
 
 from niyam.core.config import find_niyam_root
@@ -16,17 +16,17 @@ class MCPTool(BaseModel):
     schema_version: str = "1.0.0"
     name: str
     type: Literal["mcp_server", "api", "cli", "local_tool", "browser", "other"]
-    command_or_url: Optional[str] = None
-    owner: Optional[str] = None
+    command_or_url: str | None = None
+    owner: str | None = None
     risk_level: Literal["low", "medium", "high", "critical"]
     approved: bool = False
     capabilities: list[str] = Field(default_factory=list)
-    data_access: Optional[str] = None
-    network_access: Optional[str] = None
+    data_access: str | None = None
+    network_access: str | None = None
     requires_approval: bool = True
-    notes: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    notes: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 
