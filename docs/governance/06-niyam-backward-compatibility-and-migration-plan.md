@@ -4,23 +4,28 @@ This document details how the new governance, scanning, and FinOps features (int
 
 ---
 
-## 1. Compatibility Matrix
-To ensure a smooth transition, Niyam must remain fully backward-compatible with repositories initialized under v0.3.x.
+## 1. Existing Capabilities Protected
 
-| Workspace State | Impact of Upgrade | Necessary Action |
-| --- | --- | --- |
-| **v0.3.x Workspace** (No governance configuration) | **None.** Existing commands like `niyam init`, `niyam sync`, `niyam doctor`, and `niyam context` function exactly as before without errors. | None. Missing configurations default to inactive states. |
-| **Legacy Config file** (`niyam.yaml` v0.1.0) | **Automatic Fallback.** The parser loads config files, auto-injecting missing `guard` settings with `enabled: false`. | Run `niyam doctor` to auto-upgrade the workspace schema format. |
-| **Missing local Databases** (`mcp-registry.json` or `pricing.json`) | **Dynamic Initialization.** Missing registry files are generated automatically on their first corresponding command call. | None. Files initialize silently. |
-
-### Preserved CLI Behaviors
-* **`niyam init`**: Continues to build standard workspace layouts. If run in an upgraded environment, it appends default governance settings to `niyam.yaml`.
-* **`niyam doctor`**: Validates the workspace syntax. If the schema version is outdated, it alerts the developer and prompts for a safe schema upgrade.
+To preserve developer velocity and workspace health, Niyam ensures all legacy core capabilities are fully protected. The following existing workflows must remain entirely unaffected:
+* **`niyam init`**: Continues to construct standard workspace structures. If run in legacy configurations, it functions normally without demanding governance properties.
+* **`niyam sync`**: Continues to sync contexts and workspace mappings without referencing or requiring active governance modules.
+* **`niyam doctor`**: Validates the workspace syntax. Legacy config versions are loaded, validated, and flagged with a warning rather than throwing system errors.
+* **`niyam context`**: Retrieves, formats, and structures markdown context for agents, ignoring guardrails or logs unless specifically queried.
 
 ---
 
-## 2. Configuration Schema Migration
-When a repository is upgraded, the `niyam.yaml` file is updated to include the governance keys.
+## 2. Compatibility Contract
+
+Niyam commits to a strict backward compatibility contract during the v0.4.x minor release cycle:
+1. **Additive Schema Updates:** New configuration parameters (e.g. `guard`, `pricing`) are entirely optional. If missing, they fallback to inactive states or default behaviors.
+2. **Crash Prevention:** Missing, corrupt, or legacy configurations inside `.niyam/` must never crash the CLI.
+3. **No Retroactive Locks:** Upgrading the Niyam package will not write configuration overrides to user files without developer authorization or running explicit init commands.
+
+---
+
+## 3. Configuration Schema Migration
+
+When a legacy repository is upgraded to v0.4.x+, the config parser dynamically migrates the schema format in memory or alerts the user to save the upgraded structure.
 
 ### Schema Transformation Workflow
 
@@ -40,7 +45,8 @@ When a repository is upgraded, the `niyam.yaml` file is updated to include the g
             5. Update 'version' to '0.4.0'
 ```
 
-#### Code Migration Precedent (from `niyam/core/migrate.py`)
+### Code Migration Precedent
+Config migration logic is implemented in [migrate.py](file:///Users/bhushan/Documents/Projects/sutra/niyam/core/migrate.py):
 ```python
 def migrate_yaml_schema(content: dict) -> dict:
     """Migrates v0.1.0/v0.3.x configurations to v0.4.0 schema format."""
@@ -56,32 +62,35 @@ def migrate_yaml_schema(content: dict) -> dict:
 
 ---
 
-## 3. Fallback & Resilience Mechanisms
-Niyam uses defensive coding patterns to prevent missing or corrupt metadata files from causing CLI crashes.
+## 4. Fallback & Resilience Mechanisms
 
-### A. Missing `pricing.json` Fallback
-If `.niyam/pricing.json` is deleted or unparseable:
-1. Niyam logs a debug message to standard error: `[WARN] Pricing rate file missing or corrupt. Falling back to default model rates.`
-2. The engine loads the internal `DEFAULT_PRICING` dictionary (containing standard rates for Claude, GPT, and Gemini).
-3. The CLI execution proceeds without interruption.
-
-### B. Missing `mcp-registry.json` Fallback
-If `.niyam/mcp-registry.json` is missing:
-1. The registry engine instantiates an empty registry representation in memory: `{"schema_version": "1.0.0", "tools": {}}`.
-2. Common native CLI commands (such as `bash`, `git`, and `grep`) are auto-registered with default low/medium risk settings.
-3. No file write occurs until a tool registration command is explicitly triggered.
-
-### C. Corrupt JSONL Database Files
-If log ledgers (`guard-actions.jsonl` or `cost-events.jsonl`) contain corrupt lines:
-1. The file parser opens the logs using standard stream readers.
-2. It processes lines within `try/except` blocks. If an individual line fails JSON parsing, Niyam discards it and continues parsing subsequent lines.
-3. A summary of skipped corrupt records is printed in `--verbose` mode.
+* **Missing `pricing.json` Fallback:** If `.niyam/pricing.json` is missing, Niyam uses the internal default pricing dictionary, logging a debug notice: `[WARN] Pricing rate file missing or corrupt. Falling back to default model rates.`
+* **Missing `mcp-registry.json` Fallback:** If `.niyam/mcp-registry.json` is absent, an empty in-memory registry (`{"schema_version": "1.0.0", "tools": {}}`) is loaded, ensuring tools can be used or registered dynamically without failure.
+* **Corrupt JSONL Database Files:** If log ledgers contain corrupted entries, the parser skips them, continuing execution instead of crashing the process.
 
 ---
 
-## 4. API & CLI Versioning Policy
-Niyam adheres to Semantic Versioning (SemVer 2.0.0) policies:
+## 5. Rollback Plan
 
-* **Major Releases (v1.0.0)**: Reserved for breaking CLI options changes or complete config model rewrites.
-* **Minor Releases (v0.4.0)**: Used for adding new governance features (such as `scan`, `guard`, `mcp`, `cost`, `evidence`) that maintain backward compatibility.
-* **Patch Releases (v0.4.1)**: Fixes bugs, expands regex checks, or updates default model rates.
+In the event that an upgrade to v0.4.x causes unexpected build failures, follow these steps to revert the workspace and package:
+
+1. **Backup Config:** Save a copy of your current `.niyam/niyam.yaml` before running migration tools.
+2. **Revert Configuration File:** Revert any changes to `niyam.yaml` or restore the backup copy to return it to the v0.3.x structure (e.g., removing the `guard` block and reverting the version key to `0.3.0`).
+3. **Clean Up Database Files:** Delete any automatically generated governance metadata files:
+   ```bash
+   rm -f .niyam/mcp-registry.json
+   rm -f .niyam/pricing.json
+   rm -rf .niyam/logs/
+   ```
+4. **Downgrade Niyam Package:** Downgrade the Niyam CLI package via pip to the previous stable release:
+   ```bash
+   pip install niyam==0.3.0
+   ```
+
+---
+
+## 6. Regression Testing Suite
+
+To ensure that backward compatibility remains intact, the automated test suite includes dedicated regression tests:
+* **Legacy Configuration Parsing:** [test_migration_and_deprecation.py](file:///Users/bhushan/Documents/Projects/sutra/tests/test_migration_and_deprecation.py) asserts that older `niyam.yaml` shapes are parsed correctly and migrated seamlessly.
+* **E2E Compatibility Scenario:** [test_backward_compatibility_e2e.py](file:///Users/bhushan/Documents/Projects/sutra/tests/e2e/test_backward_compatibility_e2e.py) validates that legacy commands (like `niyam doctor` or `niyam init`) execute successfully inside pre-upgrade workspace fixtures.

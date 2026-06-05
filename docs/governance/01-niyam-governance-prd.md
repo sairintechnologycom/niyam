@@ -1,18 +1,48 @@
 # PRD: Niyam Governance & Production Readiness
 
-## 1. Executive Summary
-Niyam is evolving from an AI development orchestrator into a comprehensive **governance and production-readiness layer** for AI-assisted development. This Product Requirements Document (PRD) outlines the features required to validate codebase readiness, audit agent actions, catalog and classify external tool risks, track model token costs, and compile compliance-ready audit reports. All operations are local-first, agent-agnostic, and zero-trust by design.
+## 1. Executive Summary & Problem Statement
+Autonomous AI coding agents (such as Claude Code, Codex, or custom developer loops) dramatically accelerate software delivery. However, they introduce significant risks to software quality, compliance, and security:
+* **The "Vibe-to-Production" Gap:** AI agents often produce functional code but omit comprehensive unit tests, bypass security checkups, leave raw placeholder stubs, or ignore enterprise infrastructure requirements (e.g., unpinned Docker images).
+* **Credential Leaks:** Agents can accidentally print sensitive keys, database passwords, or auth tokens into logs or commit files to public repositories.
+* **Ungoverned Action Paths:** Rogue or misconfigured agent sessions may run destructive shell scripts (e.g., `rm -rf` or database table drops) or modify critical project configs without human oversight.
+* **Unvetted Third-Party Tools:** Agents frequently consume Model Context Protocol (MCP) servers and external web APIs without cataloging their host privileges or verifying security authorization.
+* **Token Cost Runaways:** Engineering managers lack visibility into token cost structures or budget wasted on failed/infinite loops during AI agent runs.
+
+**Niyam Governance** bridges these gaps by providing a local-first, agent-agnostic, zero-trust governance and production-readiness layer. It enforces safety gates and audits AI-generated changes before code hits production.
 
 ---
 
-## 2. Product Vision & Goals
-* **Bridge the "Vibe-to-Production" Gap:** AI coding agents write code quickly but often omit tests, leave placeholder stubs, bypass health endpoints, or expose credentials. Niyam provides the guardrails and scanners to verify code quality and compliance before promotion.
-* **Local-First & Zero-Trust:** All security analysis, logs, and token pricing rates are processed and stored locally inside the project's `.niyam/` folder. No proprietary codebase context or credentials are leaked to remote SaaS tracking platforms.
-* **Agent-Agnostic Governance:** Works regardless of whether the developer uses Claude Code, Codex, Gemini, or custom local scripts.
+## 2. Target Personas
+The Niyam governance capabilities are built to serve five key personas across the software delivery lifecycle:
+
+### A. The Developer
+* **Needs:** Speed and clarity.
+* **Pain Point:** Security policies that block their agent's execution without explanation.
+* **Niyam Value:** Provides immediate terminal feedback and actionable remediation guidelines (e.g., specific instructions on how to resolve failing scan rules).
+
+### B. The Senior Engineer
+* **Needs:** Code hygiene and structural consistency.
+* **Pain Point:** Reviewing pull requests with incomplete tests, commented-out assertions, or placeholder stubs.
+* **Niyam Value:** Standardizes readiness expectations using customizable scan profiles (`team`, `enterprise`) that gate builds based on clear quality rules.
+
+### C. The Architect
+* **Needs:** Compliance with system patterns.
+* **Pain Point:** Keeping track of external APIs, microservices, and base image vulnerabilities introduced by AI-generated files.
+* **Niyam Value:** Enforces infrastructure checks (e.g., Dockerfile base image pinning) and maps architectural boundaries.
+
+### D. The Security Reviewer
+* **Needs:** Prevention of secrets exposure and host privilege abuse.
+* **Pain Point:** Lack of visibility into commands executed by autonomous agents and risks from external MCP tool registries.
+* **Niyam Value:** Sanitizes agent outputs with the inline Redaction Pipeline, restricts files via Path Freeze rules, and classifies MCP server risks.
+
+### E. The Platform / DevOps Team
+* **Needs:** Clean CI/CD validation gates.
+* **Pain Point:** Complex integrations and slow build checks.
+* **Niyam Value:** Provides lightweight, standardized exit codes and CLI options (e.g., `niyam ci verify` and `niyam scan --fail-on`) that integrate into GitHub Actions or Azure DevOps in minutes.
 
 ---
 
-## 3. Product Context vs. Evolved Capabilities
+## 3. Product Vision & Evolved Capabilities
 
 | Capability | Current Context (v0.3.0) | Evolved Direction (v0.4.0+) |
 | --- | --- | --- |
@@ -22,91 +52,55 @@ Niyam is evolving from an AI development orchestrator into a comprehensive **gov
 
 ---
 
-## 4. Key Capabilities & User Stories
+## 4. Key Use Cases
 
-### I. Repository Scanning (`niyam scan`)
-Evaluates the codebase using rulesets categorized by strictness profiles: `startup`, `team`, and `enterprise`.
-* **As a** Release Engineer,
-* **I want to** run a local scan of my repository using an `enterprise` profile,
-* **So that** I can automatically block build promotions if critical vulnerabilities (like hardcoded keys or unpinned container base images) are found.
+### Use Case 1: Repository Scan Gating (`niyam scan`)
+* **Goal:** Verify that AI-generated code meets strict quality and security standards before being pushed.
+* **Trigger:** Pre-commit hooks or CI/CD pipelines run `niyam scan` on the project root.
+* **Flow:** The scanner parses rules based on the selected profile (`startup`, `team`, `enterprise`, or `regulated`), computes a readiness score ($0 - 100$), and returns an exit code of `2` if findings violate policy limits.
 
-#### Key Features:
-* **Configurable Rule Profiles:**
-  * `startup` (Lenient): Flags critical security exposures (keys, passwords).
-  * `team` (Medium): Flags missing dependency lockfiles, commented assertions, and placeholder TODO stubs.
-  * `enterprise` (Strict): Requires tests (minimum file presence), Dockerfile base image pinning, health-check routes, CI/CD config validation, and IaC checkups.
-* **Launch Gates:** Evaluates a project readiness score ($0 - 100$) based on severity deductions:
-  * **Critical Findings:** Deducts $25$ points each.
-  * **High Findings:** Deducts $15$ points each.
-  * **Medium Findings:** Deducts $8$ points each.
-  * **Low Findings:** Deducts $3$ points each.
-  * **Info Findings:** Deducts $0$ points.
-* **Decision Matrix:**
-  * **Score 90 - 100:** `GO`
-  * **Score 75 - 89:** `CONDITIONAL_GO` (passes, but lists issues to resolve).
-  * **Score 50 - 74:** `HIGH_RISK` (warns heavily, requires override).
-  * **Score < 50:** `NO_GO` (hard failure, blocks automation).
+### Use Case 2: Safe Subprocess Execution (`niyam guard run`)
+* **Goal:** Run agent shell commands inside a monitored, redacted environment.
+* **Trigger:** The agent executes commands prefixed by `niyam guard run -- <command>`.
+* **Flow:** Niyam interceptors block access to frozen directories, scan inputs for destructive patterns, redact sensitive credentials in stdout/stderr, and append execution metrics to a local append-only ledger (`.niyam/logs/guard-actions.jsonl`).
 
----
+### Use Case 3: MCP Server Risk Vetting (`niyam mcp`)
+* **Goal:** Track host-level capabilities granted to agents via Model Context Protocol (MCP) servers.
+* **Trigger:** Platform teams register new tools via `niyam mcp register`.
+* **Flow:** Niyam uses heuristic analysis to classify tool risk (e.g., marking shell/filesystem write capabilities as `critical` or `high`) and warns the developer if unapproved high-risk tools are enabled.
 
-### II. Action Governance (`niyam guard`)
-Monitors agent commands and actively enforces file/path and command constraints.
-* **As a** Security Officer,
-* **I want to** freeze access to my database migrations directory (`/db/migrations`) during automated agent runs,
-* **So that** the agent cannot accidentally drop tables or run unapproved schema alterations.
+### Use Case 4: FinOps Cost Tracking & Budget Leak Spotting (`niyam cost`)
+* **Goal:** Audit session expenses and capture financial leaks from looping agents.
+* **Trigger:** Runtimes record token counts to `.niyam/logs/cost-events.jsonl` upon task completion.
+* **Flow:** Engineering managers run `niyam cost summary` or `niyam cost report` to view calculated USD expenses against local pricing rates (`.niyam/pricing.json`) and isolate wasted budgets.
 
-#### Key Features:
-* **Passive Observation (`niyam guard run`):** Executes commands within a subprocess, recording duration, exit code, timestamp, and working directory to `.niyam/logs/guard-actions.jsonl`.
-* **Active Constraint Enforcement:**
-  * `niyam guard freeze <path>`: Blocks file writes/edits in specified folders.
-  * `niyam guard careful`: Intercepts and flags destructive shell patterns (e.g. `rm -rf`, `DROP DATABASE`) and prompts for approval.
-* **Credential Redaction:** Sanitizes all logs to redact environment variables, authorization headers, passwords, and private keys using regex rules before writing to the ledger.
+### Use Case 5: Compliance-Ready Joint Evidence (`niyam evidence`)
+* **Goal:** Generate a unified audit trail for security auditors.
+* **Trigger:** Developers or release tools run `niyam evidence generate`.
+* **Flow:** The evidence engine compiles readiness scores, observed command records, tool registry risk states, and token cost summaries into a redacted Markdown, HTML, or JSON report.
 
 ---
 
-### III. MCP & Tool Registry (`niyam mcp`)
-A catalog of external APIs, CLI commands, and Model Context Protocol (MCP) servers accessible to AI agents.
-* **As a** Devops Lead,
-* **I want to** register our local file-system MCP server and mark it as high-risk,
-* **So that** the audit report clearly notes what host capabilities were granted to the AI.
+## 5. MVP Scope vs. Future Capabilities
 
-#### Key Features:
-* **Heuristic Risk Classification:** Evaluates tools and assigns levels (`low`, `medium`, `high`, `critical`):
-  * **Critical:** Shell executions, raw command-line tools.
-  * **High:** Filesystem write access, database modification, root privilege.
-  * **Medium:** Remote cloud API connections, read/write SaaS access (e.g. Slack, Jira).
-  * **Low:** Static reference search tools, read-only documentation APIs.
-* **Approval Status:** Explicitly tracks `approved: true/false`. If a tool is high/critical and unapproved, it flags a warning in the readiness scan.
+### In MVP Scope (v0.4.0)
+* **Local-First Design:** Entirely self-contained configuration store under `.niyam/`. Zero dependencies on external database engines or cloud SaaS platforms.
+* **Five Governance CLI Commands:** `scan`, `guard`, `mcp`, `cost`, and `evidence`.
+* **Standard Profiles:** Support for `startup` (lenient), `team` (medium), `enterprise` (strict), and `regulated` (hardened).
+* **Regex Redaction Engine:** Core filter scrubbing AWS keys, private tokens, passwords, and private PEM keys from reports and logs.
+* **Heuristic Risk Classifier:** Classifying tools based on declared capabilities and types.
+* **CI/CD Integrations:** Support for structured JSON/SARIF output and customizable exit codes.
 
----
-
-### IV. AI Cost & Token Tracking (`niyam cost`)
-Estimates financial expenses incurred during AI development sessions using local rates tables.
-* **As an** Engineering Manager,
-* **I want to** run a cost summary of my team's AI token spending,
-* **So that** I can track the "wasted budget" from failed or repeated agent loops.
-
-#### Key Features:
-* **Local Pricing rate Table (`.niyam/pricing.json`):** Tracks pricing for key models (Claude, GPT, Gemini) per million tokens (input vs. output).
-* **Cost Summary & Reports:** Renders markdown tables grouped by day, repository, task, and session.
-* **Wasted Budget Calculator:** Specifically highlights the cost and count of failed or repeated runs, highlighting agent inefficiencies.
+### Out of MVP Scope (Non-Goals)
+* **No Remote SaaS Portal:** Niyam does not serve a centralized, multi-tenant cloud dashboard. All data remains local.
+* **No Auto-Remediation:** Niyam flags violations and provides advice, but it **never** automatically writes code modifications to resolve scan issues.
+* **No Agent Integration Blockers:** Niyam works alongside agents as a wrapper/gating framework, not as a replacement for the agent's internal reasoning loop.
 
 ---
 
-### V. Joint Evidence Report (`niyam evidence`)
-Compiles readiness scores, observed command logs, registered tool risks, and estimated session costs into a single audit-ready report.
-* **As a** Compliance Auditor,
-* **I want to** export a unified Markdown or HTML report of the workspace,
-* **So that** I have a permanent, timestamped evidence record of all AI actions and code checks.
-
-#### Key Features:
-* **Multi-Format Compilation:** Supports `markdown`, `json`, and `html` exports.
-* **Strict Masking:** Enforces strict data-loss prevention policies, running the secret redaction engine over all exported JSON/Markdown fields.
-
----
-
-## 5. Non-Functional Requirements
-1. **Performance:** Running `niyam scan` on a codebase of 10,000 files must complete in under $3$ seconds.
-2. **Offline Mode:** The CLI must work completely offline without sending any code or token statistics to external APIs.
-3. **Low Footprint:** Local logs and configurations must not exceed $50\text{ MB}$ of storage space per repository.
-4. **Compatibility:** Must integrate seamlessly with existing Niyam core modules without modifying existing product flows.
+## 6. Success Metrics
+* **Performance:** Running `niyam scan` on a codebase of 10,000 files completes in under $3$ seconds.
+* **Data Leak Prevention:** Zero plain-text credentials (matching defined redaction patterns) written to `.niyam/logs/` or evidence outputs.
+* **Token Cost Tracking Accuracy:** Estimated token costs deviate by less than $\pm 1\%$ from actual API provider billing rates.
+* **Offline Execution Integrity:** 100% of CLI capabilities run fully offline without external network queries.
+* **Developer Friction:** Scan failures print clear, actionable remediation tips, reducing resolution time to under $5$ minutes per finding.

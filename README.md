@@ -96,17 +96,24 @@ Then open Claude Code and use:
 | `niyam cost report` | *[Experimental]* View detailed breakdowns of expenses |
 | `niyam evidence generate`| *[Experimental]* Generate local evidence & readiness report |
 
-## Experimental Governance Capabilities
+## Enterprise Governance Capabilities
 
-Niyam now includes experimental capabilities for advanced governance and auditing of AI-assisted development. These features are designed to be run locally without requiring SaaS backends:
+Niyam includes robust, local-first enterprise governance capabilities to bridge the "vibe-to-production" gap, audit agent actions, and compile compliance-ready evidence reports:
 
-- **Local Readiness Scan (`niyam scan`):** A rule-based scan evaluating credentials exposure, dependency files/lockfiles, health endpoints, test suites, pinned images, and masked test assertions.
-- **Guard Observation (`niyam guard run`):** Shell wrapper logging execution times, outcomes, and commands (with automated secret redaction) to audit agent behavior.
-- **MCP & Tool Registry (`niyam mcp`):** Local catalog of tools, APIs, and MCP servers used by agents, utilizing heuristic risk classification for security posture analysis.
-- **AI Cost Tracking (`niyam cost`):** Audits token consumption and estimated spend using configurable local pricing tables.
-- **Unified Evidence Report (`niyam evidence generate`):** Compiles scan results, observed actions, MCP registry status, and cost reports into a single, sign-off-ready markdown or HTML document.
+* **Repository Scanning (`niyam scan`):** Evaluates repository readiness scores against strict quality and security profiles (`startup`, `team`, `enterprise`, `regulated`).
+* **Action Governance (`niyam guard`):** Intercepts shell commands, redacts credentials in real-time, blocks destructive patterns, and enforces directory read-only freezes.
+* **MCP & Tool Registry (`niyam mcp`):** Catalogs and heuristics-classifies risk profiles (`low`, `medium`, `high`, `critical`) for external Model Context Protocol servers.
+* **AI Cost Tracking (`niyam cost`):** Logs LLM token metrics and session costs against a local rate-card table to prevent budget leaks.
+* **Joint Evidence Compiler (`niyam evidence`):** Synthesizes readiness scores, observed logs, registered tools, and token pricing into a unified, audit-ready compliance document.
 
-Refer to the [Governance Overview](file:///Users/bhushan/Documents/Projects/sutra/docs/governance.md) for more details.
+### Governance Documentation Pack
+For deep dives into policies, specifications, and architecture, refer to the following guides:
+1. [01. Product Requirements (PRD)](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/01-niyam-governance-prd.md)
+2. [02. Technical Architecture](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/02-niyam-technical-architecture.md)
+3. [03. Security & Access Governance](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/03-niyam-security-access-governance.md)
+4. [04. CLI & CI/CD Specification](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/04-niyam-cli-and-ci-spec.md)
+5. [05. Feature Implementation Tickets](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/05-niyam-feature-ticket-list.md)
+6. [06. Backward Compatibility & Migration Plan](file:///Users/bhushan/Documents/Projects/sutra/docs/governance/06-niyam-backward-compatibility-and-migration-plan.md)
 
 
 ## Architecture
