@@ -317,3 +317,21 @@ def test_mcp_tool_validation_error():
         )
 
 
+def test_risk_classification_v1():
+    from niyam.core.mcp import classify_risk
+    # Capability direct mapping
+    assert classify_risk("search", "other", capabilities=["public_search"]) == "low"
+    assert classify_risk("docs", "api", capabilities=["docs_read"]) == "medium"
+    assert classify_risk("repo", "api", capabilities=["repo_read"]) == "medium"
+    assert classify_risk("file", "local_tool", capabilities=["file_write"]) == "high"
+    assert classify_risk("shell", "cli", capabilities=["shell_execute"]) == "critical"
+    assert classify_risk("cloud", "api", capabilities=["cloud_api"]) == "critical"
+    assert classify_risk("secrets", "other", capabilities=["secrets_access"]) == "critical"
+    assert classify_risk("deploy", "other", capabilities=["production_deploy"]) == "critical"
+
+    # Multiple capabilities should select highest risk
+    assert classify_risk("mixed", "other", capabilities=["public_search", "file_write"]) == "high"
+    assert classify_risk("mixed2", "other", capabilities=["repo_read", "shell_execute"]) == "critical"
+
+
+

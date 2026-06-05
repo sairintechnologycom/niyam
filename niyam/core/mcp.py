@@ -75,70 +75,53 @@ def classify_risk(
     data_access: str | None = None,
     notes: str | None = None,
 ) -> Literal["low", "medium", "high", "critical"]:
-    """Classify the risk level of a tool based on heuristics.
-
-    Heuristics:
-    - file system access = high
-    - shell access = critical
-    - cloud API access = critical
-    - read-only docs = medium
-    - public search = low/medium
-    """
     import re
 
+    caps = [c.lower().strip() for c in (capabilities or [])]
     text = f"{name} {command_or_url or ''} {data_access or ''} {notes or ''}".lower()
-    caps = [c.lower() for c in (capabilities or [])]
 
-    # Helper function to check for exact word matching
+    # Risk level priority mapping
+    risk_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    inv_risk_levels = {1: "low", 2: "medium", 3: "high", 4: "critical"}
+    max_risk_val = 0
+
+    # Map capabilities directly
+    capability_risks = {
+        "production_deploy": 4,
+        "secrets_access": 4,
+        "cloud_api": 4,
+        "shell_execute": 4,
+        "file_write": 3,
+        "repo_read": 2,
+        "docs_read": 2,
+        "public_search": 1,
+    }
+
+    for cap in caps:
+        if cap in capability_risks:
+            max_risk_val = max(max_risk_val, capability_risks[cap])
+
+    # Fallback to text heuristics if no capability matched or to refine
     def has_word(words: list[str], target: str) -> bool:
         for w in words:
             if re.search(r"\b" + re.escape(w) + r"\b", target):
                 return True
         return False
 
-    # Heuristic 1: Shell access (critical)
-    shell_keywords = [
-        "shell",
-        "bash",
-        "zsh",
-        "sh",
-        "terminal",
-        "run_command",
-        "execute",
-        "exec",
-        "cmd.exe",
-        "powershell",
-    ]
-    if has_word(shell_keywords, text) or any(
-        k in caps for k in ["run_command", "execute", "exec"]
-    ):
-        return "critical"
+    text_critical = ["shell", "bash", "zsh", "terminal", "powershell", "aws", "gcp", "azure", "kubernetes", "k8s", "secret", "deploy", "publish"]
+    text_high = ["file", "filesystem", "write", "create", "delete", "modify"]
+    text_medium = ["docs", "doc", "wiki", "read-only", "repo", "repository"]
+    text_low = ["search", "google", "query", "web"]
 
-    # Heuristic 2: Cloud API access (critical)
-    cloud_keywords = ["aws", "gcp", "azure", "cloud", "kubernetes", "k8s"]
-    if has_word(cloud_keywords, text) or "cloud api" in text:
-        return "critical"
+    if max_risk_val < 4 and (has_word(text_critical, text) or any(k in caps for k in ["run_command", "execute", "exec"])):
+        max_risk_val = max(max_risk_val, 4)
+    if max_risk_val < 3 and (has_word(text_high, text) or any(k in caps for k in ["read_file", "write_file", "file", "filesystem"])):
+        max_risk_val = max(max_risk_val, 3)
+    if max_risk_val < 2 and (has_word(text_medium, text) or any(k in caps for k in ["read_docs", "view_docs"])):
+        max_risk_val = max(max_risk_val, 2)
+    if max_risk_val < 1 and (has_word(text_low, text) or any(k in caps for k in ["search_web", "web_search"])):
+        max_risk_val = max(max_risk_val, 1)
 
-    # Heuristic 3: File system access (high)
-    fs_keywords = ["file", "fs", "directory", "folder", "filesystem", "path"]
-    if has_word(fs_keywords, text) or any(
-        k in caps for k in ["read_file", "write_file", "file", "filesystem"]
-    ):
-        return "high"
-
-    # Heuristic 4: Read-only docs (medium)
-    docs_keywords = ["docs", "doc", "documentation", "wiki", "read-only", "readme"]
-    if has_word(docs_keywords, text) or any(
-        k in caps for k in ["read_docs", "view_docs"]
-    ):
-        return "medium"
-
-    # Heuristic 5: Public search (low/medium)
-    search_keywords = ["search", "google", "query", "web", "duckduckgo", "bing"]
-    if has_word(search_keywords, text) or any(
-        k in caps for k in ["search_web", "web_search"]
-    ):
-        return "low"
-
-    # Default fallback
-    return "medium"
+    if max_risk_val == 0:
+        return "medium"  # Default fallback
+    return inv_risk_levels[max_risk_val]
