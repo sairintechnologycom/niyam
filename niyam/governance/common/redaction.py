@@ -25,7 +25,7 @@ PATTERNS = {
     ),
     "db_url": re.compile(r"([a-zA-Z0-9+.-]+://[^/:]+:)([^/@\s]+)(@[^/\s]+)"),
     "generic_assignment": re.compile(
-        r"(?i)(password|passwd|api_key|apikey|secret_key|private_key|token|auth_token|pass)(\s*)([=:]|\bis\b)(\s*)(['\"]?)([a-zA-Z0-9_\-\.]{8,128})(\5)"
+        r"(?i)(password|passwd|api_key|apikey|secret_key|private_key|token|auth_token|pass)(\s*)([=:]|\bis\b)(\s*)(['\"]?)([a-zA-Z0-9_\-\.\@\#\!\$\%\^\&\*\(\)\+\/\?\:\=\~\[\]\{\}\<\>\\\|]{8,128})(\5)"
     ),
 }
 
@@ -126,20 +126,20 @@ def redact_text(value: str, with_fingerprint: bool = False) -> str:
 def redact_dict(value: dict[str, Any], with_fingerprint: bool = False) -> dict[str, Any]:
     """Recursively search and redact secrets in dictionaries."""
     redacted = {}
+    sensitive_keys = {"password", "passwd", "api_key", "apikey", "secret_key", "private_key", "token", "auth_token", "pass", "secret"}
     for k, v in value.items():
-        if isinstance(v, dict):
-            redacted[k] = redact_dict(v, with_fingerprint=with_fingerprint)
-        elif isinstance(v, list):
-            redacted[k] = [
-                redact_dict(item, with_fingerprint=with_fingerprint) if isinstance(item, dict)
-                else redact_text(item, with_fingerprint=with_fingerprint) if isinstance(item, str)
-                else item
-                for item in v
-            ]
-        elif isinstance(v, str):
-            redacted[k] = redact_text(v, with_fingerprint=with_fingerprint)
+        if isinstance(v, str) and k.lower() in sensitive_keys:
+            # Unconditionally redact sensitive dictionary keys
+            if v.strip():
+                if with_fingerprint:
+                    fp = get_secret_fingerprint(v)
+                    redacted[k] = f"[REDACTED_SECRET_{fp}]"
+                else:
+                    redacted[k] = "[REDACTED_SECRET]"
+            else:
+                redacted[k] = v
         else:
-            redacted[k] = v
+            redacted[k] = redact_secrets(v, with_fingerprint=with_fingerprint)
     return redacted
 
 def contains_secret(value: str) -> bool:

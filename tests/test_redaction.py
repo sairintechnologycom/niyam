@@ -122,3 +122,39 @@ def test_redact_secrets_generic() -> None:
     # test list redaction
     lst = ["sk-proj-1234567890abcdef1234567890abcdef", "safe"]
     assert redact_secrets(lst) == ["[REDACTED_SECRET]", "safe"]
+
+
+def test_code_quality_review_findings() -> None:
+    # 1. Nested list of secrets under a dictionary key
+    nested_dict = {
+        "data": [
+            ["sk-ant-123456789012345678901234"],
+            "safe_val",
+            {"key": "sk-proj-1234567890abcdef1234567890abcdef"}
+        ]
+    }
+    redacted_nested = redact_dict(nested_dict)
+    assert redacted_nested["data"][0][0] == "[REDACTED_SECRET]"
+    assert redacted_nested["data"][1] == "safe_val"
+    assert redacted_nested["data"][2]["key"] == "[REDACTED_SECRET]"
+
+    # 2. Generic assignments with special characters
+    special_char_pass = 'password = "mySecret#2026!"'
+    assert redact_text(special_char_pass) == 'password = "[REDACTED_SECRET]"'
+
+    special_char_token = 'token: "auth@token_123$%"'
+    assert redact_text(special_char_token) == 'token: "[REDACTED_SECRET]"'
+
+    # 3. Direct key-based dictionary redaction
+    direct_dict = {
+        "api_key": "some-random-val",
+        "safe_key": "safe-val",
+        "secret": "another-val",
+        "auth_token": "token-val"
+    }
+    redacted_direct = redact_dict(direct_dict)
+    assert redacted_direct["api_key"] == "[REDACTED_SECRET]"
+    assert redacted_direct["safe_key"] == "safe-val"
+    assert redacted_direct["secret"] == "[REDACTED_SECRET]"
+    assert redacted_direct["auth_token"] == "[REDACTED_SECRET]"
+
