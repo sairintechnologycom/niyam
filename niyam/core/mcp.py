@@ -13,6 +13,7 @@ from niyam.core.config import find_niyam_root
 class MCPTool(BaseModel):
     """Pydantic model representing a registered tool or MCP server."""
 
+    schema_version: str = "1.0.0"
     name: str
     type: Literal["mcp_server", "api", "cli", "local_tool", "browser", "other"]
     command_or_url: Optional[str] = None
@@ -21,7 +22,12 @@ class MCPTool(BaseModel):
     approved: bool = False
     capabilities: list[str] = Field(default_factory=list)
     data_access: Optional[str] = None
+    network_access: Optional[str] = None
+    requires_approval: bool = True
     notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
 
 
 class MCPRegistry(BaseModel):

@@ -275,3 +275,23 @@ def test_mcp_risk_report(tmp_path: Path) -> None:
     assert "Unapproved High/Critical Risk Tools" in result.stdout
     assert "tool-critical-unapproved" in result.stdout
     assert "Unapproved critical root" in result.stdout
+
+
+def test_mcp_tool_model_fields():
+    from niyam.core.mcp import MCPTool
+    tool = MCPTool(
+        name="test-fields",
+        type="mcp_server",
+        risk_level="low",
+        network_access="localhost",
+        requires_approval=True,
+        created_at="2026-06-05T10:00:00Z",
+        updated_at="2026-06-05T10:00:00Z",
+    )
+    data = tool.model_dump()
+    assert data["schema_version"] == "1.0.0"
+    assert data["network_access"] == "localhost"
+    assert data["requires_approval"] is True
+    assert data["created_at"] == "2026-06-05T10:00:00Z"
+    assert data["updated_at"] == "2026-06-05T10:00:00Z"
+
