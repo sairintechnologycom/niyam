@@ -176,3 +176,30 @@ def test_nested_bypass_scenarios() -> None:
         {"nested_key": "[REDACTED_SECRET]"}
     ]
 
+
+def test_code_quality_recommendations() -> None:
+    # 1. Verify non-string dict keys do not raise AttributeError
+    non_str_key_dict = {
+        123: "safe_val",
+        True: "another_safe_val",
+        "api_key": "secret_val"
+    }
+    redacted = redact_dict(non_str_key_dict)
+    assert redacted[123] == "safe_val"
+    assert redacted[True] == "another_safe_val"
+    assert redacted["api_key"] == "[REDACTED_SECRET]"
+
+    # 2. Verify new sensitive keys are redacted
+    direct_dict = {
+        "client_secret": "my-client-secret",
+        "access_token": "my-access-token",
+        "connection_string": "my-connection-string",
+        "conn_str": "my-conn-str",
+    }
+    redacted_direct = redact_dict(direct_dict)
+    assert redacted_direct["client_secret"] == "[REDACTED_SECRET]"
+    assert redacted_direct["access_token"] == "[REDACTED_SECRET]"
+    assert redacted_direct["connection_string"] == "[REDACTED_SECRET]"
+    assert redacted_direct["conn_str"] == "[REDACTED_SECRET]"
+
+

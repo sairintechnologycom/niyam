@@ -31,7 +31,8 @@ PATTERNS = {
 
 SENSITIVE_KEYS = {
     "password", "passwd", "api_key", "apikey", "secret_key", 
-    "private_key", "token", "auth_token", "pass", "secret"
+    "private_key", "token", "auth_token", "pass", "secret",
+    "client_secret", "access_token", "connection_string", "conn_str"
 }
 
 def get_secret_fingerprint(secret: str) -> str:
@@ -132,7 +133,7 @@ def redact_dict(value: dict[str, Any], with_fingerprint: bool = False, is_sensit
     """Recursively search and redact secrets in dictionaries."""
     redacted = {}
     for k, v in value.items():
-        item_is_sensitive = is_sensitive or (k.lower() in SENSITIVE_KEYS)
+        item_is_sensitive = is_sensitive or (isinstance(k, str) and k.lower() in SENSITIVE_KEYS)
         redacted[k] = redact_secrets(v, with_fingerprint=with_fingerprint, is_sensitive=item_is_sensitive)
     return redacted
 
