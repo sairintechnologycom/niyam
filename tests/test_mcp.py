@@ -354,5 +354,74 @@ def test_save_registry_redacts_secrets(tmp_path: Path):
     assert "[REDACTED_SECRET]" in content
 
 
+def test_mcp_register_multiple_capability(tmp_path: Path):
+    from typer.testing import CliRunner
+    from niyam.cli import app
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "mcp", "register", "multi-cap",
+            "--type", "cli",
+            "--capability", "file_read",
+            "--capability", "file_write",
+        ]
+    )
+    assert result.exit_code == 0
+    
+    # Check stored capabilities
+    from niyam.core.mcp import load_mcp_registry
+    reg = load_mcp_registry(tmp_path)
+    assert reg.tools["multi-cap"].capabilities == ["file_read", "file_write"]
+
+def test_mcp_register_duplicate_with_update(tmp_path: Path):
+    from typer.testing import CliRunner
+    from niyam.cli import app
+    runner = CliRunner()
+    
+    # First register
+    runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "old notes"])
+    
+    # Second register without --update (fails)
+    res_fail = runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "new notes"])
+    assert res_fail.exit_code == 1
+    assert "already registered" in res_fail.stdout
+    
+    # Third register with --update (succeeds)
+    res_ok = runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "new notes", "--update"])
+    assert res_ok.exit_code == 0
+    assert "successfully registered" in res_ok.stdout
+    
+    # Check fields
+    from niyam.core.mcp import load_mcp_registry
+    reg = load_mcp_registry(tmp_path)
+    tool = reg.tools["dup-tool"]
+    assert tool.notes == "new notes"
+    assert tool.created_at is not None
+    assert tool.updated_at is not None
+
+
+def test_mcp_approve_tool(tmp_path: Path):
+    from typer.testing import CliRunner
+    from niyam.cli import app
+    runner = CliRunner()
+
+    # Register tool as not approved
+    runner.invoke(app, ["mcp", "register", "app-tool", "--type", "api", "--no-approved"])
+
+    # Approve tool
+    result = runner.invoke(app, ["mcp", "approve", "app-tool"])
+    assert result.exit_code == 0
+    assert "successfully approved" in result.stdout
+
+    # Check registry
+    from niyam.core.mcp import load_mcp_registry
+    reg = load_mcp_registry(tmp_path)
+    assert reg.tools["app-tool"].approved is True
+    assert reg.tools["app-tool"].updated_at is not None
+
+
+
+
 
 
