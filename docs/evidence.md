@@ -53,7 +53,7 @@ A fully compiled report includes these 10 sections:
 6. **Critical and High Findings:** Prioritized list of major findings.
 7. **Risk Register:** Summary count table of findings categorized by severity.
 8. **Recommended Remediation Plan:** Step-by-step guidance to resolve identified findings.
-9. **AI-Assisted Development Governance Notes:** Active policy status, Niyam Guard action summary metrics (total actions, blocked, warned, failed, top categories, latest session), registered tool posture, and cost logs.
+9. **AI-Assisted Development Governance Notes:** Active policy status, Niyam Guard action summary metrics (total actions, blocked, warned, failed, top categories, latest session), registered tool posture, and cost logs. The MCP section includes detailed approval posture metrics (total registered, approved, unapproved, high-risk, critical-risk, and high/critical unapproved tool counts) alongside recommended actions to approve unapproved tools. Findings from the MCP registry for unapproved high/critical risk tools are automatically injected into the primary findings risk register and remediation plan.
 10. **Appendix Summary:** Git commit details, author info, and redaction metadata.
 
 ---
@@ -82,6 +82,17 @@ When outputting to JSON (`--format json`), the report conforms to the following 
   - `top_command_categories`: List of the top executed command categories.
   - `latest_session`: Breakdown of metrics for the latest active session.
   - `latest_actions_summary`: List of recent command details.
+- `mcp`: Object containing MCP/Tool registry posture:
+  - `exists`: Boolean indicating whether the registry exists.
+  - `total`: Total count of registered tools.
+  - `approved`: Total count of approved tools.
+  - `unapproved`: Total count of unapproved tools.
+  - `high_risk`: Total count of high-risk tools.
+  - `critical_risk`: Total count of critical-risk tools.
+  - `unapproved_high_critical_count`: Count of unapproved high/critical risk tools.
+  - `tools`: Detailed list of registered tools with sensitive fields redacted.
+  - `unapproved_high_critical_tools`: Detailed list of unapproved high/critical risk tools with sensitive fields redacted.
+  - `recommended_actions`: List of recommended actions to approve unapproved tools.
 
 ---
 

@@ -437,3 +437,164 @@ def test_evidence_secrets_and_redaction(sample_scan_json: Path, tmp_path: Path, 
     assert "aws-super-secret-key-12345" not in report
     assert "password123" not in report
 
+
+def test_evidence_with_and_without_registry(sample_scan_json: Path, tmp_path: Path) -> None:
+    # 1. Evidence without registry
+    # Ensure any existing registry file is gone
+    mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
+    if mcp_file.exists():
+        mcp_file.unlink()
+
+    report_no_reg = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,mcp"
+    )
+    assert "MCP Registry not found. Skipping MCP governance posture." in report_no_reg
+    assert "Total Registered Tools:" not in report_no_reg
+
+    # Check JSON output format as well
+    report_json_no_reg = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="json", include="scan,mcp"
+    )
+    data_no_reg = json.loads(report_json_no_reg)
+    assert data_no_reg["mcp"]["exists"] is False
+    assert data_no_reg["mcp"]["total"] == 0
+
+    # 2. Evidence with registry
+    mcp_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "tools": {
+                    "tool-a": {
+                        "name": "tool-a",
+                        "type": "cli",
+                        "command_or_url": "python run.py",
+                        "owner": "dev",
+                        "risk_level": "low",
+                        "approved": True,
+                        "capabilities": [],
+                        "data_access": None,
+                        "notes": None,
+                    }
+                },
+            }
+        )
+    )
+
+    report_with_reg = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,mcp"
+    )
+    assert "MCP Registry not found" not in report_with_reg
+    assert "Total Registered Tools:** 1" in report_with_reg
+    assert "Approved Tools:** 1" in report_with_reg
+    assert "Unapproved Tools:** 0" in report_with_reg
+    assert "High-risk Tools:** 0" in report_with_reg
+    assert "Critical-risk Tools:** 0" in report_with_reg
+
+
+def test_evidence_mcp_unapproved_findings(sample_scan_json: Path, tmp_path: Path) -> None:
+    mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
+    mcp_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "tools": {
+                    "approved-tool": {
+                        "name": "approved-tool",
+                        "type": "cli",
+                        "risk_level": "medium",
+                        "approved": True,
+                    },
+                    "unapproved-high-tool": {
+                        "name": "unapproved-high-tool",
+                        "type": "cli",
+                        "risk_level": "high",
+                        "approved": False,
+                    },
+                    "unapproved_critical_tool": {
+                        "name": "unapproved_critical_tool",
+                        "type": "cli",
+                        "risk_level": "critical",
+                        "approved": False,
+                    }
+                },
+            }
+        )
+    )
+
+    report_md = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,mcp"
+    )
+
+    # High/critical unapproved tools count
+    assert "High/Critical Unapproved Tools:** 2" in report_md
+    
+    # Check that they appear in findings / Risk Register
+    assert "MCP-unapproved-high-tool" in report_md
+    assert "MCP-unapproved_critical_tool" in report_md
+    assert "Unapproved High-Risk Tool" in report_md
+    assert "Unapproved Critical-Risk Tool" in report_md
+
+    # Check recommended actions
+    assert "Approve tool 'unapproved-high-tool'" in report_md
+
+    # Check JSON output structure has updated risk_summary
+    report_json = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="json", include="scan,mcp"
+    )
+    data = json.loads(report_json)
+    
+    # Check updated risk summary counts
+    assert data["risk_summary"]["high"] == 1  # 0 from sample_scan_json + 1 injected
+    assert data["risk_summary"]["critical"] == 2  # 1 from sample_scan_json (SEC001) + 1 injected
+    
+    # Findings should contain the injected ones
+    finding_ids = [f["id"] for f in data["findings_summary"]]
+    assert "MCP-unapproved-high-tool" in finding_ids
+    assert "MCP-unapproved_critical_tool" in finding_ids
+
+
+def test_evidence_mcp_redaction_and_secrets(sample_scan_json: Path, tmp_path: Path) -> None:
+    # Verify that sensitive fields/secrets in tools are redacted in the generated output formats
+    mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
+    mcp_file.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "tools": {
+                    "api-key-tool": {
+                        "name": "api-key-tool",
+                        "type": "api",
+                        "command_or_url": "https://api.github.com?token=ghp_abc1234567890abcdef1234567890abcdef12",
+                        "owner": "test",
+                        "risk_level": "medium",
+                        "approved": True,
+                        "notes": "password = 'secretPassword123'"
+                    }
+                },
+            }
+        )
+    )
+
+    # 1. Markdown redaction
+    report_md = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,mcp"
+    )
+    assert "ghp_abc1234567890abcdef" not in report_md
+    assert "secretPassword123" not in report_md
+
+    # 2. HTML redaction
+    report_html = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="html", include="scan,mcp"
+    )
+    assert "ghp_abc1234567890abcdef" not in report_html
+    assert "secretPassword123" not in report_html
+
+    # 3. JSON redaction
+    report_json = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="json", include="scan,mcp"
+    )
+    assert "ghp_abc1234567890abcdef" not in report_json
+    assert "secretPassword123" not in report_json
+    assert "[REDACTED_SECRET]" in report_json
+

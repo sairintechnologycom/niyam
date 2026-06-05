@@ -110,7 +110,15 @@ Remediation actions are recommended below:
 {% endif %}
 {%- endif %}
 {%- if "mcp" in include -%}
+{% if mcp.exists %}
 * **MCP / Tool Approval Posture:** {{ mcp.approved }}/{{ mcp.total }} tools approved.
+  * **Total Registered Tools:** {{ mcp.total }}
+  * **Approved Tools:** {{ mcp.approved }}
+  * **Unapproved Tools:** {{ mcp.unapproved }}
+  * **High-risk Tools:** {{ mcp.high_risk }}
+  * **Critical-risk Tools:** {{ mcp.critical_risk }}
+  * **High/Critical Unapproved Tools:** {{ mcp.unapproved_high_critical_count }}
+
 {% if mcp.tools %}
 ### Registered Tools (MCP)
 | Name | Type | Risk Level | Approved | Owner |
@@ -118,6 +126,16 @@ Remediation actions are recommended below:
 {% for t in mcp.tools -%}
 | {{ t.name }} | {{ t.type }} | **{{ t.risk_level.upper() }}** | {{ 'Yes' if t.approved else 'No' }} | {{ t.owner or 'N/A' }} |
 {% endfor %}
+{% endif %}
+
+{% if mcp.recommended_actions %}
+### Recommended MCP Actions
+{% for action in mcp.recommended_actions -%}
+* **[{{ action.tool }}]** {{ action.action }}
+{% endfor %}
+{% endif %}
+{% else %}
+* **MCP / Tool Approval Posture:** MCP Registry not found. Skipping MCP governance posture.
 {% endif %}
 {%- endif %}
 {%- if "cost" in include and cost.total_cost is not none -%}
@@ -358,10 +376,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         {% if "mcp" in include %}
         <h2>4. Tool/MCP Risk Posture</h2>
+        {% if mcp.exists %}
         <ul>
             <li><strong>Total Registered Tools:</strong> {{ mcp.total }}</li>
             <li><strong>Approved Tools:</strong> {{ mcp.approved }}</li>
             <li><strong>Unapproved Tools:</strong> {{ mcp.unapproved }}</li>
+            <li><strong>High-risk Tools:</strong> {{ mcp.high_risk }}</li>
+            <li><strong>Critical-risk Tools:</strong> {{ mcp.critical_risk }}</li>
+            <li><strong>High/Critical Unapproved Tools:</strong> {{ mcp.unapproved_high_critical_count }}</li>
         </ul>
         {% if mcp.tools %}
             <table>
@@ -379,13 +401,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <tr>
                             <td>{{ t.name }}</td>
                             <td>{{ t.type }}</td>
-                            <td><strong>{{ t.risk_level }}</strong></td>
+                            <td><strong>{{ t.risk_level.upper() }}</strong></td>
                             <td>{{ 'Yes' if t.approved else 'No' }}</td>
                             <td>{{ t.owner or 'N/A' }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        {% endif %}
+        {% if mcp.recommended_actions %}
+            <h3>Recommended MCP Actions</h3>
+            <ul>
+                {% for action in mcp.recommended_actions %}
+                    <li><strong>[{{ action.tool }}]:</strong> {{ action.action }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% else %}
+        <p><em>MCP/Tool registry does not exist. Skipping MCP governance posture.</em></p>
         {% endif %}
         {% endif %}
 
@@ -455,7 +488,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 {% endfor %}
             {% endif %}
-            {% if "mcp" in include %}
+            {% if "mcp" in include and "scan" not in include %}
                 {% for t in mcp.unapproved_high %}
                     <div class="remediation-item severity-high">
                         <strong>[Tool Governance] Approve High-Risk Tool: {{ t.name }}</strong> ({{ t.risk_level.upper() }})<br>
@@ -652,9 +685,28 @@ def _get_violations(guard_logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
     """Retrieve MCP/Tool registry analytics."""
-    try:
-        from niyam.core.mcp import load_mcp_registry
+    from niyam.core.mcp import get_mcp_registry_path, load_mcp_registry
+    from niyam.governance.common.redaction import redact_secrets
 
+    path = get_mcp_registry_path(repo_root)
+    exists = path.exists()
+
+    if not exists:
+        return {
+            "exists": False,
+            "total": 0,
+            "approved": 0,
+            "unapproved": 0,
+            "high_risk": 0,
+            "critical_risk": 0,
+            "unapproved_high_critical_count": 0,
+            "tools": [],
+            "unapproved_high": [],
+            "unapproved_high_critical_tools": [],
+            "recommended_actions": [],
+        }
+
+    try:
         registry = load_mcp_registry(repo_root)
         tools_list = list(registry.tools.values())
     except Exception:
@@ -663,16 +715,40 @@ def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
     total = len(tools_list)
     approved = sum(1 for t in tools_list if t.approved)
     unapproved = total - approved
-    unapproved_high = [
+    high_risk = sum(1 for t in tools_list if t.risk_level == "high")
+    critical_risk = sum(1 for t in tools_list if t.risk_level == "critical")
+    
+    unapproved_high_critical = [
         t for t in tools_list if not t.approved and t.risk_level in ("high", "critical")
     ]
+    unapproved_high_critical_count = len(unapproved_high_critical)
+
+    # Build recommended actions for all unapproved tools
+    recommended_actions = []
+    for t in tools_list:
+        if not t.approved:
+            recommended_actions.append({
+                "tool": t.name,
+                "risk_level": t.risk_level,
+                "action": f"Approve tool '{t.name}' (Risk: {t.risk_level}) via 'niyam mcp approve {t.name}'."
+            })
+
+    # Redact sensitive fields of tools
+    redacted_tools = [redact_secrets(t.model_dump()) for t in tools_list]
+    redacted_unapproved_high_critical = [redact_secrets(t.model_dump()) for t in unapproved_high_critical]
 
     return {
+        "exists": True,
         "total": total,
         "approved": approved,
         "unapproved": unapproved,
-        "tools": [t.model_dump() for t in tools_list],
-        "unapproved_high": [t.model_dump() for t in unapproved_high],
+        "high_risk": high_risk,
+        "critical_risk": critical_risk,
+        "unapproved_high_critical_count": unapproved_high_critical_count,
+        "tools": redacted_tools,
+        "unapproved_high": redacted_unapproved_high_critical,
+        "unapproved_high_critical_tools": redacted_unapproved_high_critical,
+        "recommended_actions": recommended_actions,
     }
 
 
@@ -749,8 +825,41 @@ def run_generate_evidence(
     git_meta = _get_git_metadata(root)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    # Load MCP data early to allow finding injection if high/critical unapproved
+    mcp_data = (
+        _get_mcp_data(root)
+        if "mcp" in include_list
+        else {
+            "exists": False,
+            "total": 0,
+            "approved": 0,
+            "unapproved": 0,
+            "high_risk": 0,
+            "critical_risk": 0,
+            "unapproved_high_critical_count": 0,
+            "tools": [],
+            "unapproved_high": [],
+            "unapproved_high_critical_tools": [],
+            "recommended_actions": [],
+        }
+    )
+
     # 2. Findings breakdown & critical/high counts
-    findings = scan_results.get("findings", [])
+    findings = list(scan_results.get("findings", []))
+    
+    # Inject findings from MCP risk report if high/critical unapproved
+    if "mcp" in include_list and mcp_data.get("exists", False):
+        for tool in mcp_data.get("unapproved_high_critical_tools", []):
+            findings.append({
+                "id": f"MCP-{tool['name']}",
+                "title": f"Unapproved {tool['risk_level'].capitalize()}-Risk Tool: {tool['name']}",
+                "category": "mcp",
+                "severity": tool["risk_level"],
+                "file_path": "",
+                "description": f"The tool '{tool['name']}' is registered with {tool['risk_level']} risk level but is not approved.",
+                "recommendation": f"Approve the tool using 'niyam mcp approve {tool['name']}' if it is safe to use."
+            })
+
     critical_high = [f for f in findings if f.get("severity") in ("critical", "high")]
 
     breakdown = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
@@ -847,17 +956,6 @@ def run_generate_evidence(
     guard_logs = guard_logs_all[-10:]
     violations = _get_violations(guard_logs_all) if "guard" in include_list else []
 
-    mcp_data = (
-        _get_mcp_data(root)
-        if "mcp" in include_list
-        else {
-            "total": 0,
-            "approved": 0,
-            "unapproved": 0,
-            "tools": [],
-            "unapproved_high": [],
-        }
-    )
     cost_data = (
         _get_cost_data(root)
         if "cost" in include_list
