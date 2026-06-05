@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 import yaml
 import fnmatch
 import re
+import atexit
+import signal
+import sys
 from rich.console import Console
 from rich.panel import Panel
 
@@ -970,6 +973,9 @@ def check_overlap(files1: list[str], files2: list[str]) -> bool:
     return False
 
 
+_active_frozen_modes: dict[Path, int] = {}
+
+
 def apply_path_freeze(frozen_paths: list[str], repo_root: Path) -> dict[Path, int]:
     """Change permissions of frozen files/directories to read-only.
 
@@ -1009,6 +1015,8 @@ def apply_path_freeze(frozen_paths: list[str], repo_root: Path) -> dict[Path, in
         except Exception:
             pass
 
+    # Record in active frozen modes for emergency cleanup
+    _active_frozen_modes.update(original_modes)
     return original_modes
 
 
@@ -1018,7 +1026,40 @@ def restore_path_freeze(original_modes: dict[Path, int]) -> None:
         try:
             if path.exists():
                 path.chmod(mode)
+            # Remove from active frozen modes
+            _active_frozen_modes.pop(path, None)
         except Exception:
+            pass
+
+
+def _emergency_cleanup_permissions() -> None:
+    """Restore permissions for all paths in _active_frozen_modes at exit."""
+    if _active_frozen_modes:
+        for path, mode in list(_active_frozen_modes.items()):
+            try:
+                if path.exists():
+                    path.chmod(mode)
+            except Exception:
+                pass
+        _active_frozen_modes.clear()
+
+
+atexit.register(_emergency_cleanup_permissions)
+
+
+def _signal_handler(signum, frame):
+    _emergency_cleanup_permissions()
+    # Re-raise signal exit code or terminate
+    sys.exit(128 + signum)
+
+
+# Register signal handlers for SIGTERM, SIGINT, SIGHUP
+for sig in (signal.SIGTERM, signal.SIGINT, getattr(signal, "SIGHUP", None)):
+    if sig is not None:
+        try:
+            signal.signal(sig, _signal_handler)
+        except ValueError:
+            # Can fail if not in main thread (e.g. running inside pytest threads)
             pass
 
 

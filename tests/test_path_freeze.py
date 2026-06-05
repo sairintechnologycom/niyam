@@ -30,3 +30,32 @@ def test_apply_and_restore_path_freeze(tmp_path: Path):
     with open(frozen_file, "w", encoding="utf-8") as f:
         f.write("restored write")
     assert frozen_file.read_text(encoding="utf-8") == "restored write"
+
+
+def test_emergency_cleanup_on_exit(tmp_path: Path):
+    from niyam.mission.executor import (
+        _emergency_cleanup_permissions,
+        _active_frozen_modes,
+    )
+
+    frozen_dir = tmp_path / "emergency_dir"
+    frozen_dir.mkdir()
+    frozen_file = frozen_dir / "frozen.txt"
+    frozen_file.write_text("frozen content", encoding="utf-8")
+
+    # Verify starting state is writable
+    assert (frozen_file.stat().st_mode & stat.S_IWRITE) != 0
+
+    # Freeze
+    apply_path_freeze(["emergency_dir"], tmp_path)
+
+    # Verify it is now read-only
+    assert (frozen_file.stat().st_mode & stat.S_IWRITE) == 0
+    assert len(_active_frozen_modes) > 0
+
+    # Run emergency cleanup directly (simulating exit)
+    _emergency_cleanup_permissions()
+
+    # Verify permissions are restored and active registry is cleared
+    assert (frozen_file.stat().st_mode & stat.S_IWRITE) != 0
+    assert len(_active_frozen_modes) == 0
