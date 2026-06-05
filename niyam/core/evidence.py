@@ -73,12 +73,31 @@ Remediation actions are recommended below:
 * **AI-Risk Placeholders / Commented Assertions:** Checked.
 {% if "guard" in include -%}
 * **Agent Governance / Guardrails Status:** {{ governance.guard_status }}
-{% if guard_logs %}
+{% if guard_summary and guard_summary.total_actions > 0 -%}
+### Agent Governance Summary (Niyam Guard)
+* **Total Actions:** {{ guard_summary.total_actions }}
+* **Total Blocked:** {{ guard_summary.total_blocked }}
+* **Total Warned:** {{ guard_summary.total_warned }}
+* **Total Approval Required:** {{ guard_summary.total_approval_required }}
+* **Total Failed:** {{ guard_summary.total_failed }}
+{% if guard_summary.top_command_categories -%}
+* **Top Command Categories:** {{ guard_summary.top_command_categories|join(', ') }}
+{%- endif %}
+
+{% if guard_summary.latest_session and guard_summary.latest_session.session_id -%}
+#### Latest Session Details
+* **Session ID:** `{{ guard_summary.latest_session.session_id }}`
+* **Session Total Actions:** {{ guard_summary.latest_session.total_actions }}
+* **Session Blocked:** {{ guard_summary.latest_session.total_blocked }}
+* **Session Warned:** {{ guard_summary.latest_session.total_warned }}
+* **Session Failed:** {{ guard_summary.latest_session.total_failed }}
+{%- endif %}
+
 ### Recent Observed Actions (Agent Governance)
-| Timestamp | Actor | Command | Exit Code | Duration (ms) |
+| Timestamp | Actor | Command | Policy Decision | Exit Code |
 | --- | --- | --- | --- | --- |
-{% for log in guard_logs -%}
-| {{ log.timestamp }} | {{ log.actor_type }} | `{{ log.command }}` | {{ log.exit_code }} | {{ log.duration_ms }} |
+{% for log in guard_summary.latest_actions_summary -%}
+| {{ log.timestamp }} | {{ log.actor_type }} | `{{ log.command }}` | {{ log.policy_decision or log.decision or 'allow' }} | {{ log.exit_code }} |
 {% endfor %}
 {% endif %}
 {% if violations %}
@@ -283,32 +302,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <li><strong>Frozen Paths:</strong> {{ governance.frozen_paths or 'None' }}</li>
         </ul>
         
+        {% if guard_summary and guard_summary.total_actions > 0 %}
+        <h3>Niyam Guard Summary</h3>
+        <div class="meta-list">
+            <div class="meta-item"><span>Total Actions:</span> {{ guard_summary.total_actions }}</div>
+            <div class="meta-item"><span>Total Blocked:</span> {{ guard_summary.total_blocked }}</div>
+            <div class="meta-item"><span>Total Warned:</span> {{ guard_summary.total_warned }}</div>
+            <div class="meta-item"><span>Total Approval Required:</span> {{ guard_summary.total_approval_required }}</div>
+            <div class="meta-item"><span>Total Failed:</span> {{ guard_summary.total_failed }}</div>
+            {% if guard_summary.top_command_categories %}
+            <div class="meta-item"><span>Top Command Categories:</span> {{ guard_summary.top_command_categories|join(', ') }}</div>
+            {% endif %}
+        </div>
+
+        {% if guard_summary.latest_session and guard_summary.latest_session.session_id %}
+        <h3>Latest Session Details</h3>
+        <ul>
+            <li><strong>Session ID:</strong> <code>{{ guard_summary.latest_session.session_id }}</code></li>
+            <li><strong>Session Total Actions:</strong> {{ guard_summary.latest_session.total_actions }}</li>
+            <li><strong>Session Blocked:</strong> {{ guard_summary.latest_session.total_blocked }}</li>
+            <li><strong>Session Warned:</strong> {{ guard_summary.latest_session.total_warned }}</li>
+            <li><strong>Session Failed:</strong> {{ guard_summary.latest_session.total_failed }}</li>
+        </ul>
+        {% endif %}
+
         <h3>Recent Observed Actions</h3>
-        {% if guard_logs %}
+        {% if guard_summary.latest_actions_summary %}
             <table>
                 <thead>
                     <tr>
                         <th>Timestamp</th>
                         <th>Actor</th>
                         <th>Command</th>
+                        <th>Policy Decision</th>
                         <th>Exit Code</th>
-                        <th>Duration (ms)</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for log in guard_logs %}
+                    {% for log in guard_summary.latest_actions_summary %}
                         <tr>
                             <td>{{ log.timestamp }}</td>
                             <td>{{ log.actor_type }}</td>
                             <td><code>{{ log.command }}</code></td>
+                            <td>{{ log.policy_decision or log.decision or 'allow' }}</td>
                             <td>{{ log.exit_code }}</td>
-                            <td>{{ log.duration_ms }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% else %}
             <p>✓ No recent observed actions logged.</p>
+        {% endif %}
         {% endif %}
         {% endif %}
 
@@ -558,7 +602,7 @@ def _get_audit_trail(repo_root: Path) -> list[dict[str, Any]]:
 
 
 def _get_guard_logs(repo_root: Path) -> list[dict[str, Any]]:
-    """Load latest guard observed commands logs."""
+    """Load all guard observed commands logs."""
     path = repo_root / ".niyam" / "logs" / "guard-actions.jsonl"
     if not path.exists():
         return []
@@ -573,7 +617,28 @@ def _get_guard_logs(repo_root: Path) -> list[dict[str, Any]]:
                         pass
     except Exception:
         pass
-    return logs[-10:]
+    return logs
+
+
+def _get_top_command_categories(logs: list[dict[str, Any]]) -> list[str]:
+    """Extract top command categories/executables from logs."""
+    categories: dict[str, int] = {}
+    for log in logs:
+        cmd = log.get("command", "")
+        if not cmd:
+            continue
+        # Extract the first token of the command
+        tokens = cmd.split()
+        if tokens:
+            executable = tokens[0]
+            # Strip path if it looks like an absolute/relative path
+            executable = Path(executable).name
+            categories[executable] = categories.get(executable, 0) + 1
+    
+    # Sort categories by count descending
+    sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)
+    return [f"{exe} ({count})" for exe, count in sorted_cats[:5]]
+
 
 
 def _get_violations(guard_logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -695,8 +760,93 @@ def run_generate_evidence(
             breakdown[sev] += 1
 
     # 3. Dynamic loaders for sections
-    guard_logs = _get_guard_logs(root) if "guard" in include_list else []
-    violations = _get_violations(guard_logs) if "guard" in include_list else []
+    guard_logs_all = _get_guard_logs(root) if "guard" in include_list else []
+
+    # Calculate guard action metrics
+    guard_summary = None
+    if "guard" in include_list and guard_logs_all:
+        total_actions = len(guard_logs_all)
+        total_blocked = sum(
+            1 for log in guard_logs_all
+            if log.get("decision") in ("blocked", "denied") or log.get("policy_decision") == "block"
+        )
+        total_warned = sum(
+            1 for log in guard_logs_all
+            if log.get("decision") == "warned" or log.get("policy_decision") == "warn"
+        )
+        total_approval_required = sum(
+            1 for log in guard_logs_all
+            if log.get("policy_decision") == "approval_required"
+            or log.get("decision") in ("denied", "approved")
+        )
+        total_failed = sum(
+            1 for log in guard_logs_all
+            if log.get("exit_code", 0) != 0
+            and log.get("decision") not in ("blocked", "denied")
+            and log.get("policy_decision") != "block"
+        )
+
+        top_command_categories = _get_top_command_categories(guard_logs_all)
+
+        latest_session_id = None
+        latest_session_logs = []
+        if guard_logs_all:
+            latest_session_id = guard_logs_all[-1].get("session_id")
+            if latest_session_id:
+                latest_session_logs = [
+                    log for log in guard_logs_all if log.get("session_id") == latest_session_id
+                ]
+
+        latest_session_details = {
+            "session_id": latest_session_id,
+            "total_actions": len(latest_session_logs),
+            "total_blocked": sum(
+                1 for log in latest_session_logs
+                if log.get("decision") in ("blocked", "denied") or log.get("policy_decision") == "block"
+            ),
+            "total_warned": sum(
+                1 for log in latest_session_logs
+                if log.get("decision") == "warned" or log.get("policy_decision") == "warn"
+            ),
+            "total_approval_required": sum(
+                1 for log in latest_session_logs
+                if log.get("policy_decision") == "approval_required"
+                or log.get("decision") in ("denied", "approved")
+            ),
+            "total_failed": sum(
+                1 for log in latest_session_logs
+                if log.get("exit_code", 0) != 0
+                and log.get("decision") not in ("blocked", "denied")
+                and log.get("policy_decision") != "block"
+            ),
+        }
+
+        guard_summary = {
+            "total_actions": total_actions,
+            "total_blocked": total_blocked,
+            "total_warned": total_warned,
+            "total_approval_required": total_approval_required,
+            "total_failed": total_failed,
+            "top_command_categories": top_command_categories,
+            "latest_session": latest_session_details,
+            "latest_actions_summary": [
+                {
+                    "timestamp": log.get("timestamp"),
+                    "session_id": log.get("session_id"),
+                    "actor_type": log.get("actor_type"),
+                    "command": log.get("command"),
+                    "exit_code": log.get("exit_code"),
+                    "duration_ms": log.get("duration_ms"),
+                    "policy_decision": log.get("policy_decision"),
+                    "decision": log.get("decision"),
+                }
+                for log in guard_logs_all[-5:]
+            ]
+        }
+
+    guard_logs = guard_logs_all[-10:]
+    violations = _get_violations(guard_logs_all) if "guard" in include_list else []
+
     mcp_data = (
         _get_mcp_data(root)
         if "mcp" in include_list
@@ -791,6 +941,7 @@ def run_generate_evidence(
             "frozen_paths": frozen_paths,
         },
         "guard_logs": guard_logs,
+        "guard_summary": guard_summary,
         "violations": violations,
         "mcp": mcp_data,
         "cost": cost_data,

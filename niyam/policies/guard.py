@@ -501,8 +501,10 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
     import re
     import time
     import json
+    import uuid
     from datetime import datetime, timezone
     import subprocess
+    from niyam.governance.common.redaction import redact_text
 
     if not cmd_args:
         console.print(
@@ -521,6 +523,7 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
     # Session ID calculation
     session_id = os.environ.get("NIYAM_SESSION_ID")
     if not session_id:
+        git_branch = None
         try:
             res = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -530,13 +533,26 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
                 check=False,
             )
             if res.returncode == 0:
-                session_id = res.stdout.strip()
+                git_branch = res.stdout.strip()
         except Exception:
             pass
-    if not session_id:
-        session_id = "default-session"
+        if git_branch and git_branch != "HEAD":
+            session_id = f"{git_branch}-{uuid.uuid4()}"
+        else:
+            session_id = str(uuid.uuid4())
 
-    actor_type = os.environ.get("NIYAM_ACTOR_TYPE", "agent")
+    actor_type = os.environ.get("NIYAM_ACTOR_TYPE")
+    if not actor_type:
+        if sys.stdin.isatty():
+            actor_type = "human"
+        elif os.environ.get("NIYAM_TEST") == "1" or os.environ.get("PYTEST_CURRENT_TEST") is not None:
+            actor_type = "agent"
+        else:
+            actor_type = "unknown"
+    else:
+        actor_type = actor_type.strip().lower()
+        if actor_type not in ("human", "agent", "unknown"):
+            actor_type = "unknown"
 
     # Load config to get policy mode and lists
     mode = "observe"
@@ -558,109 +574,94 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         mode = mode_override
 
     # Validate mode is valid
-    valid_modes = {"observe", "block", "warn", "approve"}
+    valid_modes = {"observe", "block", "warn", "approve", "approval"}
     if mode not in valid_modes:
         console.print(
-            f"[bold red]Error:[/] Invalid guard mode '{mode}'. Choose from: observe, block, warn, approve."
+            f"[bold red]Error:[/] Invalid guard mode '{mode}'. Choose from: observe, block, warn, approve, approval."
         )
         raise SystemExit(1)
 
     command_str = " ".join(cmd_args)
+    redacted_command = redact_text(command_str)
 
-    # Redact secret assignments in command
-    redacted_command = re.sub(
-        r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
-        r"\1=REDACTED",
-        command_str,
-    )
+    # Policy evaluation
+    matched_rule = None
+    reason = None
+    policy_decision = "allow"
 
-    is_blocked = any(_match_command_pattern(cmd_args, blocked) for blocked in blocked_commands)
-    is_protected_file = _is_protected_file_match(cmd_args, protected_files)
-    is_approval = any(_match_command_pattern(cmd_args, appr) for appr in approval_required)
+    for pattern in blocked_commands:
+        if _match_command_pattern(cmd_args, pattern):
+            matched_rule = f"blocked_command:{pattern}"
+            reason = f"Command matches blocked command pattern: '{pattern}'"
+            policy_decision = "block"
+            break
 
-    decision = "allowed"
+    if not matched_rule:
+        for pattern in protected_files:
+            if _is_protected_file_match(cmd_args, [pattern]):
+                matched_rule = f"protected_file:{pattern}"
+                reason = f"Command references protected file: '{pattern}'"
+                policy_decision = "block"
+                break
 
-    # Check Block Mode
-    if mode == "block":
-        if is_blocked or is_protected_file:
-            console.print("[bold red]Blocked:[/] Command violates governance policy.")
-            log_entry = {
-                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "session_id": session_id,
-                "actor_type": actor_type,
-                "tool": "shell",
-                "action": "command_execute",
-                "command": redacted_command,
-                "cwd": str(Path.cwd().resolve()),
-                "exit_code": 1,
-                "duration_ms": 0,
-                "mode": "block",
-                "decision": "blocked",
-            }
-            try:
-                with open(log_file, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_entry) + "\n")
-            except Exception:
-                pass
+    if not matched_rule:
+        for pattern in approval_required:
+            if _match_command_pattern(cmd_args, pattern):
+                matched_rule = f"approval_required:{pattern}"
+                reason = f"Command requires approval pattern: '{pattern}'"
+                policy_decision = "approval_required"
+                break
+
+    def write_log(exit_code: int, duration_ms: int, final_decision: str, final_policy_decision: str, output_data: str | None = None) -> None:
+        log_entry = {
+            "schema_version": "1.0.0",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "session_id": session_id,
+            "actor_type": actor_type,
+            "tool": "shell",
+            "action": "command_execute",
+            "command": redacted_command,
+            "cwd": str(Path.cwd().resolve()),
+            "exit_code": exit_code,
+            "duration_ms": duration_ms,
+            "mode": mode,
+            "policy_decision": final_policy_decision,
+            "decision": final_decision,
+            "matched_rule": matched_rule,
+            "reason": reason,
+        }
+        if output_data is not None:
+            log_entry["output"] = redact_text(output_data)
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception as e:
+            console.print(f"[dim yellow]Warning: Failed to write guard log: {e}[/]")
+
+    # Action enforcement based on policy_decision and mode
+    if policy_decision == "block" and mode == "block":
+        console.print("[bold red]Blocked:[/] Command violates governance policy.")
+        write_log(1, 0, "blocked", "block")
+        raise SystemExit(1)
+
+    elif (policy_decision == "block" and mode in ("approve", "approval")) or \
+         (policy_decision == "approval_required" and mode in ("block", "approve", "approval")):
+        allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
+        if not allowed:
+            console.print("[bold red]Denied:[/] User rejected execution.")
+            write_log(1, 0, "denied", "approval_required")
             raise SystemExit(1)
-        elif is_approval:
-            # Requires approval
-            allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
-            if not allowed:
-                console.print("[bold red]Denied:[/] User rejected execution.")
-                log_entry = {
-                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "session_id": session_id,
-                    "actor_type": actor_type,
-                    "tool": "shell",
-                    "action": "command_execute",
-                    "command": redacted_command,
-                    "cwd": str(Path.cwd().resolve()),
-                    "exit_code": 1,
-                    "duration_ms": 0,
-                    "mode": "block",
-                    "decision": "denied",
-                }
-                try:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_entry) + "\n")
-                except Exception:
-                    pass
-                raise SystemExit(1)
-            decision = "approved"
+        decision_label = "approved"
+        policy_decision_label = "approval_required"
 
-    # Check Warn Mode
-    elif mode == "warn":
-        if is_blocked or is_protected_file or is_approval:
-            console.print("[bold yellow]Warning:[/] Command is flagged as dangerous.")
-            decision = "warned"
+    elif policy_decision in ("block", "approval_required") and mode == "warn":
+        console.print("[bold yellow]Warning:[/] Command is flagged as dangerous.")
+        decision_label = "warned"
+        policy_decision_label = "warn"
 
-    # Check Approve Mode
-    elif mode == "approve":
-        if is_blocked or is_protected_file or is_approval:
-            allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
-            if not allowed:
-                console.print("[bold red]Denied:[/] User rejected execution.")
-                log_entry = {
-                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                    "session_id": session_id,
-                    "actor_type": actor_type,
-                    "tool": "shell",
-                    "action": "command_execute",
-                    "command": redacted_command,
-                    "cwd": str(Path.cwd().resolve()),
-                    "exit_code": 1,
-                    "duration_ms": 0,
-                    "mode": "approve",
-                    "decision": "denied",
-                }
-                try:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(log_entry) + "\n")
-                except Exception:
-                    pass
-                raise SystemExit(1)
-            decision = "approved"
+    else:
+        decision_label = "allowed"
+        policy_decision_label = policy_decision
 
     # Run the command
     start_time = time.perf_counter()
@@ -693,36 +694,7 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         output_data = str(e)
 
     duration_ms = int((time.perf_counter() - start_time) * 1000)
-
-    # Store Log
-    log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "session_id": session_id,
-        "actor_type": actor_type,
-        "tool": "shell",
-        "action": "command_execute",
-        "command": redacted_command,
-        "cwd": str(Path.cwd().resolve()),
-        "exit_code": exit_code,
-        "duration_ms": duration_ms,
-        "mode": mode,
-        "decision": decision,
-    }
-    if output_data is not None:
-        # Avoid storing secrets from captured output via standard redact
-        redacted_output = re.sub(
-            r'(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*["\']?[a-zA-Z0-9_\-\.]{8,}["\']?',
-            r"\1=REDACTED",
-            output_data,
-        )
-        log_entry["output"] = redacted_output
-
-    try:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        console.print(f"[dim yellow]Warning: Failed to write guard log: {e}[/]")
-
+    write_log(exit_code, duration_ms, decision_label, policy_decision_label, output_data)
     raise SystemExit(exit_code)
 
 

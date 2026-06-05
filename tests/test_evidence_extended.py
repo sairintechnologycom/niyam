@@ -327,3 +327,113 @@ def test_evidence_reports_exact_10_sections_and_11_schema_keys(sample_scan_json:
     ]
     for key in expected_keys:
         assert key in data
+
+
+def test_evidence_with_and_without_guard_logs(sample_scan_json: Path, tmp_path: Path) -> None:
+    # 1. Without guard logs (skip guard section gracefully)
+    # The file .niyam/logs/guard-actions.jsonl doesn't exist yet, so we test without guard logs.
+    report_no_logs = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,guard"
+    )
+    # The report should compile without crashing, and should not contain Agent Governance Summary
+    assert "Agent Governance Summary (Niyam Guard)" not in report_no_logs
+
+    # 2. With guard logs
+    log_dir = tmp_path / ".niyam" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "guard-actions.jsonl"
+    
+    # Write some logs
+    log_file.write_text(
+        json.dumps({
+            "schema_version": "1.0.0",
+            "timestamp": "2026-06-04T10:00:00Z",
+            "session_id": "session-123",
+            "actor_type": "agent",
+            "tool": "shell",
+            "action": "command_execute",
+            "command": "npm test",
+            "cwd": str(tmp_path),
+            "exit_code": 0,
+            "duration_ms": 1200,
+            "mode": "observe",
+            "policy_decision": "allow",
+            "decision": "allowed"
+        }) + "\n" +
+        json.dumps({
+            "schema_version": "1.0.0",
+            "timestamp": "2026-06-04T10:01:00Z",
+            "session_id": "session-123",
+            "actor_type": "agent",
+            "tool": "shell",
+            "action": "command_execute",
+            "command": "rm -rf /tmp",
+            "cwd": str(tmp_path),
+            "exit_code": 1,
+            "duration_ms": 0,
+            "mode": "block",
+            "policy_decision": "block",
+            "decision": "blocked"
+        }) + "\n"
+    )
+    
+    report_with_logs = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,guard"
+    )
+    
+    # 1. Summarize total commands
+    assert "Total Actions:** 2" in report_with_logs
+    # 2. Summarize blocked/warned/approved actions
+    assert "Total Blocked:** 1" in report_with_logs
+    assert "Total Warned:** 0" in report_with_logs
+    # 3. Summarize failed commands (blocked does not count as run/failed)
+    assert "Total Failed:** 0" in report_with_logs
+    # 4. Include latest session details
+    assert "Session ID:** `session-123`" in report_with_logs
+    assert "Session Total Actions:** 2" in report_with_logs
+    assert "Session Blocked:** 1" in report_with_logs
+    # 5. Top command categories
+    assert "npm (1)" in report_with_logs
+    assert "rm (1)" in report_with_logs
+    # 6. Blocked action appears as policy event
+    assert "rm -rf /tmp" in report_with_logs
+
+
+def test_evidence_secrets_and_redaction(sample_scan_json: Path, tmp_path: Path, monkeypatch) -> None:
+    # Set environment secret variables to verify they are NOT included in the report
+    monkeypatch.setenv("SECRET_AWS_KEY", "aws-super-secret-key-12345")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:password123@localhost/db")
+
+    log_dir = tmp_path / ".niyam" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "guard-actions.jsonl"
+    
+    # Write a log entry with a secret command to verify redaction
+    log_file.write_text(
+        json.dumps({
+            "schema_version": "1.0.0",
+            "timestamp": "2026-06-04T10:00:00Z",
+            "session_id": "session-sec",
+            "actor_type": "agent",
+            "tool": "shell",
+            "action": "command_execute",
+            "command": "curl -u admin sk-proj-1234567890abcdef1234567890abcdef",
+            "cwd": str(tmp_path),
+            "exit_code": 0,
+            "duration_ms": 500,
+            "mode": "observe",
+            "policy_decision": "allow",
+            "decision": "allowed"
+        }) + "\n"
+    )
+
+    report = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown", include="guard"
+    )
+
+    # 1. Redacted commands remain redacted in output
+    assert "sk-proj-1234567890abcdef" not in report
+    # 2. No environment secrets included
+    assert "aws-super-secret-key-12345" not in report
+    assert "password123" not in report
+

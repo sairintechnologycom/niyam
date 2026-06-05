@@ -53,7 +53,7 @@ A fully compiled report includes these 10 sections:
 6. **Critical and High Findings:** Prioritized list of major findings.
 7. **Risk Register:** Summary count table of findings categorized by severity.
 8. **Recommended Remediation Plan:** Step-by-step guidance to resolve identified findings.
-9. **AI-Assisted Development Governance Notes:** Active policy status, recent observed actions, tool posture, and cost logs.
+9. **AI-Assisted Development Governance Notes:** Active policy status, Niyam Guard action summary metrics (total actions, blocked, warned, failed, top categories, latest session), registered tool posture, and cost logs.
 10. **Appendix Summary:** Git commit details, author info, and redaction metadata.
 
 ---
@@ -73,6 +73,15 @@ When outputting to JSON (`--format json`), the report conforms to the following 
 - `findings_summary`: List of brief finding details (ID, severity, category, title, file_path).
 - `remediation_plan`: List of remediation instructions mapped from findings.
 - `redaction_status`: Object indicating that the report passed through redaction (`{"redacted": true, "engine": "niyam-redaction"}`).
+- `guard_summary`: Object containing Niyam Guard action summaries:
+  - `total_actions`: Total commands observed.
+  - `total_blocked`: Total commands blocked before execution.
+  - `total_warned`: Total commands that printed warnings.
+  - `total_approval_required`: Total commands requiring user confirmation.
+  - `total_failed`: Total commands that exited with code != 0.
+  - `top_command_categories`: List of the top executed command categories.
+  - `latest_session`: Breakdown of metrics for the latest active session.
+  - `latest_actions_summary`: List of recent command details.
 
 ---
 
