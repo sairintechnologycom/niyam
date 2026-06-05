@@ -125,7 +125,7 @@ def validate_mission_plan(plan_path: Path, repo_root: Path) -> None:
         if t.validation and t.validation.commands:
             for cmd in t.validation.commands:
                 try:
-                    validate_command(cmd)
+                    validate_command(cmd, repo_root)
                 except CommandSecurityError as e:
                     errors.append(
                         f"Task '{t.id}' validation command '{cmd}' blocked by security: {e}"
@@ -145,7 +145,7 @@ def validate_mission_plan(plan_path: Path, repo_root: Path) -> None:
             ]:
                 if cmd:
                     try:
-                        validate_command(cmd)
+                        validate_command(cmd, repo_root)
                     except CommandSecurityError as e:
                         errors.append(
                             f"Project configuration validation '{name}' command '{cmd}' blocked by security: {e}"

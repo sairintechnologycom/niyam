@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from niyam.core.security import validate_command, CommandSecurityError
+from niyam.core.security import validate_command, CommandSecurityError, validate_path_within_repo
 from niyam.evidence.reporter import run_report
 from niyam.core.context import run_context_refresh, run_context_diff
 from niyam.runtimes.claude import ClaudeAdapter
@@ -277,9 +277,81 @@ def test_writes_files_false_violation_and_revert(niyam_repo: Path) -> None:
     assert plan["tasks"][0]["status"] == "failed"
     assert not (niyam_repo / "src" / "changed.py").exists()
 
-    # Verify write violation event is logged
     policy_events_path = run_dir / "policy-events.json"
     assert policy_events_path.exists()
     with open(policy_events_path, encoding="utf-8") as f:
         events = json.load(f)
     assert any(e["type"] == "WRITE_VIOLATION" for e in events)
+
+
+def test_validate_path_within_repo_security(tmp_path: Path) -> None:
+    """Should block path traversal and partial match traversal."""
+    from niyam.core.security import validate_path_within_repo
+
+    repo_root = tmp_path / "my-repo"
+    repo_root.mkdir()
+
+    # Path within repo is allowed
+    allowed = validate_path_within_repo("src/file.py", repo_root)
+    assert allowed == (repo_root / "src/file.py").resolve()
+
+    # Traversal resolving outside should be blocked
+    with pytest.raises(ValueError) as excinfo:
+        validate_path_within_repo("../outside.py", repo_root)
+    assert "resolves outside the repository root" in str(excinfo.value)
+
+    # Prefix match trick (e.g. repo-backup vs repo) should be blocked
+    backup_path = tmp_path / "my-repo-backup"
+    backup_path.mkdir()
+
+    # Although my-repo-backup starts with my-repo, it is not inside my-repo
+    with pytest.raises(ValueError) as excinfo:
+        validate_path_within_repo("../my-repo-backup", repo_root)
+    assert "resolves outside the repository root" in str(excinfo.value)
+
+
+def test_validate_command_hardening(tmp_path: Path) -> None:
+    """Should enforce command validation and path restrictions for validation commands."""
+    from niyam.core.security import validate_command, CommandSecurityError
+
+    repo_root = tmp_path / "my-repo"
+    repo_root.mkdir()
+
+    # 1. Test normal command within repo
+    parts = validate_command("rm file.txt", repo_root)
+    assert parts == ["rm", "file.txt"]
+
+    # 2. Test command with traversal outside repo
+    with pytest.raises(CommandSecurityError) as excinfo:
+        validate_command("rm ../outside.txt", repo_root)
+    assert "points outside the repository root" in str(excinfo.value)
+
+    # 3. Test command with absolute path outside repo
+    with pytest.raises(CommandSecurityError) as excinfo:
+        validate_command("rm /etc/passwd", repo_root)
+    assert "points outside the repository root" in str(excinfo.value)
+
+    # 4. Test Docker volume mount security
+    # Valid relative volume mount
+    parts = validate_command("docker run -v .:/workspace alpine", repo_root)
+    assert parts == ["docker", "run", "-v", ".:/workspace", "alpine"]
+
+    # Valid absolute mount of docker socket
+    parts = validate_command("docker run -v /var/run/docker.sock:/var/run/docker.sock alpine", repo_root)
+    assert parts == ["docker", "run", "-v", "/var/run/docker.sock:/var/run/docker.sock", "alpine"]
+
+    # Invalid absolute volume mount
+    with pytest.raises(CommandSecurityError) as excinfo:
+        validate_command("docker run -v /etc:/workspace alpine", repo_root)
+    assert "resolves outside the repository root" in str(excinfo.value)
+
+    # Invalid relative volume mount pointing outside
+    with pytest.raises(CommandSecurityError) as excinfo:
+        validate_command("docker run -v ../outside:/workspace alpine", repo_root)
+    assert "resolves outside the repository root" in str(excinfo.value)
+
+    # Invalid mount using --mount syntax
+    with pytest.raises(CommandSecurityError) as excinfo:
+        validate_command("docker run --mount type=bind,source=/etc,target=/workspace alpine", repo_root)
+    assert "resolves outside the repository root" in str(excinfo.value)
+

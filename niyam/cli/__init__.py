@@ -8,9 +8,7 @@ import builtins
 import typing
 import typer
 
-builtins.Annotated = typing.Annotated
-builtins.Optional = typing.Optional
-builtins.typer = typer
+
 
 import logging
 from rich.console import Console

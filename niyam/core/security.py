@@ -81,11 +81,12 @@ class CommandSecurityError(Exception):
     """Raised when a command fails security validation."""
 
 
-def validate_command(cmd: str) -> list[str]:
+def validate_command(cmd: str, repo_root: Path | None = None) -> list[str]:
     """Validate and split a command string safely.
 
     Returns the command as a list of arguments (shlex-split).
-    Raises CommandSecurityError if the command base is not in the allowlist.
+    Raises CommandSecurityError if the command base is not in the allowlist
+    or if command arguments violate path traversal policies.
     """
     if not cmd or not cmd.strip():
         raise CommandSecurityError("Empty command is not allowed")
@@ -117,6 +118,65 @@ def validate_command(cmd: str) -> list[str]:
                 f"Command contains potentially dangerous shell operator '{char}'. "
                 "Use separate validation commands instead of chaining."
             )
+
+    # Hardening dangerous executables
+    if repo_root is not None:
+        repo_resolved = repo_root.resolve()
+
+        # 1. Check path arguments for file manipulation utilities
+        if executable in {"rm", "cp", "mv", "mkdir"}:
+            for arg in parts[1:]:
+                # Skip flags/options (e.g., -r, -f, --recursive)
+                if arg.startswith("-"):
+                    continue
+                # Check if this argument resolves outside repo_root
+                try:
+                    resolved_arg = (repo_resolved / arg).resolve()
+                    resolved_arg.relative_to(repo_resolved)
+                except ValueError:
+                    raise CommandSecurityError(
+                        f"Argument '{arg}' in command '{executable}' points outside the repository root. "
+                        "File manipulation outside the repository root is blocked."
+                    )
+
+        # 2. Check Docker volume/mount arguments
+        elif executable in {"docker", "docker-compose"}:
+            for arg in parts[1:]:
+                # Check for volume mapping flags like -v host_path:container_path
+                # or --volume host_path:container_path
+                if ":" in arg and not arg.startswith("-"):
+                    parts_mount = arg.split(":")
+                    host_part = parts_mount[0]
+                    if (
+                        "/" in host_part
+                        or "\\" in host_part
+                        or ".." in host_part
+                        or host_part.startswith(".")
+                    ):
+                        if host_part == "/var/run/docker.sock":
+                            continue
+                        try:
+                            resolved_host = (repo_resolved / host_part).resolve()
+                            resolved_host.relative_to(repo_resolved)
+                        except ValueError:
+                            raise CommandSecurityError(
+                                f"Docker volume host path '{host_part}' resolves outside the repository root. "
+                                "Mounting directories outside the repository root is blocked."
+                            )
+                elif "source=" in arg:
+                    for sub in arg.split(","):
+                        if sub.startswith("source="):
+                            host_part = sub.split("=", 1)[1]
+                            if host_part == "/var/run/docker.sock":
+                                continue
+                            try:
+                                resolved_host = (repo_resolved / host_part).resolve()
+                                resolved_host.relative_to(repo_resolved)
+                            except ValueError:
+                                raise CommandSecurityError(
+                                    f"Docker mount source path '{host_part}' resolves outside the repository root. "
+                                    "Mounting directories outside the repository root is blocked."
+                                )
 
     return parts
 
@@ -161,7 +221,7 @@ def safe_run_command(
         dest_path = validate_path_within_repo(redirection_file, cwd)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        parts = validate_command(exec_cmd)
+        parts = validate_command(exec_cmd, repo_root=cwd)
 
         sub_kwargs = kwargs.copy()
         if capture_output:
@@ -178,7 +238,7 @@ def safe_run_command(
             )
         return res
 
-    parts = validate_command(cmd)
+    parts = validate_command(cmd, repo_root=cwd)
     return subprocess.run(
         parts,
         cwd=cwd,
@@ -225,7 +285,9 @@ def validate_path_within_repo(path_str: str, repo_root: Path) -> Path:
     resolved = (repo_root / path_str).resolve()
     repo_resolved = repo_root.resolve()
 
-    if not str(resolved).startswith(str(repo_resolved)):
+    try:
+        resolved.relative_to(repo_resolved)
+    except ValueError:
         raise ValueError(
             f"Path '{path_str}' resolves outside the repository root. "
             "Path traversal is not allowed."
