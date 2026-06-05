@@ -165,7 +165,19 @@ def load_rules_from_yaml(path: Path) -> list[GovernanceRule]:
             rule.validate_rule()
             loaded_rules.append(rule)
         except ValidationError as ve:
-            raise ValueError(f"Validation error in rule at index {idx}: {ve}")
+            rule_id = rule_data.get("id") or f"<missing id at index {idx}>"
+            missing_fields = []
+            for err in ve.errors():
+                if err.get("type") == "missing":
+                    loc = err.get("loc")
+                    if loc:
+                        missing_fields.append(str(loc[0]))
+            if missing_fields:
+                raise ValueError(
+                    f"Validation error: Rule '{rule_id}' is missing required field: {', '.join(missing_fields)}"
+                )
+            else:
+                raise ValueError(f"Validation error in rule at index {idx}: {ve}")
         except ValueError as ve:
             raise ValueError(str(ve))
 
@@ -174,7 +186,7 @@ def load_rules_from_yaml(path: Path) -> list[GovernanceRule]:
 
 def load_profile_rules(profile: str) -> list[GovernanceRule]:
     """Load default rules based on the profile name."""
-    rules_dir = Path(__file__).parent.parent / "governance" / "rules"
+    rules_dir = Path(__file__).parent.parent / "governance" / "rules" / "profiles"
     profile_path = rules_dir / f"{profile}.yaml"
     if not profile_path.exists():
         # Fall back to startup if profile file does not exist
@@ -417,7 +429,11 @@ def evaluate_rule(
 
 
 def run_scanner_checks(
-    root: Path, profile: str | None = None, custom_rules_path: Path | None = None
+    root: Path,
+    profile: str | None = None,
+    custom_rules_path: Path | None = None,
+    baseline_path: Path | None = None,
+    create_baseline_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run readiness checks using the rule engine and return a report."""
     from datetime import datetime, timezone
@@ -449,13 +465,29 @@ def run_scanner_checks(
     except Exception:
         pass
 
-    # 4. Calculate score
-    from niyam.governance.scoring import calculate_readiness_score
-    score, scoring_breakdown, _ = calculate_readiness_score(findings, profile=profile_name)
+    # 3b. Apply/Create Baseline
+    from niyam.core.baseline import load_baseline, apply_baseline, save_baseline
+    baseline = {}
+    if baseline_path:
+        baseline = load_baseline(baseline_path)
 
-    # 5. Check hard blockers and override decision/score
+    apply_baseline(findings, baseline)
+
+    if create_baseline_path:
+        project_name = root.name
+        save_baseline(create_baseline_path, findings, project_name)
+        new_baseline = load_baseline(create_baseline_path)
+        apply_baseline(findings, new_baseline)
+
+    # 4. Calculate score using only open findings
+    open_findings = [f for f in findings if f.get("status") != "accepted_existing"]
+
+    from niyam.governance.scoring import calculate_readiness_score
+    score, scoring_breakdown, _ = calculate_readiness_score(open_findings, profile=profile_name)
+
+    # 5. Check hard blockers and override decision/score using only open findings
     from niyam.governance.decision import evaluate_decision
-    decision, decision_reason, score = evaluate_decision(findings, score, profile=profile_name, project_root=root)
+    decision, decision_reason, score = evaluate_decision(open_findings, score, profile=profile_name, project_root=root)
 
     # Check for missing/skipped external scanners
     import shutil

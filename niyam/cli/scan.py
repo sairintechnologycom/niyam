@@ -13,6 +13,95 @@ from rich.table import Table
 from niyam.cli import app, console
 
 
+def generate_sarif_report(results: dict) -> str:
+    """Generate a valid SARIF v2.1.0 JSON string from scan results."""
+    findings = results.get("findings", [])
+    
+    severity_map = {
+        "critical": "error",
+        "high": "error",
+        "medium": "warning",
+        "low": "note",
+        "info": "note"
+    }
+
+    rules_dict = {}
+    sarif_results = []
+    
+    for f in findings:
+        rule_id = f.get("id", "UNKNOWN")
+        severity = f.get("severity", "info").lower()
+        level = severity_map.get(severity, "note")
+        
+        if rule_id not in rules_dict:
+            rules_dict[rule_id] = {
+                "id": rule_id,
+                "shortDescription": {
+                    "text": f.get("title", rule_id)
+                },
+                "fullDescription": {
+                    "text": f.get("description", "")
+                },
+                "help": {
+                    "text": f"Recommendation: {f.get('recommendation', '')}"
+                }
+            }
+            
+        location = {}
+        file_path = f.get("file_path", "")
+        if file_path:
+            artifact_loc = {
+                "uri": file_path
+            }
+            region = {}
+            line_num = f.get("line_number")
+            if line_num is not None:
+                region["startLine"] = int(line_num)
+                location = {
+                    "physicalLocation": {
+                        "artifactLocation": artifact_loc,
+                        "region": region
+                    }
+                }
+            else:
+                location = {
+                    "physicalLocation": {
+                        "artifactLocation": artifact_loc
+                    }
+                }
+
+        result_entry = {
+            "ruleId": rule_id,
+            "level": level,
+            "message": {
+                "text": f"{f.get('description', '')}\nRecommendation: {f.get('recommendation', '')}"
+            }
+        }
+        if location:
+            result_entry["locations"] = [location]
+            
+        sarif_results.append(result_entry)
+
+    sarif_log = {
+        "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.5.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Niyam Scanner",
+                        "rules": list(rules_dict.values()),
+                        "version": "0.4.0"
+                    }
+                },
+                "results": sarif_results
+            }
+        ]
+    }
+    
+    return json.dumps(sarif_log, indent=2)
+
+
 def generate_markdown_report(results: dict) -> str:
     """Generate a clean markdown report from scan results."""
     from datetime import datetime, timezone
@@ -76,22 +165,25 @@ def generate_markdown_report(results: dict) -> str:
         # Table header
         lines.extend(
             [
-                "| ID | Severity | Category | Description | File Path |",
-                "| --- | --- | --- | --- | --- |",
+                "| ID | Severity | Status | Category | Description | File Path |",
+                "| --- | --- | --- | --- | --- | --- |",
             ]
         )
         for f in findings:
             fpath = f"`{f['file_path']}`" if f["file_path"] else "*Global*"
+            status_val = "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
             lines.append(
-                f"| {f['id']} | **{f['severity'].upper()}** | {f['category']} | {f['description']} | {fpath} |"
+                f"| {f['id']} | **{f['severity'].upper()}** | **{status_val}** | {f['category']} | {f['description']} | {fpath} |"
             )
 
         lines.extend(["", "## Recommendations & Remediation", ""])
         for i, f in enumerate(findings, 1):
+            status_val = "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
             lines.extend(
                 [
                     f"### {i}. [{f['id']}] {f['title']}",
                     f"- **Severity:** {f['severity'].upper()}",
+                    f"- **Status:** {status_val}",
                     f"- **Category:** {f['category']}",
                     f"- **Description:** {f['description']}",
                     f"- **Recommendation:** {f['recommendation']}",
@@ -131,6 +223,12 @@ def scan_command(
             "--fail-on", help="Fail scan (exit code 2) if finding with this severity or higher is found: critical, high, medium, low, info."
         ),
     ] = None,
+    baseline: Annotated[
+        str, typer.Option("--baseline", help="Path to baseline JSON file.")
+    ] = None,
+    create_baseline: Annotated[
+        str, typer.Option("--create-baseline", help="Path to write the baseline JSON file.")
+    ] = None,
 ) -> None:
     """[Experimental] Scan the repository for production-readiness and code risk factors."""
     scan_path = Path(path).resolve()
@@ -138,16 +236,29 @@ def scan_command(
         console.print(f"[bold red]Error:[/] Directory '{path}' does not exist.")
         raise typer.Exit(3)  # Invalid config/input paths
 
+    if output not in ("text", "json", "markdown", "sarif"):
+        console.print(f"[bold red]Error:[/] Invalid --output format '{output}'. Allowed values: text, json, markdown, sarif.")
+        raise typer.Exit(3)
+
     custom_rules = Path(rules).resolve() if rules else None
+    baseline_path = Path(baseline).resolve() if baseline else None
+    create_baseline_path = Path(create_baseline).resolve() if create_baseline else None
     from niyam.governance.scan.command import execute_scan
-    
+
     try:
         results = execute_scan(
-            str(scan_path), profile=profile, custom_rules_path=custom_rules
+            str(scan_path),
+            profile=profile,
+            custom_rules_path=custom_rules,
+            baseline_path=baseline_path,
+            create_baseline_path=create_baseline_path,
         )
     except (ValueError, FileNotFoundError) as e:
         console.print(f"[bold red]Configuration Error:[/] {e}")
         raise typer.Exit(3)
+    except PermissionError as e:
+        console.print(f"[bold red]Permission/Access Error:[/] {e}")
+        raise typer.Exit(5)
     except OSError as e:
         console.print(f"[bold red]Scan Runtime Error:[/] {e}")
         raise typer.Exit(4)
@@ -162,11 +273,15 @@ def scan_command(
     # Save file if requested
     if report_file:
         report_path = Path(report_file).resolve()
-        md_content = generate_markdown_report(results)
-        # Extra safety text redaction
-        md_content = redact_text(md_content)
+        if output == "json":
+            content = json.dumps(results, indent=2)
+        elif output == "sarif":
+            content = generate_sarif_report(results)
+        else:
+            content = generate_markdown_report(results)
+        content = redact_text(content)
         try:
-            report_path.write_text(md_content, encoding="utf-8")
+            report_path.write_text(content, encoding="utf-8")
         except Exception as e:
             console.print(f"[bold red]Error writing report file:[/] {e}")
             raise typer.Exit(4)
@@ -175,6 +290,10 @@ def scan_command(
         # Print pure json to stdout
         json_str = json.dumps(results, indent=2)
         print(redact_text(json_str))
+    elif output == "sarif":
+        # Print pure sarif to stdout
+        sarif_str = generate_sarif_report(results)
+        print(redact_text(sarif_str))
     elif output == "markdown":
         # Print markdown to stdout
         md_str = generate_markdown_report(results)
@@ -196,6 +315,7 @@ def scan_command(
             table = Table(show_lines=False, box=None)
             table.add_column("ID", style="cyan", width=8)
             table.add_column("Severity", width=12)
+            table.add_column("Status", width=12)
             table.add_column("Category", style="magenta", width=15)
             table.add_column("Description")
             table.add_column("File Path", style="dim")
@@ -210,14 +330,23 @@ def scan_command(
 
             for f in findings:
                 sev_str = severity_styles.get(f["severity"], f["severity"].upper())
+                status_str = "[green]ACCEPTED[/]" if f.get("status") == "accepted_existing" else "[red]OPEN[/]"
                 fpath = f["file_path"] if f["file_path"] else "-"
                 # Redact cell text
                 desc_redacted = redact_text(f["description"])
                 fpath_redacted = redact_text(fpath)
-                table.add_row(f["id"], sev_str, f["category"], desc_redacted, fpath_redacted)
+                table.add_row(f["id"], sev_str, status_str, f["category"], desc_redacted, fpath_redacted)
 
             console.print(table)
             console.print()
+
+        # Print severity count summary
+        summary = results.get("summary", {})
+        console.print("[bold]Scan Findings Summary by Severity:[/]")
+        for sev in ["critical", "high", "medium", "low", "info"]:
+            count = summary.get(sev, 0)
+            console.print(f"  • {sev.upper()}: {count}")
+        console.print()
 
         decision_colors = {
             "GO": "bold green",
@@ -291,5 +420,12 @@ def scan_command(
     if exceeded:
         import sys
         sys.stderr.write(redact_text(f"\n❌ Scan failed: {fail_reason}\n"))
+        summary = results.get("summary", {})
+        sys.stderr.write("\nSeverity Summary:\n")
+        for sev in ["critical", "high", "medium", "low", "info"]:
+            count = summary.get(sev, 0)
+            sys.stderr.write(f"  • {sev.upper()}: {count}\n")
+        if report_file:
+            sys.stderr.write(f"\nReport Path: {report_file}\n")
         raise typer.Exit(2)
 

@@ -198,3 +198,100 @@ rules:
     assert data["profile"] == "custom"
     assert len(data["findings"]) == 1
     assert data["findings"][0]["id"] == "CUST001"
+
+
+def test_load_all_builtin_profiles() -> None:
+    """Should load all default built-in rule profiles: startup, team, enterprise, regulated."""
+    from niyam.core.scan import load_profile_rules
+    for profile in ["startup", "team", "enterprise", "regulated"]:
+        rules = load_profile_rules(profile)
+        assert len(rules) > 0
+        for r in rules:
+            assert r.id is not None
+            assert r.title is not None
+            assert r.category is not None
+            assert r.severity is not None
+
+
+def test_match_directory_exists(tmp_path: Path) -> None:
+    """Evaluate directory_exists rule logic."""
+    from niyam.core.scan import GovernanceRule
+    rule_data = {
+        "id": "R004",
+        "title": "Directory present",
+        "category": "env_config",
+        "severity": "medium",
+        "description": "Required directory exists",
+        "recommendation": "Maintain it",
+        "match": {"type": "directory_exists", "patterns": ["deploy"]},
+    }
+    rule = GovernanceRule(**rule_data)
+
+    # 1. Directory does not exist => no findings
+    findings = evaluate_rule(rule, tmp_path, [])
+    assert len(findings) == 0
+
+    # 2. Directory exists => 1 finding
+    deploy_dir = tmp_path / "deploy"
+    deploy_dir.mkdir()
+    findings = evaluate_rule(rule, tmp_path, [])
+    assert len(findings) == 1
+    assert findings[0]["id"] == "R004"
+    assert findings[0]["file_path"] == "deploy"
+
+
+def test_match_filename_pattern(tmp_path: Path) -> None:
+    """Evaluate filename_pattern rule logic."""
+    from niyam.core.scan import GovernanceRule
+    rule_data = {
+        "id": "R005",
+        "title": "Match by name",
+        "category": "env_config",
+        "severity": "medium",
+        "description": "Secrets file found by name pattern",
+        "recommendation": "Remove it",
+        "match": {"type": "filename_pattern", "patterns": ["*.secret"]},
+    }
+    rule = GovernanceRule(**rule_data)
+
+    test_file = tmp_path / "key.secret"
+    test_file.touch()
+
+    findings = evaluate_rule(rule, tmp_path, [test_file])
+    assert len(findings) == 1
+    assert findings[0]["id"] == "R005"
+    assert findings[0]["file_path"] == "key.secret"
+
+
+def test_match_content_contains(tmp_path: Path) -> None:
+    """Evaluate content_contains rule logic."""
+    from niyam.core.scan import GovernanceRule
+    rule_data = {
+        "id": "R006",
+        "title": "Match contains string",
+        "category": "secrets",
+        "severity": "high",
+        "description": "Sensitive keyword found",
+        "recommendation": "Remove it",
+        "match": {
+            "type": "content_contains",
+            "patterns": ["PASSWORD_PLAIN_TEXT"],
+            "files": ["*.py"]
+        },
+    }
+    rule = GovernanceRule(**rule_data)
+
+    # Match containing string
+    code_file = tmp_path / "main.py"
+    code_file.write_text("pwd = 'PASSWORD_PLAIN_TEXT'")
+
+    findings = evaluate_rule(rule, tmp_path, [code_file])
+    assert len(findings) == 1
+    assert findings[0]["id"] == "R006"
+    assert findings[0]["line_number"] == 1
+
+    # Safe file
+    safe_file = tmp_path / "safe.py"
+    safe_file.write_text("pwd = 'safe'")
+    findings = evaluate_rule(rule, tmp_path, [safe_file])
+    assert len(findings) == 0

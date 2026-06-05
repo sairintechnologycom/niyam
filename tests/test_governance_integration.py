@@ -239,6 +239,12 @@ def test_rule_engine_loads_enterprise_profile() -> None:
     assert len(rules) > 0
 
 
+def test_rule_engine_loads_regulated_profile() -> None:
+    """Regulated rules file loads successfully."""
+    rules = load_profile_rules("regulated")
+    assert len(rules) > 0
+
+
 def test_rule_engine_supports_file_exists(tmp_path: Path) -> None:
     """Support file_exists match type."""
     rule_def = {

@@ -9,13 +9,14 @@ The `niyam scan` command is a local repository scanner that assesses production 
 
 ## 1. Profiles & Severity Gates
 
-Niyam supports three built-in scan profiles depending on the target strictness:
+Niyam supports four built-in scan profiles depending on the target strictness:
 
 | Profile | Strictness | Target Audience | Key Behavior |
 | --- | --- | --- | --- |
 | `startup` | Lenient | Early-stage products / rapid MVPs | Minimal warnings. Focuses on critical secrets exposure. |
 | `team` | Medium | Collaborative projects | Flags missing lockfiles, missing test files, and high AI stubs. |
 | `enterprise` | Strict | Production enterprise codebases | Strict requirements. Elevates lack of testing, health routes, CI/CD pipelines, and IaC policies to high/critical severity. |
+| `regulated` | Very Strict | Regulated compliance environments | Strictest validation. Elevates all key gaps (testing, CI/CD, lockfiles, etc.) to critical severity blockers. |
 
 Use `--profile` option to toggle profiles:
 ```bash
@@ -28,10 +29,11 @@ niyam scan . --profile team
 
 The scanner uses a lightweight YAML-based rule engine. Standard rules are defined under:
 ```
-niyam/governance/rules/
+niyam/governance/rules/profiles/
   ├── startup.yaml
   ├── team.yaml
-  └── enterprise.yaml
+  ├── enterprise.yaml
+  └── regulated.yaml
 ```
 
 Each rule supports the following attributes:
@@ -172,4 +174,146 @@ Certain blocker rules bypass the numeric score and enforce a maximum decision an
 
 * **100% Offline by Default:** The rule engine evaluates checks completely locally. It does not call remote API endpoints.
 * **Auto-Sanitization:** All outputs (stdout console summaries, JSON, and Markdown reports) pass through Niyam's central redaction utility. Before any output is written, hardcoded secrets (API keys, connection strings, private keys, passwords) are automatically replaced with `[REDACTED_SECRET]` to prevent leaks in logs, reports, or CI/CD logs.
+
+---
+
+## 10. Rule Authoring Guide
+
+Each governance rule is a YAML object that defines a check performed against the repository files.
+
+### Rule Attributes
+A valid rule must specify:
+* `id` (string): Unique rule identifier (e.g. `SEC001`, `DEP001`).
+* `title` (string): Short title summarizing the finding.
+* `category` (string): Mapping category (e.g. `secrets`, `dependencies`, `env_config`, `health`, `docs`, `tests`, `cicd`, `ai_risk`).
+* `severity` (string): Severity level (`critical`, `high`, `medium`, `low`, `info`).
+* `description` (string): Description of the risk or issue.
+* `recommendation` (string): Recommended steps to fix the issue.
+* `match` (mapping): The match definition structure.
+
+Optional attributes:
+* `confidence` (string): Finding confidence level (`high`, `medium`, `low`). If not set, defaults based on match type.
+* `remediation_effort` (string): Level of effort (`low`, `medium`, `high`). If not set, defaults based on category.
+* `tags` (list of strings): Custom tags (e.g. `['security', 'secrets']`).
+
+### Match Definition Schema
+The `match` block must support:
+* `type` (string): The match type (see below).
+* `patterns` (list of strings): Patterns to look for (filenames, directories, regexes, strings).
+* `files` (list of strings, optional): Sub-selection of files to check when running `content_contains` or `content_regex` (e.g. `['*.py', '*.ts']`).
+* `if_exists` (string or list of strings, optional): Pre-condition pattern; rule is evaluated only if a file matching this exists.
+
+### Supported Match Types
+1. **`file_exists`**: Match matches if a file matching any pattern exists.
+2. **`file_missing`**: Match matches if NO files match any pattern.
+3. **`directory_exists`**: Match matches if a directory matches any pattern.
+4. **`directory_missing`**: Match matches if NO directory matches any pattern.
+5. **`filename_pattern`**: Match matches files whose names match the glob patterns.
+6. **`content_contains`**: Match searches for raw string patterns in files.
+7. **`content_regex`**: Match searches for regular expression patterns in files.
+
+---
+
+## 11. Custom Rule Example
+
+Here is a custom rules file that ensures a specific security configuration is set and a legacy config folder is absent:
+
+```yaml
+# custom-rules.yaml
+rules:
+  - id: custom-auth-config
+    title: Custom Auth Policy File Missing
+    category: auth
+    severity: high
+    description: Highly-regulated applications must contain a standard auth-policy.json file.
+    recommendation: Add and define auth-policy.json in the repository root.
+    match:
+      type: file_missing
+      patterns:
+        - "auth-policy.json"
+
+  - id: legacy-config-dir
+    title: Legacy Config Directory Exposed
+    category: env_config
+    severity: medium
+    description: Old legacy-config folder should not be present in production-bound builds.
+    recommendation: Delete the legacy-config folder from the workspace.
+    match:
+      type: directory_exists
+      patterns:
+        - "legacy-config"
+```
+
+To run:
+```bash
+niyam scan . --rules ./custom-rules.yaml
+```
+
+---
+
+## 12. Rule Validation & Errors
+
+Rules are strictly validated against their schema prior to execution. If a rule fails validation:
+1. The scan execution halts immediately.
+2. An error is printed to stderr indicating the rule `id` and the specific fields that are missing or malformed.
+3. The CLI exits with code `3` (Invalid configuration).
+
+### Example Validation Errors
+
+* **Missing Required Field:**
+  ```
+  Configuration Error: Validation error: Rule 'custom-rule-1' is missing required field: description, recommendation, match
+  ```
+* **Unsupported Match Type:**
+  ```
+  Configuration Error: Rule 'custom-rule-2' has unsupported match type 'invalid_type'. Supported types: content_contains, content_regex, directory_exists, directory_missing, file_exists, file_missing, filename_pattern
+  ```
+* **Missing Patterns for Match Type:**
+  ```
+  Configuration Error: Rule 'custom-rule-3' of type 'file_exists' must specify 'patterns'.
+  ```
+
+---
+
+## 13. Scan Baseline & Risk Acceptance
+
+Niyam supports baseline suppression to help teams adopt the tool in existing repositories without causing builds/gating checks to fail on day one due to legacy issues.
+
+### Creating a Baseline
+To capture all current scan findings and save them to a baseline file:
+```bash
+niyam scan . --create-baseline .niyam/baseline.json
+```
+This runs a normal repository scan and creates a `.niyam/baseline.json` file. All existing findings are serialized with a stable fingerprint.
+
+### Consuming a Baseline
+To run the scanner while suppressing findings already recorded in the baseline:
+```bash
+niyam scan . --baseline .niyam/baseline.json
+```
+Findings present in the baseline are marked as `accepted_existing`. They do not deduct points from the readiness score and do not trigger gating or exit failures.
+
+### Risk Acceptance Behavior
+* **Awareness vs Gating:** Baseline suppression only suppresses gating/failures; it does not hide findings. All findings (including suppressed ones) are still printed in JSON, Markdown, and console reports. Suppressed findings will display a status of `ACCEPTED`, whereas new findings display `OPEN`.
+* **Hard Blocker Suppression:** Hard blockers (such as critical secrets or exposed private keys) are NOT suppressed by the baseline unless they are explicitly accepted with a non-empty `reason` in the baseline file.
+* **Expiration Dates:** Each accepted finding in the baseline JSON can optionally contain an `expires_at` ISO-8601 timestamp. Once this date is exceeded, the suppression expires and the finding reverts to `OPEN`.
+
+---
+
+## 14. Enterprise Rollout Guidance
+
+Adopting Niyam across large engineering organizations should be phased:
+
+1. **Phase 1: Shadow / Monitoring Mode**
+   Integrate `niyam scan` into your CI/CD pipelines without the `--fail-on` flag. This allows teams to build awareness and inspect reports without blocking build runs.
+2. **Phase 2: Establish Baselines**
+   Have each team run `niyam scan . --create-baseline .niyam/baseline.json` on their default branch. Commit the baseline file to the repository.
+3. **Phase 3: Active Gating on Delta (New Findings)**
+   Configure CI/CD pipelines to run with baseline checks and gating:
+   ```bash
+   niyam scan . --baseline .niyam/baseline.json --fail-on high
+   ```
+   This ensures that any new security risks or quality issues added in PRs fail the build immediately, while keeping legacy findings accepted under the baseline.
+4. **Phase 4: Baseline Burn-down**
+   Track and schedule burn-down sprints to resolve legacy findings, removing them from the baseline as they get remediated. Use `expires_at` in the baseline entries to enforce remediation timelines.
 

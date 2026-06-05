@@ -90,7 +90,7 @@ def evaluate_decision(
     # We can detect if category is "auth", "authentication", or "authorization" and description/title contains "missing" or "no" or "unauthenticated"
     # Or if finding ID contains API and AUT or title contains "api" and "auth"
     has_no_auth_on_api = False
-    if profile.lower() == "enterprise":
+    if profile.lower() in ("enterprise", "regulated"):
         for f in findings:
             category = f.get("category", "").lower()
             fid = f.get("id", "").upper()

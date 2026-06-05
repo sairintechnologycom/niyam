@@ -11,7 +11,15 @@ def execute_scan(
     path: str = ".",
     profile: str = "startup",
     custom_rules_path: Path | None = None,
+    baseline_path: Path | None = None,
+    create_baseline_path: Path | None = None,
 ) -> dict[str, Any]:
     """Execute repository scan for production readiness (Experimental)."""
     scan_path = Path(path).resolve()
-    return run_scanner_checks(scan_path, profile=profile, custom_rules_path=custom_rules_path)
+    return run_scanner_checks(
+        scan_path,
+        profile=profile,
+        custom_rules_path=custom_rules_path,
+        baseline_path=baseline_path,
+        create_baseline_path=create_baseline_path,
+    )

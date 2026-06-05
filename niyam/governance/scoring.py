@@ -37,6 +37,16 @@ PROFILE_WEIGHTS = {
         "data_protection": 7,
         "documentation": 3,
     },
+    "regulated": {
+        "secrets": 30,
+        "auth": 20,
+        "dependencies": 10,
+        "cloud": 15,
+        "production_ops": 10,
+        "ai_risk": 5,
+        "data_protection": 7,
+        "documentation": 3,
+    },
 }
 
 # Standard deductions by severity
