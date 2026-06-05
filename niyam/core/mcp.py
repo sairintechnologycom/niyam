@@ -61,11 +61,16 @@ def load_mcp_registry(root: Path | None = None) -> MCPRegistry:
 
 
 def save_mcp_registry(registry: MCPRegistry, root: Path | None = None) -> None:
-    """Save the MCP/tool registry locally to the JSON file."""
+    """Save the MCP/tool registry locally to the JSON file with secret redaction."""
     path = get_mcp_registry_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    
+    from niyam.governance.common.redaction import redact_secrets
+    redacted_data = redact_secrets(registry.model_dump())
+    
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(registry.model_dump(), f, indent=2)
+        json.dump(redacted_data, f, indent=2)
+
 
 
 def classify_risk(

@@ -334,4 +334,25 @@ def test_risk_classification_v1():
     assert classify_risk("mixed2", "other", capabilities=["repo_read", "shell_execute"]) == "critical"
 
 
+def test_save_registry_redacts_secrets(tmp_path: Path):
+    from niyam.core.mcp import MCPRegistry, MCPTool, save_mcp_registry
+    registry = MCPRegistry()
+    registry.tools["secret-tool"] = MCPTool(
+        name="secret-tool",
+        type="api",
+        command_or_url="https://api.example.com?key=sk-ant-123456789012345678901234",
+        owner="test",
+        risk_level="medium",
+        notes="Secret password is 'supersecretpasswd123'",
+    )
+    save_mcp_registry(registry, root=tmp_path)
+    
+    registry_file = tmp_path / ".niyam" / "mcp-registry.json"
+    content = registry_file.read_text(encoding="utf-8")
+    assert "sk-ant-" not in content
+    assert "supersecretpasswd123" not in content
+    assert "[REDACTED_SECRET]" in content
+
+
+
 

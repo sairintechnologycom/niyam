@@ -25,7 +25,7 @@ PATTERNS = {
     ),
     "db_url": re.compile(r"([a-zA-Z0-9+.-]+://[^/:]+:)([^/@\s]+)(@[^/\s]+)"),
     "generic_assignment": re.compile(
-        r"(?i)(password|passwd|api_key|apikey|secret_key|private_key|token|auth_token|pass)(\s*)([=:])(\s*)(['\"]?)([a-zA-Z0-9_\-\.]{8,128})(\5)"
+        r"(?i)(password|passwd|api_key|apikey|secret_key|private_key|token|auth_token|pass)(\s*)([=:]|\bis\b)(\s*)(['\"]?)([a-zA-Z0-9_\-\.]{8,128})(\5)"
     ),
 }
 
