@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -75,33 +76,45 @@ def classify_risk(
     data_access: str | None = None,
     notes: str | None = None,
 ) -> Literal["low", "medium", "high", "critical"]:
-    import re
+    """Classify the risk level of a tool based on heuristics and capability mappings.
 
+    The type parameter is currently kept in signature for compatibility but is unused.
+    """
     caps = [c.lower().strip() for c in (capabilities or [])]
     text = f"{name} {command_or_url or ''} {data_access or ''} {notes or ''}".lower()
 
-    # Risk level priority mapping
-    risk_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    # Priority mapping
     inv_risk_levels = {1: "low", 2: "medium", 3: "high", 4: "critical"}
     max_risk_val = 0
 
-    # Map capabilities directly
+    # Unified capability mapping
     capability_risks = {
         "production_deploy": 4,
         "secrets_access": 4,
         "cloud_api": 4,
         "shell_execute": 4,
+        "run_command": 4,
+        "execute": 4,
+        "exec": 4,
         "file_write": 3,
+        "read_file": 3,
+        "write_file": 3,
+        "file": 3,
+        "filesystem": 3,
         "repo_read": 2,
         "docs_read": 2,
+        "read_docs": 2,
+        "view_docs": 2,
         "public_search": 1,
+        "search_web": 1,
+        "web_search": 1,
     }
 
     for cap in caps:
         if cap in capability_risks:
             max_risk_val = max(max_risk_val, capability_risks[cap])
 
-    # Fallback to text heuristics if no capability matched or to refine
+    # Fallback to text heuristics
     def has_word(words: list[str], target: str) -> bool:
         for w in words:
             if re.search(r"\b" + re.escape(w) + r"\b", target):
@@ -113,15 +126,15 @@ def classify_risk(
     text_medium = ["docs", "doc", "wiki", "read-only", "repo", "repository"]
     text_low = ["search", "google", "query", "web"]
 
-    if max_risk_val < 4 and (has_word(text_critical, text) or any(k in caps for k in ["run_command", "execute", "exec"])):
-        max_risk_val = max(max_risk_val, 4)
-    if max_risk_val < 3 and (has_word(text_high, text) or any(k in caps for k in ["read_file", "write_file", "file", "filesystem"])):
-        max_risk_val = max(max_risk_val, 3)
-    if max_risk_val < 2 and (has_word(text_medium, text) or any(k in caps for k in ["read_docs", "view_docs"])):
-        max_risk_val = max(max_risk_val, 2)
-    if max_risk_val < 1 and (has_word(text_low, text) or any(k in caps for k in ["search_web", "web_search"])):
-        max_risk_val = max(max_risk_val, 1)
+    if max_risk_val < 4 and has_word(text_critical, text):
+        max_risk_val = 4
+    if max_risk_val < 3 and has_word(text_high, text):
+        max_risk_val = 3
+    if max_risk_val < 2 and has_word(text_medium, text):
+        max_risk_val = 2
+    if max_risk_val < 1 and has_word(text_low, text):
+        max_risk_val = 1
 
     if max_risk_val == 0:
-        return "medium"  # Default fallback
+        return "medium"
     return inv_risk_levels[max_risk_val]
