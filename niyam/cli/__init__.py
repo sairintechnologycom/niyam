@@ -4,10 +4,7 @@
 
 from __future__ import annotations
 
-import builtins
-import typing
 import typer
-
 
 
 import logging

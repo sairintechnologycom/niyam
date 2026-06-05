@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from niyam.core.security import validate_command, CommandSecurityError, validate_path_within_repo
+from niyam.core.security import validate_command, CommandSecurityError
 from niyam.evidence.reporter import run_report
 from niyam.core.context import run_context_refresh, run_context_diff
 from niyam.runtimes.claude import ClaudeAdapter
@@ -337,8 +337,16 @@ def test_validate_command_hardening(tmp_path: Path) -> None:
     assert parts == ["docker", "run", "-v", ".:/workspace", "alpine"]
 
     # Valid absolute mount of docker socket
-    parts = validate_command("docker run -v /var/run/docker.sock:/var/run/docker.sock alpine", repo_root)
-    assert parts == ["docker", "run", "-v", "/var/run/docker.sock:/var/run/docker.sock", "alpine"]
+    parts = validate_command(
+        "docker run -v /var/run/docker.sock:/var/run/docker.sock alpine", repo_root
+    )
+    assert parts == [
+        "docker",
+        "run",
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "alpine",
+    ]
 
     # Invalid absolute volume mount
     with pytest.raises(CommandSecurityError) as excinfo:
@@ -352,6 +360,8 @@ def test_validate_command_hardening(tmp_path: Path) -> None:
 
     # Invalid mount using --mount syntax
     with pytest.raises(CommandSecurityError) as excinfo:
-        validate_command("docker run --mount type=bind,source=/etc,target=/workspace alpine", repo_root)
+        validate_command(
+            "docker run --mount type=bind,source=/etc,target=/workspace alpine",
+            repo_root,
+        )
     assert "resolves outside the repository root" in str(excinfo.value)
-
