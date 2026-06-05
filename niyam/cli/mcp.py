@@ -283,6 +283,7 @@ def mcp_show(
     approved_text = "[green]Yes[/]" if tool.approved else "[red]No[/]"
 
     content = (
+        f"[bold]Schema Version:[/] {tool.schema_version}\n"
         f"[bold]Name:[/] {tool.name}\n"
         f"[bold]Type:[/] {tool.type}\n"
         f"[bold]Risk Level:[/] [{risk_style}]{tool.risk_level}[/]\n"
@@ -291,7 +292,11 @@ def mcp_show(
         f"[bold]Command/URL:[/] {tool.command_or_url or 'N/A'}\n"
         f"[bold]Capabilities:[/] {', '.join(tool.capabilities) if tool.capabilities else 'None'}\n"
         f"[bold]Data Access:[/] {tool.data_access or 'N/A'}\n"
-        f"[bold]Notes:[/] {tool.notes or 'N/A'}"
+        f"[bold]Network Access:[/] {tool.network_access or 'N/A'}\n"
+        f"[bold]Requires Approval:[/] {'Yes' if tool.requires_approval else 'No'}\n"
+        f"[bold]Notes:[/] {tool.notes or 'N/A'}\n"
+        f"[bold]Created At:[/] {tool.created_at or 'N/A'}\n"
+        f"[bold]Updated At:[/] {tool.updated_at or 'N/A'}"
     )
 
     console.print(

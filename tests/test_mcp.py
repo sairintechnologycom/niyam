@@ -421,6 +421,31 @@ def test_mcp_approve_tool(tmp_path: Path):
     assert reg.tools["app-tool"].updated_at is not None
 
 
+def test_mcp_show_all_fields(tmp_path: Path):
+    from typer.testing import CliRunner
+    from niyam.cli import app
+    runner = CliRunner()
+
+    runner.invoke(
+        app,
+        [
+            "mcp", "register", "show-tool",
+            "--type", "api",
+            "--network-access", "internet",
+            "--requires-approval", "true",
+        ]
+    )
+
+    result = runner.invoke(app, ["mcp", "show", "show-tool"])
+    assert result.exit_code == 0
+    assert "Schema Version:" in result.stdout
+    assert "Network Access:" in result.stdout
+    assert "Requires Approval:" in result.stdout
+    assert "Created At:" in result.stdout
+    assert "Updated At:" in result.stdout
+
+
+
 
 
 
