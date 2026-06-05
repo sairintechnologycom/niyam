@@ -153,19 +153,20 @@ def safe_run_command(
 
     if redirection_file and redirection_mode:
         # Strip quotes if present
-        if (redirection_file.startswith("'") and redirection_file.endswith("'")) or \
-           (redirection_file.startswith('"') and redirection_file.endswith('"')):
+        if (redirection_file.startswith("'") and redirection_file.endswith("'")) or (
+            redirection_file.startswith('"') and redirection_file.endswith('"')
+        ):
             redirection_file = redirection_file[1:-1]
-        
+
         dest_path = validate_path_within_repo(redirection_file, cwd)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         parts = validate_command(exec_cmd)
-        
+
         sub_kwargs = kwargs.copy()
         if capture_output:
             sub_kwargs["stderr"] = subprocess.PIPE
-            
+
         with open(dest_path, redirection_mode, encoding="utf-8") as f:
             res = subprocess.run(
                 parts,

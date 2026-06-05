@@ -9,7 +9,6 @@ from typer.testing import CliRunner
 
 from niyam.cli import app
 from niyam.core.scan import run_scanner_checks
-from niyam.core.baseline import load_baseline, save_baseline, apply_baseline
 
 
 def test_create_and_consume_baseline(tmp_path: Path) -> None:
@@ -17,7 +16,7 @@ def test_create_and_consume_baseline(tmp_path: Path) -> None:
     # 1. Create a risky app: write a .env file and a manifest but no lockfile
     env_file = tmp_path / ".env"
     env_file.write_text("API_KEY=sk-proj-1234567890123456\n")
-    
+
     package_json = tmp_path / "package.json"
     package_json.write_text('{"dependencies": {"express": "*"}}')
 
@@ -25,7 +24,7 @@ def test_create_and_consume_baseline(tmp_path: Path) -> None:
     baseline_file = tmp_path / "baseline.json"
 
     # 2. Run scan to create the baseline
-    results = run_scanner_checks(tmp_path, profile="startup", create_baseline_path=baseline_file)
+    run_scanner_checks(tmp_path, profile="startup", create_baseline_path=baseline_file)
 
     # 3. Check baseline file exists and contains the schema keys
     assert baseline_file.exists()
@@ -39,7 +38,9 @@ def test_create_and_consume_baseline(tmp_path: Path) -> None:
     assert "sk-proj-123456789" not in baseline_file.read_text(encoding="utf-8")
 
     # 4. Re-scan consuming the baseline. Readiness score should be 100 because findings are accepted.
-    results_with_baseline = run_scanner_checks(tmp_path, profile="startup", baseline_path=baseline_file)
+    results_with_baseline = run_scanner_checks(
+        tmp_path, profile="startup", baseline_path=baseline_file
+    )
     assert results_with_baseline["score"] == 100
     assert results_with_baseline["decision"] == "GO"
     for f in results_with_baseline["findings"]:
@@ -60,8 +61,10 @@ def test_new_finding_is_open(tmp_path: Path) -> None:
     env_file.write_text("DB_PWD=secretpass\n")
 
     # Re-scan with baseline. The new env_file finding should be "open", while others are "accepted_existing"
-    results = run_scanner_checks(tmp_path, profile="startup", baseline_path=baseline_file)
-    
+    results = run_scanner_checks(
+        tmp_path, profile="startup", baseline_path=baseline_file
+    )
+
     env_findings = [f for f in results["findings"] if ".env" in f["file_path"]]
     assert len(env_findings) > 0
     assert any(f["status"] == "open" for f in env_findings)
@@ -81,14 +84,18 @@ def test_expired_baseline_item(tmp_path: Path) -> None:
 
     # Load baseline and manually set an expired date on the findings
     data = json.loads(baseline_file.read_text(encoding="utf-8"))
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     for entry in data["accepted_findings"]:
         entry["expires_at"] = yesterday
 
     baseline_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     # Re-scan. The findings should be "open" because the baseline items are expired
-    results = run_scanner_checks(tmp_path, profile="startup", baseline_path=baseline_file)
+    results = run_scanner_checks(
+        tmp_path, profile="startup", baseline_path=baseline_file
+    )
     for f in results["findings"]:
         # Since they are expired, they must be marked as open
         assert f["status"] == "open"
@@ -115,7 +122,7 @@ def test_critical_new_finding_fails(tmp_path: Path) -> None:
             str(baseline_file),
             "--fail-on",
             "critical",
-        ]
+        ],
     )
     assert result.exit_code == 2
     assert "Scan failed" in result.stderr

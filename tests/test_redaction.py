@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from niyam.governance.common.redaction import (
     redact_text,
     redact_dict,
@@ -10,6 +9,7 @@ from niyam.governance.common.redaction import (
     get_secret_fingerprint,
     redact_secrets,
 )
+
 
 def test_redact_openai_key() -> None:
     # OpenAI sk- proj format
@@ -68,12 +68,14 @@ MIIEowIBAAKCAQEA0Y2X...
 def test_redact_db_url() -> None:
     raw = "postgresql://myuser:mypassword123@localhost:5432/mydb"
     assert "mypassword123" not in redact_text(raw)
-    assert redact_text(raw) == "postgresql://myuser:[REDACTED_SECRET]@localhost:5432/mydb"
+    assert (
+        redact_text(raw) == "postgresql://myuser:[REDACTED_SECRET]@localhost:5432/mydb"
+    )
 
 
 def test_redact_generic_assignments() -> None:
     # password assignment
-    assert redact_text("password = \"mypass12345\"") == "password = \"[REDACTED_SECRET]\""
+    assert redact_text('password = "mypass12345"') == 'password = "[REDACTED_SECRET]"'
     # api key assignment
     assert redact_text("api_key: 'key1234567'") == "api_key: '[REDACTED_SECRET]'"
     # token assignment
@@ -130,7 +132,7 @@ def test_code_quality_review_findings() -> None:
         "data": [
             ["sk-ant-123456789012345678901234"],
             "safe_val",
-            {"key": "sk-proj-1234567890abcdef1234567890abcdef"}
+            {"key": "sk-proj-1234567890abcdef1234567890abcdef"},
         ]
     }
     redacted_nested = redact_dict(nested_dict)
@@ -150,7 +152,7 @@ def test_code_quality_review_findings() -> None:
         "api_key": "some-random-val",
         "safe_key": "safe-val",
         "secret": "another-val",
-        "auth_token": "token-val"
+        "auth_token": "token-val",
     }
     redacted_direct = redact_dict(direct_dict)
     assert redacted_direct["api_key"] == "[REDACTED_SECRET]"
@@ -166,14 +168,14 @@ def test_nested_bypass_scenarios() -> None:
         "api_key": [
             "custom_secret_1",
             "custom_secret_2",
-            {"nested_key": "custom_secret_3"}
+            {"nested_key": "custom_secret_3"},
         ]
     }
     redacted = redact_secrets(data)
     assert redacted["api_key"] == [
         "[REDACTED_SECRET]",
         "[REDACTED_SECRET]",
-        {"nested_key": "[REDACTED_SECRET]"}
+        {"nested_key": "[REDACTED_SECRET]"},
     ]
 
 
@@ -182,7 +184,7 @@ def test_code_quality_recommendations() -> None:
     non_str_key_dict = {
         123: "safe_val",
         True: "another_safe_val",
-        "api_key": "secret_val"
+        "api_key": "secret_val",
     }
     redacted = redact_dict(non_str_key_dict)
     assert redacted[123] == "safe_val"
@@ -201,5 +203,3 @@ def test_code_quality_recommendations() -> None:
     assert redacted_direct["access_token"] == "[REDACTED_SECRET]"
     assert redacted_direct["connection_string"] == "[REDACTED_SECRET]"
     assert redacted_direct["conn_str"] == "[REDACTED_SECRET]"
-
-

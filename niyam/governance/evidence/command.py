@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from niyam.core.evidence import run_generate_evidence
 
+
 def execute_generate_evidence(
     from_scan_json: str | None = None,
     fmt: str = "markdown",

@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import sys
 from typer.testing import CliRunner
-import pytest
 
 from niyam.cli import app
 
 runner = CliRunner()
 
+
 def test_governance_imports() -> None:
     """Verify that all new governance modules can be imported correctly."""
-    import niyam.governance
     from niyam.governance.scan.command import execute_scan
     from niyam.governance.evidence.command import execute_generate_evidence
-    from niyam.governance.common.schemas import GovernanceConfig, ScanConfig, GuardConfig
+    from niyam.governance.common.schemas import (
+        GovernanceConfig,
+        ScanConfig,
+        GuardConfig,
+    )
     from niyam.governance.common.redaction import redact_secrets
 
     assert execute_scan is not None

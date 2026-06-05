@@ -279,6 +279,7 @@ def test_mcp_risk_report(tmp_path: Path) -> None:
 
 def test_mcp_tool_model_fields():
     from niyam.core.mcp import MCPTool
+
     tool = MCPTool(
         name="test-fields",
         type="mcp_server",
@@ -319,6 +320,7 @@ def test_mcp_tool_validation_error():
 
 def test_risk_classification_v1():
     from niyam.core.mcp import classify_risk
+
     # Capability direct mapping
     assert classify_risk("search", "other", capabilities=["public_search"]) == "low"
     assert classify_risk("docs", "api", capabilities=["docs_read"]) == "medium"
@@ -326,16 +328,28 @@ def test_risk_classification_v1():
     assert classify_risk("file", "local_tool", capabilities=["file_write"]) == "high"
     assert classify_risk("shell", "cli", capabilities=["shell_execute"]) == "critical"
     assert classify_risk("cloud", "api", capabilities=["cloud_api"]) == "critical"
-    assert classify_risk("secrets", "other", capabilities=["secrets_access"]) == "critical"
-    assert classify_risk("deploy", "other", capabilities=["production_deploy"]) == "critical"
+    assert (
+        classify_risk("secrets", "other", capabilities=["secrets_access"]) == "critical"
+    )
+    assert (
+        classify_risk("deploy", "other", capabilities=["production_deploy"])
+        == "critical"
+    )
 
     # Multiple capabilities should select highest risk
-    assert classify_risk("mixed", "other", capabilities=["public_search", "file_write"]) == "high"
-    assert classify_risk("mixed2", "other", capabilities=["repo_read", "shell_execute"]) == "critical"
+    assert (
+        classify_risk("mixed", "other", capabilities=["public_search", "file_write"])
+        == "high"
+    )
+    assert (
+        classify_risk("mixed2", "other", capabilities=["repo_read", "shell_execute"])
+        == "critical"
+    )
 
 
 def test_save_registry_redacts_secrets(tmp_path: Path):
     from niyam.core.mcp import MCPRegistry, MCPTool, save_mcp_registry
+
     registry = MCPRegistry()
     registry.tools["secret-tool"] = MCPTool(
         name="secret-tool",
@@ -346,7 +360,7 @@ def test_save_registry_redacts_secrets(tmp_path: Path):
         notes="Secret password is 'supersecretpasswd123'",
     )
     save_mcp_registry(registry, root=tmp_path)
-    
+
     registry_file = tmp_path / ".niyam" / "mcp-registry.json"
     content = registry_file.read_text(encoding="utf-8")
     assert "sk-ant-" not in content
@@ -357,43 +371,69 @@ def test_save_registry_redacts_secrets(tmp_path: Path):
 def test_mcp_register_multiple_capability(tmp_path: Path):
     from typer.testing import CliRunner
     from niyam.cli import app
+
     runner = CliRunner()
     result = runner.invoke(
         app,
         [
-            "mcp", "register", "multi-cap",
-            "--type", "cli",
-            "--capability", "file_read",
-            "--capability", "file_write",
-        ]
+            "mcp",
+            "register",
+            "multi-cap",
+            "--type",
+            "cli",
+            "--capability",
+            "file_read",
+            "--capability",
+            "file_write",
+        ],
     )
     assert result.exit_code == 0
-    
+
     # Check stored capabilities
     from niyam.core.mcp import load_mcp_registry
+
     reg = load_mcp_registry(tmp_path)
     assert reg.tools["multi-cap"].capabilities == ["file_read", "file_write"]
+
 
 def test_mcp_register_duplicate_with_update(tmp_path: Path):
     from typer.testing import CliRunner
     from niyam.cli import app
+
     runner = CliRunner()
-    
+
     # First register
-    runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "old notes"])
-    
+    runner.invoke(
+        app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "old notes"]
+    )
+
     # Second register without --update (fails)
-    res_fail = runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "new notes"])
+    res_fail = runner.invoke(
+        app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "new notes"]
+    )
     assert res_fail.exit_code == 1
     assert "already registered" in res_fail.stdout
-    
+
     # Third register with --update (succeeds)
-    res_ok = runner.invoke(app, ["mcp", "register", "dup-tool", "--type", "api", "--notes", "new notes", "--update"])
+    res_ok = runner.invoke(
+        app,
+        [
+            "mcp",
+            "register",
+            "dup-tool",
+            "--type",
+            "api",
+            "--notes",
+            "new notes",
+            "--update",
+        ],
+    )
     assert res_ok.exit_code == 0
     assert "successfully registered" in res_ok.stdout
-    
+
     # Check fields
     from niyam.core.mcp import load_mcp_registry
+
     reg = load_mcp_registry(tmp_path)
     tool = reg.tools["dup-tool"]
     assert tool.notes == "new notes"
@@ -404,10 +444,13 @@ def test_mcp_register_duplicate_with_update(tmp_path: Path):
 def test_mcp_approve_tool(tmp_path: Path):
     from typer.testing import CliRunner
     from niyam.cli import app
+
     runner = CliRunner()
 
     # Register tool as not approved
-    runner.invoke(app, ["mcp", "register", "app-tool", "--type", "api", "--no-approved"])
+    runner.invoke(
+        app, ["mcp", "register", "app-tool", "--type", "api", "--no-approved"]
+    )
 
     # Approve tool
     result = runner.invoke(app, ["mcp", "approve", "app-tool"])
@@ -416,6 +459,7 @@ def test_mcp_approve_tool(tmp_path: Path):
 
     # Check registry
     from niyam.core.mcp import load_mcp_registry
+
     reg = load_mcp_registry(tmp_path)
     assert reg.tools["app-tool"].approved is True
     assert reg.tools["app-tool"].updated_at is not None
@@ -424,16 +468,22 @@ def test_mcp_approve_tool(tmp_path: Path):
 def test_mcp_show_all_fields(tmp_path: Path):
     from typer.testing import CliRunner
     from niyam.cli import app
+
     runner = CliRunner()
 
     runner.invoke(
         app,
         [
-            "mcp", "register", "show-tool",
-            "--type", "api",
-            "--network-access", "internet",
-            "--requires-approval", "true",
-        ]
+            "mcp",
+            "register",
+            "show-tool",
+            "--type",
+            "api",
+            "--network-access",
+            "internet",
+            "--requires-approval",
+            "true",
+        ],
     )
 
     result = runner.invoke(app, ["mcp", "show", "show-tool"])
@@ -443,10 +493,3 @@ def test_mcp_show_all_fields(tmp_path: Path):
     assert "Requires Approval:" in result.stdout
     assert "Created At:" in result.stdout
     assert "Updated At:" in result.stdout
-
-
-
-
-
-
-

@@ -290,10 +290,14 @@ def test_evidence_redacts_secrets(sample_scan_json: Path, tmp_path: Path) -> Non
     assert "sb-1234567890abcdef" not in report
 
 
-def test_evidence_reports_exact_10_sections_and_11_schema_keys(sample_scan_json: Path) -> None:
+def test_evidence_reports_exact_10_sections_and_11_schema_keys(
+    sample_scan_json: Path,
+) -> None:
     """Verify that the generated report has the 10 standard sections and JSON has the 11 schema keys."""
     # Generate markdown and verify the 10 sections
-    report_md = run_generate_evidence(from_scan_json=str(sample_scan_json), fmt="markdown")
+    report_md = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="markdown"
+    )
     expected_sections = [
         "1. Executive Summary",
         "2. Project Metadata",
@@ -304,13 +308,15 @@ def test_evidence_reports_exact_10_sections_and_11_schema_keys(sample_scan_json:
         "7. Risk Register",
         "8. Recommended Remediation Plan",
         "9. AI-Assisted Development Governance Notes",
-        "10. Appendix Summary"
+        "10. Appendix Summary",
     ]
     for section in expected_sections:
         assert section in report_md
 
     # Generate JSON and verify the 11 schema keys
-    report_json = run_generate_evidence(from_scan_json=str(sample_scan_json), fmt="json")
+    report_json = run_generate_evidence(
+        from_scan_json=str(sample_scan_json), fmt="json"
+    )
     data = json.loads(report_json)
     expected_keys = [
         "schema_version",
@@ -323,13 +329,15 @@ def test_evidence_reports_exact_10_sections_and_11_schema_keys(sample_scan_json:
         "risk_summary",
         "findings_summary",
         "remediation_plan",
-        "redaction_status"
+        "redaction_status",
     ]
     for key in expected_keys:
         assert key in data
 
 
-def test_evidence_with_and_without_guard_logs(sample_scan_json: Path, tmp_path: Path) -> None:
+def test_evidence_with_and_without_guard_logs(
+    sample_scan_json: Path, tmp_path: Path
+) -> None:
     # 1. Without guard logs (skip guard section gracefully)
     # The file .niyam/logs/guard-actions.jsonl doesn't exist yet, so we test without guard logs.
     report_no_logs = run_generate_evidence(
@@ -342,45 +350,51 @@ def test_evidence_with_and_without_guard_logs(sample_scan_json: Path, tmp_path: 
     log_dir = tmp_path / ".niyam" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "guard-actions.jsonl"
-    
+
     # Write some logs
     log_file.write_text(
-        json.dumps({
-            "schema_version": "1.0.0",
-            "timestamp": "2026-06-04T10:00:00Z",
-            "session_id": "session-123",
-            "actor_type": "agent",
-            "tool": "shell",
-            "action": "command_execute",
-            "command": "npm test",
-            "cwd": str(tmp_path),
-            "exit_code": 0,
-            "duration_ms": 1200,
-            "mode": "observe",
-            "policy_decision": "allow",
-            "decision": "allowed"
-        }) + "\n" +
-        json.dumps({
-            "schema_version": "1.0.0",
-            "timestamp": "2026-06-04T10:01:00Z",
-            "session_id": "session-123",
-            "actor_type": "agent",
-            "tool": "shell",
-            "action": "command_execute",
-            "command": "rm -rf /tmp",
-            "cwd": str(tmp_path),
-            "exit_code": 1,
-            "duration_ms": 0,
-            "mode": "block",
-            "policy_decision": "block",
-            "decision": "blocked"
-        }) + "\n"
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "timestamp": "2026-06-04T10:00:00Z",
+                "session_id": "session-123",
+                "actor_type": "agent",
+                "tool": "shell",
+                "action": "command_execute",
+                "command": "npm test",
+                "cwd": str(tmp_path),
+                "exit_code": 0,
+                "duration_ms": 1200,
+                "mode": "observe",
+                "policy_decision": "allow",
+                "decision": "allowed",
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "timestamp": "2026-06-04T10:01:00Z",
+                "session_id": "session-123",
+                "actor_type": "agent",
+                "tool": "shell",
+                "action": "command_execute",
+                "command": "rm -rf /tmp",
+                "cwd": str(tmp_path),
+                "exit_code": 1,
+                "duration_ms": 0,
+                "mode": "block",
+                "policy_decision": "block",
+                "decision": "blocked",
+            }
+        )
+        + "\n"
     )
-    
+
     report_with_logs = run_generate_evidence(
         from_scan_json=str(sample_scan_json), fmt="markdown", include="scan,guard"
     )
-    
+
     # 1. Summarize total commands
     assert "Total Actions:** 2" in report_with_logs
     # 2. Summarize blocked/warned/approved actions
@@ -399,7 +413,9 @@ def test_evidence_with_and_without_guard_logs(sample_scan_json: Path, tmp_path: 
     assert "rm -rf /tmp" in report_with_logs
 
 
-def test_evidence_secrets_and_redaction(sample_scan_json: Path, tmp_path: Path, monkeypatch) -> None:
+def test_evidence_secrets_and_redaction(
+    sample_scan_json: Path, tmp_path: Path, monkeypatch
+) -> None:
     # Set environment secret variables to verify they are NOT included in the report
     monkeypatch.setenv("SECRET_AWS_KEY", "aws-super-secret-key-12345")
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:password123@localhost/db")
@@ -407,24 +423,27 @@ def test_evidence_secrets_and_redaction(sample_scan_json: Path, tmp_path: Path, 
     log_dir = tmp_path / ".niyam" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "guard-actions.jsonl"
-    
+
     # Write a log entry with a secret command to verify redaction
     log_file.write_text(
-        json.dumps({
-            "schema_version": "1.0.0",
-            "timestamp": "2026-06-04T10:00:00Z",
-            "session_id": "session-sec",
-            "actor_type": "agent",
-            "tool": "shell",
-            "action": "command_execute",
-            "command": "curl -u admin sk-proj-1234567890abcdef1234567890abcdef",
-            "cwd": str(tmp_path),
-            "exit_code": 0,
-            "duration_ms": 500,
-            "mode": "observe",
-            "policy_decision": "allow",
-            "decision": "allowed"
-        }) + "\n"
+        json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "timestamp": "2026-06-04T10:00:00Z",
+                "session_id": "session-sec",
+                "actor_type": "agent",
+                "tool": "shell",
+                "action": "command_execute",
+                "command": "curl -u admin sk-proj-1234567890abcdef1234567890abcdef",
+                "cwd": str(tmp_path),
+                "exit_code": 0,
+                "duration_ms": 500,
+                "mode": "observe",
+                "policy_decision": "allow",
+                "decision": "allowed",
+            }
+        )
+        + "\n"
     )
 
     report = run_generate_evidence(
@@ -438,7 +457,9 @@ def test_evidence_secrets_and_redaction(sample_scan_json: Path, tmp_path: Path, 
     assert "password123" not in report
 
 
-def test_evidence_with_and_without_registry(sample_scan_json: Path, tmp_path: Path) -> None:
+def test_evidence_with_and_without_registry(
+    sample_scan_json: Path, tmp_path: Path
+) -> None:
     # 1. Evidence without registry
     # Ensure any existing registry file is gone
     mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
@@ -492,7 +513,9 @@ def test_evidence_with_and_without_registry(sample_scan_json: Path, tmp_path: Pa
     assert "Critical-risk Tools:** 0" in report_with_reg
 
 
-def test_evidence_mcp_unapproved_findings(sample_scan_json: Path, tmp_path: Path) -> None:
+def test_evidence_mcp_unapproved_findings(
+    sample_scan_json: Path, tmp_path: Path
+) -> None:
     mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
     mcp_file.write_text(
         json.dumps(
@@ -516,7 +539,7 @@ def test_evidence_mcp_unapproved_findings(sample_scan_json: Path, tmp_path: Path
                         "type": "cli",
                         "risk_level": "critical",
                         "approved": False,
-                    }
+                    },
                 },
             }
         )
@@ -528,7 +551,7 @@ def test_evidence_mcp_unapproved_findings(sample_scan_json: Path, tmp_path: Path
 
     # High/critical unapproved tools count
     assert "High/Critical Unapproved Tools:** 2" in report_md
-    
+
     # Check that they appear in findings / Risk Register
     assert "MCP-unapproved-high-tool" in report_md
     assert "MCP-unapproved_critical_tool" in report_md
@@ -543,18 +566,22 @@ def test_evidence_mcp_unapproved_findings(sample_scan_json: Path, tmp_path: Path
         from_scan_json=str(sample_scan_json), fmt="json", include="scan,mcp"
     )
     data = json.loads(report_json)
-    
+
     # Check updated risk summary counts
     assert data["risk_summary"]["high"] == 1  # 0 from sample_scan_json + 1 injected
-    assert data["risk_summary"]["critical"] == 2  # 1 from sample_scan_json (SEC001) + 1 injected
-    
+    assert (
+        data["risk_summary"]["critical"] == 2
+    )  # 1 from sample_scan_json (SEC001) + 1 injected
+
     # Findings should contain the injected ones
     finding_ids = [f["id"] for f in data["findings_summary"]]
     assert "MCP-unapproved-high-tool" in finding_ids
     assert "MCP-unapproved_critical_tool" in finding_ids
 
 
-def test_evidence_mcp_redaction_and_secrets(sample_scan_json: Path, tmp_path: Path) -> None:
+def test_evidence_mcp_redaction_and_secrets(
+    sample_scan_json: Path, tmp_path: Path
+) -> None:
     # Verify that sensitive fields/secrets in tools are redacted in the generated output formats
     mcp_file = tmp_path / ".niyam" / "mcp-registry.json"
     mcp_file.write_text(
@@ -569,7 +596,7 @@ def test_evidence_mcp_redaction_and_secrets(sample_scan_json: Path, tmp_path: Pa
                         "owner": "test",
                         "risk_level": "medium",
                         "approved": True,
-                        "notes": "password = 'secretPassword123'"
+                        "notes": "password = 'secretPassword123'",
                     }
                 },
             }
@@ -597,4 +624,3 @@ def test_evidence_mcp_redaction_and_secrets(sample_scan_json: Path, tmp_path: Pa
     assert "ghp_abc1234567890abcdef" not in report_json
     assert "secretPassword123" not in report_json
     assert "[REDACTED_SECRET]" in report_json
-

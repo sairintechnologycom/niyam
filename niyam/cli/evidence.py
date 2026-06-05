@@ -7,7 +7,6 @@ from typing import Annotated
 import typer
 
 from niyam.cli import console, evidence_app
-from niyam.core.evidence import run_generate_evidence
 
 
 @evidence_app.command("generate")
@@ -41,6 +40,7 @@ def generate_evidence(
 
     try:
         from niyam.governance.evidence.command import execute_generate_evidence
+
         report_str = execute_generate_evidence(
             from_scan_json=from_scan, fmt=fmt, output=output, include=include
         )

@@ -91,7 +91,12 @@ class GovernanceRule(BaseModel):
 def is_text_file(path: Path) -> bool:
     """Check if the file is a text file that should be scanned."""
     name_lower = path.name.lower()
-    if name_lower in ("dockerfile", "jenkinsfile", ".gitignore", ".gitattributes") or name_lower.startswith(".env"):
+    if name_lower in (
+        "dockerfile",
+        "jenkinsfile",
+        ".gitignore",
+        ".gitattributes",
+    ) or name_lower.startswith(".env"):
         return True
     suffix = path.suffix.lower()
     if suffix in (".lock", ".sum"):
@@ -199,6 +204,7 @@ def evaluate_rule(
 ) -> list[dict[str, Any]]:
     """Evaluate a single governance rule against the workspace files."""
     import hashlib
+
     findings = []
 
     # 1. Resolve relative paths
@@ -228,7 +234,12 @@ def evaluate_rule(
     # Default values logic
     confidence_val = rule.confidence
     if not confidence_val:
-        confidence_val = "high" if mtype in ("file_exists", "file_missing", "directory_exists", "directory_missing") else "medium"
+        confidence_val = (
+            "high"
+            if mtype
+            in ("file_exists", "file_missing", "directory_exists", "directory_missing")
+            else "medium"
+        )
 
     remediation_val = rule.remediation_effort
     if not remediation_val:
@@ -437,6 +448,7 @@ def run_scanner_checks(
 ) -> dict[str, Any]:
     """Run readiness checks using the rule engine and return a report."""
     from datetime import datetime, timezone
+
     root = Path(root).resolve()
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -461,12 +473,14 @@ def run_scanner_checks(
     # Run external security scanners (gitleaks, semgrep, trivy, checkov)
     try:
         from niyam.core.external_scanners import run_all_external_scanners
+
         findings.extend(run_all_external_scanners(root))
     except Exception:
         pass
 
     # 3b. Apply/Create Baseline
     from niyam.core.baseline import load_baseline, apply_baseline, save_baseline
+
     baseline = {}
     if baseline_path:
         baseline = load_baseline(baseline_path)
@@ -483,14 +497,21 @@ def run_scanner_checks(
     open_findings = [f for f in findings if f.get("status") != "accepted_existing"]
 
     from niyam.governance.scoring import calculate_readiness_score
-    score, scoring_breakdown, _ = calculate_readiness_score(open_findings, profile=profile_name)
+
+    score, scoring_breakdown, _ = calculate_readiness_score(
+        open_findings, profile=profile_name
+    )
 
     # 5. Check hard blockers and override decision/score using only open findings
     from niyam.governance.decision import evaluate_decision
-    decision, decision_reason, score = evaluate_decision(open_findings, score, profile=profile_name, project_root=root)
+
+    decision, decision_reason, score = evaluate_decision(
+        open_findings, score, profile=profile_name, project_root=root
+    )
 
     # Check for missing/skipped external scanners
     import shutil
+
     skipped_scanners = []
     for scanner_name, binary in [
         ("gitleaks", "gitleaks"),

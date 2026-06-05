@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ from niyam.governance.common.redaction import redact_text
 
 def parse_iso_datetime(dt_str: str) -> datetime:
     """Safely parse ISO datetime string, supporting Z suffix in Python 3.10+."""
-    clean_str = re.sub(r'Z$', '+00:00', dt_str.strip())
+    clean_str = re.sub(r"Z$", "+00:00", dt_str.strip())
     dt = datetime.fromisoformat(clean_str)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -30,7 +29,9 @@ def is_hard_blocker(finding: dict[str, Any]) -> bool:
     fpath = str(finding.get("file_path", ""))
 
     # 1. Critical secrets
-    if severity == "critical" and (category == "secrets" or "GITLEAKS" in fid or "SEC" in fid or "secret" in title):
+    if severity == "critical" and (
+        category == "secrets" or "GITLEAKS" in fid or "SEC" in fid or "secret" in title
+    ):
         return True
     if fid == "SEC001" or Path(fpath).name.startswith(".env"):
         return True
@@ -41,13 +42,27 @@ def is_hard_blocker(finding: dict[str, Any]) -> bool:
 
     # 3. Public Cloud Exposure in IaC
     if category in ("iac", "cloud") or "checkov" in fid.lower():
-        if severity in ("high", "critical") and ("public" in title or "public" in desc or "expose" in title or "expose" in desc or "open" in title or "open" in desc):
+        if severity in ("high", "critical") and (
+            "public" in title
+            or "public" in desc
+            or "expose" in title
+            or "expose" in desc
+            or "open" in title
+            or "open" in desc
+        ):
             return True
 
     # 4. Missing Authentication on API
     if category in ("auth", "authentication", "authorization") or fid.startswith("AUT"):
         if "api" in title or "api" in desc or "route" in title or "route" in desc:
-            if "missing" in title or "missing" in desc or "no auth" in title or "no auth" in desc or "unauthenticated" in title or "unauthenticated" in desc:
+            if (
+                "missing" in title
+                or "missing" in desc
+                or "no auth" in title
+                or "no auth" in desc
+                or "unauthenticated" in title
+                or "unauthenticated" in desc
+            ):
                 return True
 
     return False
@@ -60,6 +75,7 @@ def load_baseline(path: Path) -> dict[str, Any]:
 
     try:
         import json
+
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
@@ -76,15 +92,21 @@ def load_baseline(path: Path) -> dict[str, Any]:
 
     for idx, entry in enumerate(data["accepted_findings"]):
         if not isinstance(entry, dict):
-            raise ValueError(f"Baseline finding entry at index {idx} is not a JSON object.")
+            raise ValueError(
+                f"Baseline finding entry at index {idx} is not a JSON object."
+            )
         for field in ("fingerprint", "rule_id", "severity", "reason"):
             if field not in entry:
-                raise ValueError(f"Baseline finding entry at index {idx} is missing required field: {field}")
+                raise ValueError(
+                    f"Baseline finding entry at index {idx} is missing required field: {field}"
+                )
 
     return data
 
 
-def apply_baseline(findings: list[dict[str, Any]], baseline: dict[str, Any]) -> list[dict[str, Any]]:
+def apply_baseline(
+    findings: list[dict[str, Any]], baseline: dict[str, Any]
+) -> list[dict[str, Any]]:
     """Mark findings as accepted_existing or open based on baseline mappings."""
     if not baseline or "accepted_findings" not in baseline:
         for f in findings:
@@ -126,20 +148,24 @@ def apply_baseline(findings: list[dict[str, Any]], baseline: dict[str, Any]) -> 
     return findings
 
 
-def save_baseline(path: Path, findings: list[dict[str, Any]], project_name: str) -> None:
+def save_baseline(
+    path: Path, findings: list[dict[str, Any]], project_name: str
+) -> None:
     """Serialize scan findings to the baseline JSON file with secret redaction."""
     import json
 
     accepted_findings = []
     for f in findings:
-        accepted_findings.append({
-            "fingerprint": f.get("fingerprint"),
-            "rule_id": f.get("id"),
-            "severity": f.get("severity"),
-            "reason": f"Baseline auto-generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-            "accepted_by": "system",
-            "expires_at": None,
-        })
+        accepted_findings.append(
+            {
+                "fingerprint": f.get("fingerprint"),
+                "rule_id": f.get("id"),
+                "severity": f.get("severity"),
+                "reason": f"Baseline auto-generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+                "accepted_by": "system",
+                "expires_at": None,
+            }
+        )
 
     baseline_data = {
         "schema_version": "1.0.0",

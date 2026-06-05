@@ -667,11 +667,10 @@ def _get_top_command_categories(logs: list[dict[str, Any]]) -> list[str]:
             # Strip path if it looks like an absolute/relative path
             executable = Path(executable).name
             categories[executable] = categories.get(executable, 0) + 1
-    
+
     # Sort categories by count descending
     sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)
     return [f"{exe} ({count})" for exe, count in sorted_cats[:5]]
-
 
 
 def _get_violations(guard_logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -717,7 +716,7 @@ def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
     unapproved = total - approved
     high_risk = sum(1 for t in tools_list if t.risk_level == "high")
     critical_risk = sum(1 for t in tools_list if t.risk_level == "critical")
-    
+
     unapproved_high_critical = [
         t for t in tools_list if not t.approved and t.risk_level in ("high", "critical")
     ]
@@ -727,15 +726,19 @@ def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
     recommended_actions = []
     for t in tools_list:
         if not t.approved:
-            recommended_actions.append({
-                "tool": t.name,
-                "risk_level": t.risk_level,
-                "action": f"Approve tool '{t.name}' (Risk: {t.risk_level}) via 'niyam mcp approve {t.name}'."
-            })
+            recommended_actions.append(
+                {
+                    "tool": t.name,
+                    "risk_level": t.risk_level,
+                    "action": f"Approve tool '{t.name}' (Risk: {t.risk_level}) via 'niyam mcp approve {t.name}'.",
+                }
+            )
 
     # Redact sensitive fields of tools
     redacted_tools = [redact_secrets(t.model_dump()) for t in tools_list]
-    redacted_unapproved_high_critical = [redact_secrets(t.model_dump()) for t in unapproved_high_critical]
+    redacted_unapproved_high_critical = [
+        redact_secrets(t.model_dump()) for t in unapproved_high_critical
+    ]
 
     return {
         "exists": True,
@@ -846,19 +849,21 @@ def run_generate_evidence(
 
     # 2. Findings breakdown & critical/high counts
     findings = list(scan_results.get("findings", []))
-    
+
     # Inject findings from MCP risk report if high/critical unapproved
     if "mcp" in include_list and mcp_data.get("exists", False):
         for tool in mcp_data.get("unapproved_high_critical_tools", []):
-            findings.append({
-                "id": f"MCP-{tool['name']}",
-                "title": f"Unapproved {tool['risk_level'].capitalize()}-Risk Tool: {tool['name']}",
-                "category": "mcp",
-                "severity": tool["risk_level"],
-                "file_path": "",
-                "description": f"The tool '{tool['name']}' is registered with {tool['risk_level']} risk level but is not approved.",
-                "recommendation": f"Approve the tool using 'niyam mcp approve {tool['name']}' if it is safe to use."
-            })
+            findings.append(
+                {
+                    "id": f"MCP-{tool['name']}",
+                    "title": f"Unapproved {tool['risk_level'].capitalize()}-Risk Tool: {tool['name']}",
+                    "category": "mcp",
+                    "severity": tool["risk_level"],
+                    "file_path": "",
+                    "description": f"The tool '{tool['name']}' is registered with {tool['risk_level']} risk level but is not approved.",
+                    "recommendation": f"Approve the tool using 'niyam mcp approve {tool['name']}' if it is safe to use.",
+                }
+            )
 
     critical_high = [f for f in findings if f.get("severity") in ("critical", "high")]
 
@@ -876,20 +881,25 @@ def run_generate_evidence(
     if "guard" in include_list and guard_logs_all:
         total_actions = len(guard_logs_all)
         total_blocked = sum(
-            1 for log in guard_logs_all
-            if log.get("decision") in ("blocked", "denied") or log.get("policy_decision") == "block"
+            1
+            for log in guard_logs_all
+            if log.get("decision") in ("blocked", "denied")
+            or log.get("policy_decision") == "block"
         )
         total_warned = sum(
-            1 for log in guard_logs_all
+            1
+            for log in guard_logs_all
             if log.get("decision") == "warned" or log.get("policy_decision") == "warn"
         )
         total_approval_required = sum(
-            1 for log in guard_logs_all
+            1
+            for log in guard_logs_all
             if log.get("policy_decision") == "approval_required"
             or log.get("decision") in ("denied", "approved")
         )
         total_failed = sum(
-            1 for log in guard_logs_all
+            1
+            for log in guard_logs_all
             if log.get("exit_code", 0) != 0
             and log.get("decision") not in ("blocked", "denied")
             and log.get("policy_decision") != "block"
@@ -903,27 +913,35 @@ def run_generate_evidence(
             latest_session_id = guard_logs_all[-1].get("session_id")
             if latest_session_id:
                 latest_session_logs = [
-                    log for log in guard_logs_all if log.get("session_id") == latest_session_id
+                    log
+                    for log in guard_logs_all
+                    if log.get("session_id") == latest_session_id
                 ]
 
         latest_session_details = {
             "session_id": latest_session_id,
             "total_actions": len(latest_session_logs),
             "total_blocked": sum(
-                1 for log in latest_session_logs
-                if log.get("decision") in ("blocked", "denied") or log.get("policy_decision") == "block"
+                1
+                for log in latest_session_logs
+                if log.get("decision") in ("blocked", "denied")
+                or log.get("policy_decision") == "block"
             ),
             "total_warned": sum(
-                1 for log in latest_session_logs
-                if log.get("decision") == "warned" or log.get("policy_decision") == "warn"
+                1
+                for log in latest_session_logs
+                if log.get("decision") == "warned"
+                or log.get("policy_decision") == "warn"
             ),
             "total_approval_required": sum(
-                1 for log in latest_session_logs
+                1
+                for log in latest_session_logs
                 if log.get("policy_decision") == "approval_required"
                 or log.get("decision") in ("denied", "approved")
             ),
             "total_failed": sum(
-                1 for log in latest_session_logs
+                1
+                for log in latest_session_logs
                 if log.get("exit_code", 0) != 0
                 and log.get("decision") not in ("blocked", "denied")
                 and log.get("policy_decision") != "block"
@@ -950,7 +968,7 @@ def run_generate_evidence(
                     "decision": log.get("decision"),
                 }
                 for log in guard_logs_all[-5:]
-            ]
+            ],
         }
 
     guard_logs = guard_logs_all[-10:]
@@ -979,7 +997,7 @@ def run_generate_evidence(
         "high": breakdown.get("high", 0),
         "medium": breakdown.get("medium", 0),
         "low": breakdown.get("low", 0),
-        "info": breakdown.get("info", 0)
+        "info": breakdown.get("info", 0),
     }
 
     findings_summary = [
@@ -988,7 +1006,7 @@ def run_generate_evidence(
             "severity": f.get("severity"),
             "category": f.get("category"),
             "title": f.get("title"),
-            "file_path": f.get("file_path")
+            "file_path": f.get("file_path"),
         }
         for f in findings
     ]
@@ -998,7 +1016,7 @@ def run_generate_evidence(
             "id": f.get("id"),
             "title": f.get("title"),
             "severity": f.get("severity"),
-            "recommendation": f.get("recommendation")
+            "recommendation": f.get("recommendation"),
         }
         for f in findings
     ]
@@ -1011,7 +1029,9 @@ def run_generate_evidence(
         "project": project_name,
         "readiness_score": scan_results.get("score", 0),
         "decision": scan_results.get("decision", "NO_GO"),
-        "decision_reason": scan_results.get("decision_reason", "Scan completed successfully."),
+        "decision_reason": scan_results.get(
+            "decision_reason", "Scan completed successfully."
+        ),
         "risk_summary": risk_summary,
         "findings_summary": findings_summary,
         "remediation_plan": remediation_plan,
@@ -1048,6 +1068,7 @@ def run_generate_evidence(
 
     # 5. Redact secrets recursively across the context dictionary using the shared redaction utility
     from niyam.governance.common.redaction import redact_secrets, redact_text
+
     context = redact_secrets(context)
 
     # 6. Render report

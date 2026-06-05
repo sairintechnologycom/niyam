@@ -203,6 +203,7 @@ rules:
 def test_load_all_builtin_profiles() -> None:
     """Should load all default built-in rule profiles: startup, team, enterprise, regulated."""
     from niyam.core.scan import load_profile_rules
+
     for profile in ["startup", "team", "enterprise", "regulated"]:
         rules = load_profile_rules(profile)
         assert len(rules) > 0
@@ -216,6 +217,7 @@ def test_load_all_builtin_profiles() -> None:
 def test_match_directory_exists(tmp_path: Path) -> None:
     """Evaluate directory_exists rule logic."""
     from niyam.core.scan import GovernanceRule
+
     rule_data = {
         "id": "R004",
         "title": "Directory present",
@@ -243,6 +245,7 @@ def test_match_directory_exists(tmp_path: Path) -> None:
 def test_match_filename_pattern(tmp_path: Path) -> None:
     """Evaluate filename_pattern rule logic."""
     from niyam.core.scan import GovernanceRule
+
     rule_data = {
         "id": "R005",
         "title": "Match by name",
@@ -266,6 +269,7 @@ def test_match_filename_pattern(tmp_path: Path) -> None:
 def test_match_content_contains(tmp_path: Path) -> None:
     """Evaluate content_contains rule logic."""
     from niyam.core.scan import GovernanceRule
+
     rule_data = {
         "id": "R006",
         "title": "Match contains string",
@@ -276,7 +280,7 @@ def test_match_content_contains(tmp_path: Path) -> None:
         "match": {
             "type": "content_contains",
             "patterns": ["PASSWORD_PLAIN_TEXT"],
-            "files": ["*.py"]
+            "files": ["*.py"],
         },
     }
     rule = GovernanceRule(**rule_data)

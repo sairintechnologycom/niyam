@@ -105,7 +105,9 @@ def test_guard_observe_log_schema_and_secrets(tmp_path: Path, monkeypatch) -> No
 
     # Set up some fake environment variables/secrets that should NOT be in the logs
     monkeypatch.setenv("MY_SUPER_SECRET", "sk-ant-1234567890abcdef12345678")
-    monkeypatch.setenv("NIYAM_SESSION_ID", "")  # Clear session ID to trigger auto generation
+    monkeypatch.setenv(
+        "NIYAM_SESSION_ID", ""
+    )  # Clear session ID to trigger auto generation
 
     # Run command containing a secret
     result = runner.invoke(
@@ -184,6 +186,7 @@ def test_guard_observe_actor_type_human(tmp_path: Path, monkeypatch) -> None:
     class MockStdin:
         def isatty(self):
             return True
+
     monkeypatch.setattr(sys, "stdin", MockStdin())
     monkeypatch.delenv("NIYAM_ACTOR_TYPE", raising=False)
 
@@ -199,14 +202,17 @@ def test_guard_observe_actor_type_human(tmp_path: Path, monkeypatch) -> None:
     assert entry["actor_type"] == "human"
 
 
-def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypatch) -> None:
+def test_guard_policy_modes_observe_warn_block_approval(
+    tmp_path: Path, monkeypatch
+) -> None:
     """Verify warn, block, and approval behaviors and JSONL schema fields."""
     runner = CliRunner()
-    
+
     # 1. Write niyam.yaml with guard rules
     niyam_dir = tmp_path / ".niyam"
     niyam_dir.mkdir(exist_ok=True)
     import yaml
+
     config_data = {
         "version": "0.1.0",
         "governance": {
@@ -214,9 +220,9 @@ def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypa
                 "mode": "observe",
                 "blocked_commands": ["nonexistent_cmd destroy", "rm -rf"],
                 "protected_files": [".env"],
-                "approval_required": ["nonexistent_cmd apply"]
+                "approval_required": ["nonexistent_cmd apply"],
             }
-        }
+        },
     }
     with open(niyam_dir / "niyam.yaml", "w", encoding="utf-8") as f:
         yaml.dump(config_data, f)
@@ -225,10 +231,12 @@ def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypa
 
     # -- Mode Warn --
     # Risky command warned and allowed in warn mode (will return 127 because nonexistent_cmd doesn't exist)
-    result_warn = runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "nonexistent_cmd", "destroy"])
+    result_warn = runner.invoke(
+        app, ["guard", "run", "--mode", "warn", "--", "nonexistent_cmd", "destroy"]
+    )
     assert result_warn.exit_code == 127
     assert "Warning:" in result_warn.stdout
-    
+
     # Check JSONL log entry for warn
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry_warn = json.loads(lines[-1])
@@ -239,10 +247,12 @@ def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypa
 
     # -- Mode Block --
     # Risky command blocked in block mode
-    result_block = runner.invoke(app, ["guard", "run", "--mode", "block", "--", "nonexistent_cmd", "destroy"])
+    result_block = runner.invoke(
+        app, ["guard", "run", "--mode", "block", "--", "nonexistent_cmd", "destroy"]
+    )
     assert result_block.exit_code == 1
     assert "Blocked:" in result_block.stdout
-    
+
     # Check JSONL log entry for block
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry_block = json.loads(lines[-1])
@@ -255,7 +265,7 @@ def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypa
     result_appr_deny = runner.invoke(
         app,
         ["guard", "run", "--mode", "approval", "--", "nonexistent_cmd", "apply"],
-        input="n\n"
+        input="n\n",
     )
     assert result_appr_deny.exit_code == 1
     assert "Denied:" in result_appr_deny.stdout
@@ -270,10 +280,10 @@ def test_guard_policy_modes_observe_warn_block_approval(tmp_path: Path, monkeypa
     result_appr_allow = runner.invoke(
         app,
         ["guard", "run", "--mode", "approval", "--", "nonexistent_cmd", "apply"],
-        input="y\n"
+        input="y\n",
     )
     assert result_appr_allow.exit_code == 127
-    
+
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry_allow = json.loads(lines[-1])
     assert entry_allow["policy_decision"] == "approval_required"

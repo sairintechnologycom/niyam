@@ -976,6 +976,7 @@ def apply_path_freeze(frozen_paths: list[str], repo_root: Path) -> dict[Path, in
     Returns a dict mapping Path objects to their original permission mode.
     """
     import stat
+
     original_modes = {}
 
     for path_str in frozen_paths:
@@ -1080,6 +1081,7 @@ def run_hooks(stage: str, context: dict, niyam_dir: Path, console: Console) -> N
 
         try:
             from niyam.core.security import CommandSecurityError, safe_run_command
+
             repo_root = niyam_dir.parent
             res = safe_run_command(cmd, cwd=repo_root, capture_output=True, text=True)
             if res.returncode != 0:
@@ -1250,7 +1252,9 @@ Do not perform destructive operations.
         try:
             plan_data = load_plan(run_dir)
             mission_meta = plan_data.get("mission", {})
-            orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
+            orchestrator = task.get("runtime") or mission_meta.get(
+                "orchestrator", "claude"
+            )
             parallel_limit = mission_meta.get("parallel", 1)
 
             configured_runtimes = []
@@ -1294,7 +1298,9 @@ Do not perform destructive operations.
                                 console.print(
                                     f"[yellow]Orchestrator '{current_orchestrator}' CLI not found in PATH.[/]"
                                 )
-                                console.print("Please run the task using the prompt at:")
+                                console.print(
+                                    "Please run the task using the prompt at:"
+                                )
                                 console.print(f"  [bold]cat {prompt_path}[/]")
                                 console.print(
                                     "\nPress Enter once you have executed the prompt and completed the work..."
@@ -1358,7 +1364,9 @@ Do not perform destructive operations.
                     run_failed = True
                     if task_log_path.exists():
                         try:
-                            log_content = task_log_path.read_text(encoding="utf-8").lower()
+                            log_content = task_log_path.read_text(
+                                encoding="utf-8"
+                            ).lower()
                             exhaustion_keywords = [
                                 "rate limit",
                                 "limit exceeded",
@@ -1997,7 +2005,11 @@ def run_mission_start(
                     has_overlap = False
                     for active_id in running_tasks:
                         active_task = task_by_id[active_id]
-                        active_files = active_task.get("files_allowed") or active_task.get("allowed_files") or ["*"]
+                        active_files = (
+                            active_task.get("files_allowed")
+                            or active_task.get("allowed_files")
+                            or ["*"]
+                        )
                         if check_overlap(t_files, active_files):
                             has_overlap = True
                             break

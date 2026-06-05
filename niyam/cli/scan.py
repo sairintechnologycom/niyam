@@ -16,43 +16,35 @@ from niyam.cli import app, console
 def generate_sarif_report(results: dict) -> str:
     """Generate a valid SARIF v2.1.0 JSON string from scan results."""
     findings = results.get("findings", [])
-    
+
     severity_map = {
         "critical": "error",
         "high": "error",
         "medium": "warning",
         "low": "note",
-        "info": "note"
+        "info": "note",
     }
 
     rules_dict = {}
     sarif_results = []
-    
+
     for f in findings:
         rule_id = f.get("id", "UNKNOWN")
         severity = f.get("severity", "info").lower()
         level = severity_map.get(severity, "note")
-        
+
         if rule_id not in rules_dict:
             rules_dict[rule_id] = {
                 "id": rule_id,
-                "shortDescription": {
-                    "text": f.get("title", rule_id)
-                },
-                "fullDescription": {
-                    "text": f.get("description", "")
-                },
-                "help": {
-                    "text": f"Recommendation: {f.get('recommendation', '')}"
-                }
+                "shortDescription": {"text": f.get("title", rule_id)},
+                "fullDescription": {"text": f.get("description", "")},
+                "help": {"text": f"Recommendation: {f.get('recommendation', '')}"},
             }
-            
+
         location = {}
         file_path = f.get("file_path", "")
         if file_path:
-            artifact_loc = {
-                "uri": file_path
-            }
+            artifact_loc = {"uri": file_path}
             region = {}
             line_num = f.get("line_number")
             if line_num is not None:
@@ -60,26 +52,22 @@ def generate_sarif_report(results: dict) -> str:
                 location = {
                     "physicalLocation": {
                         "artifactLocation": artifact_loc,
-                        "region": region
+                        "region": region,
                     }
                 }
             else:
-                location = {
-                    "physicalLocation": {
-                        "artifactLocation": artifact_loc
-                    }
-                }
+                location = {"physicalLocation": {"artifactLocation": artifact_loc}}
 
         result_entry = {
             "ruleId": rule_id,
             "level": level,
             "message": {
                 "text": f"{f.get('description', '')}\nRecommendation: {f.get('recommendation', '')}"
-            }
+            },
         }
         if location:
             result_entry["locations"] = [location]
-            
+
         sarif_results.append(result_entry)
 
     sarif_log = {
@@ -91,14 +79,14 @@ def generate_sarif_report(results: dict) -> str:
                     "driver": {
                         "name": "Niyam Scanner",
                         "rules": list(rules_dict.values()),
-                        "version": "0.4.0"
+                        "version": "0.4.0",
                     }
                 },
-                "results": sarif_results
+                "results": sarif_results,
             }
-        ]
+        ],
     }
-    
+
     return json.dumps(sarif_log, indent=2)
 
 
@@ -133,14 +121,16 @@ def generate_markdown_report(results: dict) -> str:
     ]
     if decision_reason and decision_reason != "Scan completed successfully.":
         lines.append(f"**Decision Reason:** *{decision_reason}*")
-    
-    lines.extend([
-        "",
-        "## Readiness Score Breakdown",
-        "",
-        "| Dimension | Weight | Score |",
-        "| --- | --- | --- |",
-    ])
+
+    lines.extend(
+        [
+            "",
+            "## Readiness Score Breakdown",
+            "",
+            "| Dimension | Weight | Score |",
+            "| --- | --- | --- |",
+        ]
+    )
 
     weights = PROFILE_WEIGHTS.get(profile.lower(), PROFILE_WEIGHTS["startup"])
     scoring_bd = results.get("scoring_breakdown", {})
@@ -149,14 +139,16 @@ def generate_markdown_report(results: dict) -> str:
         score_val = scoring_bd.get(dim, weight)
         lines.append(f"| {label} | {weight}% | {score_val}/{weight} |")
 
-    lines.extend([
-        f"| **Total** | **100%** | **{score}/100** |",
-        "",
-        "---",
-        "",
-        "## Summary of Findings",
-        "",
-    ])
+    lines.extend(
+        [
+            f"| **Total** | **100%** | **{score}/100** |",
+            "",
+            "---",
+            "",
+            "## Summary of Findings",
+            "",
+        ]
+    )
 
     findings = results["findings"]
     if not findings:
@@ -171,14 +163,18 @@ def generate_markdown_report(results: dict) -> str:
         )
         for f in findings:
             fpath = f"`{f['file_path']}`" if f["file_path"] else "*Global*"
-            status_val = "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
+            status_val = (
+                "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
+            )
             lines.append(
                 f"| {f['id']} | **{f['severity'].upper()}** | **{status_val}** | {f['category']} | {f['description']} | {fpath} |"
             )
 
         lines.extend(["", "## Recommendations & Remediation", ""])
         for i, f in enumerate(findings, 1):
-            status_val = "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
+            status_val = (
+                "ACCEPTED" if f.get("status") == "accepted_existing" else "OPEN"
+            )
             lines.extend(
                 [
                     f"### {i}. [{f['id']}] {f['title']}",
@@ -220,14 +216,16 @@ def scan_command(
     fail_on: Annotated[
         str,
         typer.Option(
-            "--fail-on", help="Fail scan (exit code 2) if finding with this severity or higher is found: critical, high, medium, low, info."
+            "--fail-on",
+            help="Fail scan (exit code 2) if finding with this severity or higher is found: critical, high, medium, low, info.",
         ),
     ] = None,
     baseline: Annotated[
         str, typer.Option("--baseline", help="Path to baseline JSON file.")
     ] = None,
     create_baseline: Annotated[
-        str, typer.Option("--create-baseline", help="Path to write the baseline JSON file.")
+        str,
+        typer.Option("--create-baseline", help="Path to write the baseline JSON file."),
     ] = None,
 ) -> None:
     """[Experimental] Scan the repository for production-readiness and code risk factors."""
@@ -237,7 +235,9 @@ def scan_command(
         raise typer.Exit(3)  # Invalid config/input paths
 
     if output not in ("text", "json", "markdown", "sarif"):
-        console.print(f"[bold red]Error:[/] Invalid --output format '{output}'. Allowed values: text, json, markdown, sarif.")
+        console.print(
+            f"[bold red]Error:[/] Invalid --output format '{output}'. Allowed values: text, json, markdown, sarif."
+        )
         raise typer.Exit(3)
 
     custom_rules = Path(rules).resolve() if rules else None
@@ -268,6 +268,7 @@ def scan_command(
 
     # Redact all results before writing or printing
     from niyam.governance.common.redaction import redact_secrets, redact_text
+
     results = redact_secrets(results)
 
     # Save file if requested
@@ -305,7 +306,11 @@ def scan_command(
         findings = results["findings"]
 
         console.print(redact_text("\n[bold cyan]🔍 Niyam Repository Readiness Scan[/]"))
-        console.print(redact_text(f"[dim]Workspace:[/] {scan_path}   [dim]Profile:[/] {profile}\n"))
+        console.print(
+            redact_text(
+                f"[dim]Workspace:[/] {scan_path}   [dim]Profile:[/] {profile}\n"
+            )
+        )
 
         if not findings:
             console.print(
@@ -330,12 +335,23 @@ def scan_command(
 
             for f in findings:
                 sev_str = severity_styles.get(f["severity"], f["severity"].upper())
-                status_str = "[green]ACCEPTED[/]" if f.get("status") == "accepted_existing" else "[red]OPEN[/]"
+                status_str = (
+                    "[green]ACCEPTED[/]"
+                    if f.get("status") == "accepted_existing"
+                    else "[red]OPEN[/]"
+                )
                 fpath = f["file_path"] if f["file_path"] else "-"
                 # Redact cell text
                 desc_redacted = redact_text(f["description"])
                 fpath_redacted = redact_text(fpath)
-                table.add_row(f["id"], sev_str, status_str, f["category"], desc_redacted, fpath_redacted)
+                table.add_row(
+                    f["id"],
+                    sev_str,
+                    status_str,
+                    f["category"],
+                    desc_redacted,
+                    fpath_redacted,
+                )
 
             console.print(table)
             console.print()
@@ -356,12 +372,13 @@ def scan_command(
         }
         color = decision_colors.get(decision, "white")
 
-        panel_content = (
-            f"Readiness Score: [bold cyan]{score}/100[/]\nDecision: [{color}]{decision}[/]"
-        )
-        if "decision_reason" in results and results["decision_reason"] != "Scan completed successfully.":
+        panel_content = f"Readiness Score: [bold cyan]{score}/100[/]\nDecision: [{color}]{decision}[/]"
+        if (
+            "decision_reason" in results
+            and results["decision_reason"] != "Scan completed successfully."
+        ):
             panel_content += f"\nReason: {results['decision_reason']}"
-            
+
         console.print(
             Panel(
                 panel_content,
@@ -390,13 +407,7 @@ def scan_command(
     # Check fail-on exit code logic
     exceeded = False
     fail_reason = ""
-    severity_levels = {
-        "info": 1,
-        "low": 2,
-        "medium": 3,
-        "high": 4,
-        "critical": 5
-    }
+    severity_levels = {"info": 1, "low": 2, "medium": 3, "high": 4, "critical": 5}
 
     if fail_on:
         fail_on_lower = fail_on.lower()
@@ -409,7 +420,9 @@ def scan_command(
                     fail_reason = f"Severity '{sev.upper()}' finding found: [{f['id']}] {f['title']}"
                     break
         else:
-            console.print(f"[bold red]Error:[/] Invalid --fail-on value '{fail_on}'. Allowed values: critical, high, medium, low, info.")
+            console.print(
+                f"[bold red]Error:[/] Invalid --fail-on value '{fail_on}'. Allowed values: critical, high, medium, low, info."
+            )
             raise typer.Exit(3)
 
     # If scan decision is NO_GO, fail with exit code 2 (blocking findings) regardless of --fail-on
@@ -419,6 +432,7 @@ def scan_command(
 
     if exceeded:
         import sys
+
         sys.stderr.write(redact_text(f"\n❌ Scan failed: {fail_reason}\n"))
         summary = results.get("summary", {})
         sys.stderr.write("\nSeverity Summary:\n")
@@ -428,4 +442,3 @@ def scan_command(
         if report_file:
             sys.stderr.write(f"\nReport Path: {report_file}\n")
         raise typer.Exit(2)
-

@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from niyam.core.external_scanners import (
-    run_all_external_scanners,
     run_checkov,
     run_gitleaks,
     run_semgrep,
@@ -44,8 +43,10 @@ def test_run_gitleaks_installed_with_findings(tmp_path: Path) -> None:
         report_file.write_text(json.dumps(mock_report), encoding="utf-8")
         return MagicMock(returncode=8)
 
-    with patch("shutil.which", return_value="/usr/local/bin/gitleaks"), \
-         patch("subprocess.run", side_effect=mock_subprocess_run):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/gitleaks"),
+        patch("subprocess.run", side_effect=mock_subprocess_run),
+    ):
         findings = run_gitleaks(tmp_path)
 
         assert len(findings) == 1
@@ -77,8 +78,10 @@ def test_run_semgrep_installed_with_findings(tmp_path: Path) -> None:
 
     mock_res = MagicMock(returncode=0, stdout=json.dumps(mock_output))
 
-    with patch("shutil.which", return_value="/usr/local/bin/semgrep"), \
-         patch("subprocess.run", return_value=mock_res):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/semgrep"),
+        patch("subprocess.run", return_value=mock_res),
+    ):
         findings = run_semgrep(tmp_path)
 
         assert len(findings) == 1
@@ -114,8 +117,10 @@ def test_run_trivy_installed_with_findings(tmp_path: Path) -> None:
 
     mock_res = MagicMock(returncode=0, stdout=json.dumps(mock_output))
 
-    with patch("shutil.which", return_value="/usr/local/bin/trivy"), \
-         patch("subprocess.run", return_value=mock_res):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/trivy"),
+        patch("subprocess.run", return_value=mock_res),
+    ):
         findings = run_trivy(tmp_path)
 
         assert len(findings) == 1
@@ -126,7 +131,9 @@ def test_run_trivy_installed_with_findings(tmp_path: Path) -> None:
         assert f["severity"] == "critical"
         assert f["file_path"] == "package-lock.json"
         assert "installed version 4.17.20" in f["description"]
-        assert "FixedVersion" not in f["recommendation"]  # FixedVersion used in recommendation string
+        assert (
+            "FixedVersion" not in f["recommendation"]
+        )  # FixedVersion used in recommendation string
         assert "4.17.21" in f["recommendation"]
 
 
@@ -148,8 +155,10 @@ def test_run_checkov_installed_with_findings(tmp_path: Path) -> None:
 
     mock_res = MagicMock(returncode=0, stdout=json.dumps(mock_output))
 
-    with patch("shutil.which", return_value="/usr/local/bin/checkov"), \
-         patch("subprocess.run", return_value=mock_res):
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/checkov"),
+        patch("subprocess.run", return_value=mock_res),
+    ):
         findings = run_checkov(tmp_path)
 
         assert len(findings) == 1
@@ -180,7 +189,10 @@ def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None
         }
     ]
 
-    with patch("niyam.core.external_scanners.run_all_external_scanners", return_value=mock_findings):
+    with patch(
+        "niyam.core.external_scanners.run_all_external_scanners",
+        return_value=mock_findings,
+    ):
         results = run_scanner_checks(tmp_path, profile="startup")
 
         assert results is not None
@@ -196,4 +208,9 @@ def test_scanner_checks_reports_skipped_scanners(tmp_path: Path) -> None:
     with patch("shutil.which", return_value=None):
         results = run_scanner_checks(tmp_path, profile="startup")
         assert "skipped_scanners" in results
-        assert set(results["skipped_scanners"]) == {"gitleaks", "semgrep", "trivy", "checkov"}
+        assert set(results["skipped_scanners"]) == {
+            "gitleaks",
+            "semgrep",
+            "trivy",
+            "checkov",
+        }

@@ -39,9 +39,16 @@ def evaluate_decision(
         fpath = f.get("file_path", "")
 
         # Blocker 1: critical secrets finding
-        if severity == "critical" and (category == "secrets" or "GITLEAKS" in fid or "SEC" in fid or "secret" in title):
+        if severity == "critical" and (
+            category == "secrets"
+            or "GITLEAKS" in fid
+            or "SEC" in fid
+            or "secret" in title
+        ):
             has_critical_secret = True
-            triggered_blockers.append("Critical secrets finding detected in repository.")
+            triggered_blockers.append(
+                "Critical secrets finding detected in repository."
+            )
 
         # Also look for .env file secrets using our existing code logic
         if fid == "SEC001" or (fpath and Path(fpath).name.startswith(".env")):
@@ -49,10 +56,17 @@ def evaluate_decision(
                 try:
                     env_path = project_root / fpath
                     if env_path.is_file():
-                        env_content = env_path.read_text(encoding="utf-8", errors="ignore")
-                        if contains_secret(env_content) or any(line.strip() and "=" in line for line in env_content.splitlines()):
+                        env_content = env_path.read_text(
+                            encoding="utf-8", errors="ignore"
+                        )
+                        if contains_secret(env_content) or any(
+                            line.strip() and "=" in line
+                            for line in env_content.splitlines()
+                        ):
                             has_critical_secret = True
-                            triggered_blockers.append("Committed environment configuration file (.env) with possible secrets.")
+                            triggered_blockers.append(
+                                "Committed environment configuration file (.env) with possible secrets."
+                            )
                 except Exception:
                     pass
 
@@ -69,7 +83,9 @@ def evaluate_decision(
                     content = file_p.read_text(encoding="utf-8", errors="ignore")
                     if "-----BEGIN" in content and "PRIVATE KEY" in content:
                         has_private_key = True
-                        triggered_blockers.append(f"Obvious private key committed in source code: {fpath}")
+                        triggered_blockers.append(
+                            f"Obvious private key committed in source code: {fpath}"
+                        )
             except Exception:
                 pass
 
@@ -81,7 +97,9 @@ def evaluate_decision(
                     content = file_p.read_text(encoding="utf-8", errors="ignore")
                     if "AKIA" in content or "AccountKey=" in content:
                         has_critical_secret = True
-                        triggered_blockers.append(f"Public cloud exposure pattern detected in source code: {fpath}")
+                        triggered_blockers.append(
+                            f"Public cloud exposure pattern detected in source code: {fpath}"
+                        )
             except Exception:
                 pass
 
@@ -98,13 +116,30 @@ def evaluate_decision(
             desc = f.get("description", "").lower()
 
             is_api_missing_auth = (
-                (category in ("auth", "authentication", "authorization") or fid.startswith("AUT"))
-                and ("api" in title or "api" in desc or "route" in title or "route" in desc)
-                and ("missing" in title or "missing" in desc or "no auth" in title or "no auth" in desc or "unauthenticated" in title or "unauthenticated" in desc)
+                (
+                    category in ("auth", "authentication", "authorization")
+                    or fid.startswith("AUT")
+                )
+                and (
+                    "api" in title
+                    or "api" in desc
+                    or "route" in title
+                    or "route" in desc
+                )
+                and (
+                    "missing" in title
+                    or "missing" in desc
+                    or "no auth" in title
+                    or "no auth" in desc
+                    or "unauthenticated" in title
+                    or "unauthenticated" in desc
+                )
             )
             if is_api_missing_auth:
                 has_no_auth_on_api = True
-                triggered_blockers.append(f"No authentication/authorization configured on detected API: {f.get('title')}")
+                triggered_blockers.append(
+                    f"No authentication/authorization configured on detected API: {f.get('title')}"
+                )
 
     # 3. Blocker 4: high/critical public IaC exposure
     # Check findings for high/critical severity and category "iac" or "cloud" with "public" in title/description
@@ -115,21 +150,38 @@ def evaluate_decision(
         title = f.get("title", "").lower()
         desc = f.get("description", "").lower()
 
-        if severity in ("high", "critical") and (category in ("iac", "cloud") or "checkov" in f.get("id", "").lower()):
-            if "public" in title or "public" in desc or "expose" in title or "expose" in desc or "open" in title or "open" in desc:
+        if severity in ("high", "critical") and (
+            category in ("iac", "cloud") or "checkov" in f.get("id", "").lower()
+        ):
+            if (
+                "public" in title
+                or "public" in desc
+                or "expose" in title
+                or "expose" in desc
+                or "open" in title
+                or "open" in desc
+            ):
                 has_public_iac_exposure = True
-                triggered_blockers.append(f"High/Critical public IaC exposure detected: {f.get('title')}")
+                triggered_blockers.append(
+                    f"High/Critical public IaC exposure detected: {f.get('title')}"
+                )
 
     # 4. Blocker 5: more than 3 high findings => HIGH_RISK maximum
     # Count findings with severity "high"
     high_count = sum(1 for f in findings if f.get("severity", "").lower() == "high")
     has_many_high_findings = high_count > 3
     if has_many_high_findings:
-        triggered_blockers.append(f"More than 3 High findings detected ({high_count} found).")
+        triggered_blockers.append(
+            f"More than 3 High findings detected ({high_count} found)."
+        )
 
     # Evaluate blockers override:
     # First: NO_GO blockers
-    if has_critical_secret or has_private_key or (profile.lower() == "enterprise" and has_no_auth_on_api):
+    if (
+        has_critical_secret
+        or has_private_key
+        or (profile.lower() == "enterprise" and has_no_auth_on_api)
+    ):
         decision = "NO_GO"
         # Overridden score is min(49, score) to force it below 50
         overridden_score = min(49, score)

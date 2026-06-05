@@ -7,6 +7,7 @@ from typing import Any
 
 from niyam.core.scan import run_scanner_checks
 
+
 def execute_scan(
     path: str = ".",
     profile: str = "startup",

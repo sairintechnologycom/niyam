@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 import pytest
@@ -11,7 +10,12 @@ import yaml
 from typer.testing import CliRunner
 
 from niyam.cli import app
-from niyam.core.scan import load_profile_rules, run_scanner_checks, GovernanceRule, evaluate_rule
+from niyam.core.scan import (
+    load_profile_rules,
+    run_scanner_checks,
+    GovernanceRule,
+    evaluate_rule,
+)
 from niyam.core.evidence import run_generate_evidence
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -27,39 +31,35 @@ def clean_niyam_env(tmp_path: Path, monkeypatch) -> None:
     """Redirect .niyam directory and settings to a temporary workspace."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("NIYAM_SESSION_ID", "test-session")
-    
+
     # Pre-create a niyam.yaml configuration in tmp_path
     niyam_dir = tmp_path / ".niyam"
     niyam_dir.mkdir(exist_ok=True)
-    
+
     config_data = {
         "version": "0.1.0",
         "project_name": "governance-test",
         "profile": "fullstack",
         "runtimes": ["claude"],
         "governance": {
-            "scan": {
-                "profile": "startup",
-                "fail_on": [],
-                "include": []
-            },
+            "scan": {"profile": "startup", "fail_on": [], "include": []},
             "guard": {
                 "mode": "block",
                 "blocked_commands": ["rm -rf", "terraform destroy", "kubectl delete"],
                 "protected_files": [".env", ".env.local", "secrets.json"],
-                "approval_required": ["terraform apply", "az ad", "aws iam", "echo approve"]
-            }
-        }
+                "approval_required": [
+                    "terraform apply",
+                    "az ad",
+                    "aws iam",
+                    "echo approve",
+                ],
+            },
+        },
     }
     with open(niyam_dir / "niyam.yaml", "w", encoding="utf-8") as f:
         yaml.dump(config_data, f)
-        
-    project_data = {
-        "name": "governance-test",
-        "validation": {
-            "test": "pytest"
-        }
-    }
+
+    project_data = {"name": "governance-test", "validation": {"test": "pytest"}}
     with open(niyam_dir / "project.yaml", "w", encoding="utf-8") as f:
         yaml.dump(project_data, f)
 
@@ -67,6 +67,7 @@ def clean_niyam_env(tmp_path: Path, monkeypatch) -> None:
 # ==========================================
 # 1. CLI Command Shells
 # ==========================================
+
 
 def test_cli_existing_commands_still_work() -> None:
     """Verify that old commands like niyam doctor, validate, run still exist and function."""
@@ -140,6 +141,7 @@ def test_cli_governance_commands_are_additive() -> None:
 # 2. niyam scan MVP
 # ==========================================
 
+
 def test_scan_empty_directory(tmp_path: Path) -> None:
     """Scanning an empty directory should return a score and low readiness decision."""
     results = run_scanner_checks(tmp_path, profile="startup")
@@ -202,7 +204,9 @@ def test_scan_generates_markdown_report(tmp_path: Path) -> None:
     """Scan command can save a report file to path."""
     runner = CliRunner()
     report_file = tmp_path / "scan-report.md"
-    result = runner.invoke(app, ["scan", str(CLEAN_APP), "--report-file", str(report_file)])
+    result = runner.invoke(
+        app, ["scan", str(CLEAN_APP), "--report-file", str(report_file)]
+    )
     assert result.exit_code == 0
     assert report_file.exists()
     content = report_file.read_text(encoding="utf-8")
@@ -219,6 +223,7 @@ def test_scan_score_and_decision_are_present() -> None:
 # ==========================================
 # 3. Scanner Rule Engine
 # ==========================================
+
 
 def test_rule_engine_loads_startup_profile() -> None:
     """Startup rules file loads successfully."""
@@ -254,12 +259,12 @@ def test_rule_engine_supports_file_exists(tmp_path: Path) -> None:
         "severity": "low",
         "description": "Checking file",
         "recommendation": "Rec",
-        "match": {"type": "file_exists", "patterns": ["target.txt"]}
+        "match": {"type": "file_exists", "patterns": ["target.txt"]},
     }
     rule = GovernanceRule(**rule_def)
     target = tmp_path / "target.txt"
     target.touch()
-    
+
     findings = evaluate_rule(rule, tmp_path, [target])
     assert len(findings) == 1
     assert findings[0]["file_path"] == "target.txt"
@@ -274,10 +279,10 @@ def test_rule_engine_supports_file_missing(tmp_path: Path) -> None:
         "severity": "low",
         "description": "Checking file missing",
         "recommendation": "Rec",
-        "match": {"type": "file_missing", "patterns": ["needed.txt"]}
+        "match": {"type": "file_missing", "patterns": ["needed.txt"]},
     }
     rule = GovernanceRule(**rule_def)
-    
+
     findings = evaluate_rule(rule, tmp_path, [])
     assert len(findings) == 1
     assert findings[0]["file_path"] == ""
@@ -292,12 +297,12 @@ def test_rule_engine_supports_filename_pattern(tmp_path: Path) -> None:
         "severity": "low",
         "description": "Checking pattern",
         "recommendation": "Rec",
-        "match": {"type": "filename_pattern", "patterns": ["*.secret"]}
+        "match": {"type": "filename_pattern", "patterns": ["*.secret"]},
     }
     rule = GovernanceRule(**rule_def)
     secret_file = tmp_path / "my.secret"
     secret_file.touch()
-    
+
     findings = evaluate_rule(rule, tmp_path, [secret_file])
     assert len(findings) == 1
 
@@ -311,12 +316,12 @@ def test_rule_engine_supports_content_contains(tmp_path: Path) -> None:
         "severity": "low",
         "description": "Checking contains",
         "recommendation": "Rec",
-        "match": {"type": "content_contains", "patterns": ["DANGER"]}
+        "match": {"type": "content_contains", "patterns": ["DANGER"]},
     }
     rule = GovernanceRule(**rule_def)
     f = tmp_path / "file.py"
     f.write_text("warning: DANGER here")
-    
+
     findings = evaluate_rule(rule, tmp_path, [f])
     assert len(findings) == 1
 
@@ -330,12 +335,12 @@ def test_rule_engine_supports_content_regex(tmp_path: Path) -> None:
         "severity": "low",
         "description": "Checking regex",
         "recommendation": "Rec",
-        "match": {"type": "content_regex", "patterns": ["[0-9]{3}-[0-9]{3}"]}
+        "match": {"type": "content_regex", "patterns": ["[0-9]{3}-[0-9]{3}"]},
     }
     rule = GovernanceRule(**rule_def)
     f = tmp_path / "file.py"
     f.write_text("code = 123-456")
-    
+
     findings = evaluate_rule(rule, tmp_path, [f])
     assert len(findings) == 1
 
@@ -351,6 +356,7 @@ def test_rule_engine_rejects_invalid_yaml_gracefully() -> None:
 # 4. niyam evidence
 # ==========================================
 
+
 def test_evidence_generate_from_scan_json(tmp_path: Path) -> None:
     """Generate evidence from pre-existing scan results JSON."""
     scan_json = tmp_path / "scan.json"
@@ -358,10 +364,10 @@ def test_evidence_generate_from_scan_json(tmp_path: Path) -> None:
         "profile": "startup",
         "score": 88,
         "decision": "CONDITIONAL_GO",
-        "findings": []
+        "findings": [],
     }
     scan_json.write_text(json.dumps(scan_data), encoding="utf-8")
-    
+
     report = run_generate_evidence(from_scan_json=str(scan_json), fmt="markdown")
     assert "Niyam Governance & Production Readiness" in report
     assert "88/100" in report
@@ -411,24 +417,31 @@ def test_evidence_does_not_include_raw_secrets(tmp_path: Path) -> None:
                 "category": "secrets",
                 "severity": "critical",
                 "description": "Found api_key = sk-proj-supersecretkeyhere",
-                "recommendation": "Fix api_key = sk-proj-supersecretkeyhere"
+                "recommendation": "Fix api_key = sk-proj-supersecretkeyhere",
             }
         ]
     }
     scan_json.write_text(json.dumps(scan_data), encoding="utf-8")
     report = run_generate_evidence(from_scan_json=str(scan_json), fmt="markdown")
     assert "supersecretkey" not in report
-    assert "sk-proj-REDACTED" in report or "api_key=REDACTED" in report or "REDACTED" in report
+    assert (
+        "sk-proj-REDACTED" in report
+        or "api_key=REDACTED" in report
+        or "REDACTED" in report
+    )
 
 
 # ==========================================
 # 5. niyam guard Observe Mode
 # ==========================================
 
+
 def test_guard_observe_runs_command() -> None:
     """Guard run executes standard safe shell command successfully."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--capture-output", "--", "echo", "observe-ok"])
+    result = runner.invoke(
+        app, ["guard", "run", "--capture-output", "--", "echo", "observe-ok"]
+    )
     assert result.exit_code == 0
     assert "observe-ok" in result.stdout
 
@@ -436,7 +449,9 @@ def test_guard_observe_runs_command() -> None:
 def test_guard_observe_preserves_exit_code() -> None:
     """Guard run preserves standard exit code from executed command."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--", sys.executable, "-c", "import sys; sys.exit(42)"])
+    result = runner.invoke(
+        app, ["guard", "run", "--", sys.executable, "-c", "import sys; sys.exit(42)"]
+    )
     assert result.exit_code == 42
 
 
@@ -452,10 +467,10 @@ def test_guard_observe_logs_command(tmp_path: Path) -> None:
 
     runner = CliRunner()
     runner.invoke(app, ["guard", "run", "--capture-output", "--", "echo", "logged-cmd"])
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     assert log_file.exists()
-    
+
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
     assert entry["mode"] == "observe"
@@ -465,8 +480,10 @@ def test_guard_observe_logs_command(tmp_path: Path) -> None:
 def test_guard_observe_logs_failed_command(tmp_path: Path) -> None:
     """Guard run logs failed commands with non-zero exit codes."""
     runner = CliRunner()
-    runner.invoke(app, ["guard", "run", "--", sys.executable, "-c", "import sys; sys.exit(10)"])
-    
+    runner.invoke(
+        app, ["guard", "run", "--", sys.executable, "-c", "import sys; sys.exit(10)"]
+    )
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
@@ -477,7 +494,7 @@ def test_guard_observe_does_not_capture_output_by_default(tmp_path: Path) -> Non
     """Verify command stdout/stderr output is not stored in logs unless requested."""
     runner = CliRunner()
     runner.invoke(app, ["guard", "run", "--", "echo", "secret-output"])
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
@@ -488,20 +505,25 @@ def test_guard_observe_does_not_capture_output_by_default(tmp_path: Path) -> Non
 # 6. niyam guard Policy Mode
 # ==========================================
 
+
 def test_guard_policy_allows_safe_command() -> None:
     """Safe command execution allowed under policy block."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--mode", "block", "--", "echo", "safe-command"])
+    result = runner.invoke(
+        app, ["guard", "run", "--mode", "block", "--", "echo", "safe-command"]
+    )
     assert result.exit_code == 0
 
 
 def test_guard_policy_blocks_dangerous_command(tmp_path: Path) -> None:
     """Command matching blocked command rules is rejected and logged."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--mode", "block", "--", "rm", "-rf", "folder"])
+    result = runner.invoke(
+        app, ["guard", "run", "--mode", "block", "--", "rm", "-rf", "folder"]
+    )
     assert result.exit_code == 1
     assert "Blocked:" in result.stdout
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
@@ -512,7 +534,19 @@ def test_guard_policy_blocks_dangerous_command(tmp_path: Path) -> None:
 def test_guard_policy_warns_configured_command() -> None:
     """Command matching warn policy outputs warning and runs."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "rm", "-rf", "nonexistent_warning_dir"])
+    result = runner.invoke(
+        app,
+        [
+            "guard",
+            "run",
+            "--mode",
+            "warn",
+            "--",
+            "rm",
+            "-rf",
+            "nonexistent_warning_dir",
+        ],
+    )
     assert result.exit_code == 0
     assert "Warning:" in result.stdout
 
@@ -520,26 +554,35 @@ def test_guard_policy_warns_configured_command() -> None:
 def test_guard_policy_requires_approval(tmp_path: Path) -> None:
     """Approval commands trigger confirmation and handle deny/allow correctly."""
     runner = CliRunner()
-    
+
     # 1. Deny approval
     result_deny = runner.invoke(
-        app, 
+        app,
         ["guard", "run", "--mode", "block", "--", "terraform", "apply"],
-        input="n\n"
+        input="n\n",
     )
     assert result_deny.exit_code == 1
     assert "Denied:" in result_deny.stdout
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry_deny = json.loads(lines[-1])
     assert entry_deny["decision"] == "denied"
-    
+
     # 2. Allow approval
     result_allow = runner.invoke(
-        app, 
-        ["guard", "run", "--capture-output", "--mode", "block", "--", "echo", "approve"],
-        input="y\n"
+        app,
+        [
+            "guard",
+            "run",
+            "--capture-output",
+            "--mode",
+            "block",
+            "--",
+            "echo",
+            "approve",
+        ],
+        input="y\n",
     )
     assert result_allow.exit_code == 0
     assert "approve" in result_allow.stdout
@@ -549,7 +592,7 @@ def test_guard_policy_logs_decision(tmp_path: Path) -> None:
     """Guard logs store the policy decision classification."""
     runner = CliRunner()
     runner.invoke(app, ["guard", "run", "--mode", "warn", "--", "rm", "-rf", "warning"])
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
@@ -569,7 +612,7 @@ def test_guard_default_mode_is_observe(tmp_path: Path) -> None:
 
     runner = CliRunner()
     runner.invoke(app, ["guard", "run", "--", "echo", "hello"])
-    
+
     log_file = tmp_path / ".niyam" / "logs" / "guard-actions.jsonl"
     lines = log_file.read_text(encoding="utf-8").strip().split("\n")
     entry = json.loads(lines[-1])
@@ -579,7 +622,9 @@ def test_guard_default_mode_is_observe(tmp_path: Path) -> None:
 def test_guard_invalid_mode() -> None:
     """Verify that passing an invalid guard mode results in an error exit code."""
     runner = CliRunner()
-    result = runner.invoke(app, ["guard", "run", "--mode", "invalid", "--", "echo", "hello"])
+    result = runner.invoke(
+        app, ["guard", "run", "--mode", "invalid", "--", "echo", "hello"]
+    )
     assert result.exit_code == 1
     assert "Invalid guard mode" in result.stdout
 
@@ -589,11 +634,10 @@ def test_guard_non_interactive_auto_deny(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("CI", "1")
     monkeypatch.setenv("NIYAM_TEST_NON_INTERACTIVE", "1")
     monkeypatch.delenv("NIYAM_TEST", raising=False)
-    
+
     runner = CliRunner()
     result = runner.invoke(
-        app,
-        ["guard", "run", "--mode", "block", "--", "echo", "approve"]
+        app, ["guard", "run", "--mode", "block", "--", "echo", "approve"]
     )
     assert result.exit_code == 1
     assert "Denied: Non-interactive/CI environment detected" in result.stdout
@@ -603,8 +647,7 @@ def test_guard_substring_file_operand_no_match() -> None:
     """Verify that protected files matching only as substrings of arguments are allowed."""
     runner = CliRunner()
     result = runner.invoke(
-        app,
-        ["guard", "run", "--mode", "block", "--", "touch", ".env.example"]
+        app, ["guard", "run", "--mode", "block", "--", "touch", ".env.example"]
     )
     assert result.exit_code == 0
     assert "Blocked:" not in result.stdout
@@ -614,16 +657,26 @@ def test_guard_substring_file_operand_no_match() -> None:
 # 7. niyam mcp Registry
 # ==========================================
 
+
 def test_mcp_register_tool(tmp_path: Path) -> None:
     """Register tool inside CLI registry."""
     runner = CliRunner()
     result = runner.invoke(
         app,
-        ["mcp", "register", "toolA", "--type", "mcp_server", "--risk", "high", "--no-approved"]
+        [
+            "mcp",
+            "register",
+            "toolA",
+            "--type",
+            "mcp_server",
+            "--risk",
+            "high",
+            "--no-approved",
+        ],
     )
     assert result.exit_code == 0
     assert "successfully registered" in result.stdout
-    
+
     registry_file = tmp_path / ".niyam" / "mcp-registry.json"
     assert registry_file.exists()
     data = json.loads(registry_file.read_text(encoding="utf-8"))
@@ -634,8 +687,10 @@ def test_mcp_register_tool(tmp_path: Path) -> None:
 def test_mcp_list_tools() -> None:
     """List registered tools from MCP command."""
     runner = CliRunner()
-    runner.invoke(app, ["mcp", "register", "toolA", "--type", "mcp_server", "--risk", "high"])
-    
+    runner.invoke(
+        app, ["mcp", "register", "toolA", "--type", "mcp_server", "--risk", "high"]
+    )
+
     result = runner.invoke(app, ["mcp", "list"])
     assert result.exit_code == 0
     assert "toolA" in result.stdout
@@ -644,8 +699,10 @@ def test_mcp_list_tools() -> None:
 def test_mcp_show_tool() -> None:
     """Show details of registered tool."""
     runner = CliRunner()
-    runner.invoke(app, ["mcp", "register", "toolB", "--type", "api", "--risk", "medium"])
-    
+    runner.invoke(
+        app, ["mcp", "register", "toolB", "--type", "api", "--risk", "medium"]
+    )
+
     result = runner.invoke(app, ["mcp", "show", "toolB"])
     assert result.exit_code == 0
     assert "toolB" in result.stdout
@@ -665,7 +722,19 @@ def test_mcp_duplicate_registration() -> None:
 def test_mcp_risk_report() -> None:
     """Verify MCP risk-report shows statistics correctly."""
     runner = CliRunner()
-    runner.invoke(app, ["mcp", "register", "unsafeTool", "--type", "api", "--risk", "critical", "--no-approved"])
+    runner.invoke(
+        app,
+        [
+            "mcp",
+            "register",
+            "unsafeTool",
+            "--type",
+            "api",
+            "--risk",
+            "critical",
+            "--no-approved",
+        ],
+    )
     result = runner.invoke(app, ["mcp", "risk-report"])
     assert result.exit_code == 0
     assert "unsafeTool" in result.stdout
@@ -676,7 +745,7 @@ def test_mcp_registry_schema_versioned(tmp_path: Path) -> None:
     """Verify MCP registry saves schema format containing version."""
     runner = CliRunner()
     runner.invoke(app, ["mcp", "register", "toolC", "--type", "local_tool"])
-    
+
     registry_file = tmp_path / ".niyam" / "mcp-registry.json"
     data = json.loads(registry_file.read_text(encoding="utf-8"))
     assert "schema_version" in data or "version" in data
@@ -686,6 +755,7 @@ def test_mcp_registry_schema_versioned(tmp_path: Path) -> None:
 # ==========================================
 # 8. niyam cost Tracking
 # ==========================================
+
 
 def test_cost_log_event(tmp_path: Path) -> None:
     """Log an AI model execution event and check cost-events.jsonl."""
@@ -704,14 +774,14 @@ def test_cost_log_event(tmp_path: Path) -> None:
             "--output-tokens",
             "1000",
             "--task",
-            "test-task"
-        ]
+            "test-task",
+        ],
     )
     assert result.exit_code == 0
-    
+
     cost_file = tmp_path / ".niyam" / "logs" / "cost-events.jsonl"
     assert cost_file.exists()
-    
+
     lines = cost_file.read_text(encoding="utf-8").strip().split("\n")
     event = json.loads(lines[-1])
     assert event["tool_name"] == "gemini-cli"
@@ -724,7 +794,19 @@ def test_cost_log_event(tmp_path: Path) -> None:
 def test_cost_summary_total() -> None:
     """cost summary shows aggregates correctly."""
     runner = CliRunner()
-    runner.invoke(app, ["cost", "log", "--model", "claude-sonnet", "--input-tokens", "100", "--output-tokens", "20"])
+    runner.invoke(
+        app,
+        [
+            "cost",
+            "log",
+            "--model",
+            "claude-sonnet",
+            "--input-tokens",
+            "100",
+            "--output-tokens",
+            "20",
+        ],
+    )
     result = runner.invoke(app, ["cost", "summary"])
     assert result.exit_code == 0
     assert "Total Logged Events: 1" in result.stdout
@@ -733,7 +815,9 @@ def test_cost_summary_total() -> None:
 def test_cost_report_by_tool() -> None:
     """cost report shows breakdown by tool."""
     runner = CliRunner()
-    runner.invoke(app, ["cost", "log", "--tool", "custom-tool", "--model", "claude-sonnet"])
+    runner.invoke(
+        app, ["cost", "log", "--tool", "custom-tool", "--model", "claude-sonnet"]
+    )
     result = runner.invoke(app, ["cost", "report"])
     assert result.exit_code == 0
 
@@ -759,7 +843,7 @@ def test_cost_handles_missing_optional_fields(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["cost", "log"])
     assert result.exit_code == 0
-    
+
     cost_file = tmp_path / ".niyam" / "logs" / "cost-events.jsonl"
     lines = cost_file.read_text(encoding="utf-8").strip().split("\n")
     event = json.loads(lines[-1])
@@ -770,12 +854,15 @@ def test_cost_handles_missing_optional_fields(tmp_path: Path) -> None:
 # 9. Integrated Evidence Report
 # ==========================================
 
+
 def test_integrated_evidence_with_scan_only(tmp_path: Path) -> None:
     """Integrated evidence report includes only requested scan section."""
     scan_json = tmp_path / "scan.json"
     scan_json.write_text(json.dumps({"findings": []}), encoding="utf-8")
-    
-    report = run_generate_evidence(from_scan_json=str(scan_json), include="scan", fmt="markdown")
+
+    report = run_generate_evidence(
+        from_scan_json=str(scan_json), include="scan", fmt="markdown"
+    )
     assert "Production Readiness" in report
     assert "Agent Governance" not in report
     assert "Cost" not in report
@@ -785,8 +872,10 @@ def test_integrated_evidence_with_scan_and_guard(tmp_path: Path) -> None:
     """Integrated evidence report includes scan and guard sections."""
     scan_json = tmp_path / "scan.json"
     scan_json.write_text(json.dumps({"findings": []}), encoding="utf-8")
-    
-    report = run_generate_evidence(from_scan_json=str(scan_json), include="scan,guard", fmt="markdown")
+
+    report = run_generate_evidence(
+        from_scan_json=str(scan_json), include="scan,guard", fmt="markdown"
+    )
     assert "Production Readiness" in report
     assert "Agent Governance" in report
     assert "Cost" not in report
@@ -796,13 +885,15 @@ def test_integrated_evidence_with_scan_guard_mcp_cost(tmp_path: Path) -> None:
     """Integrated evidence report includes all sections combined."""
     scan_json = tmp_path / "scan.json"
     scan_json.write_text(json.dumps({"findings": []}), encoding="utf-8")
-    
+
     # Pre-populate some cost and mcp data
     runner = CliRunner()
     runner.invoke(app, ["mcp", "register", "someTool", "--type", "cli"])
     runner.invoke(app, ["cost", "log", "--model", "claude-sonnet"])
-    
-    report = run_generate_evidence(from_scan_json=str(scan_json), include="scan,guard,mcp,cost", fmt="markdown")
+
+    report = run_generate_evidence(
+        from_scan_json=str(scan_json), include="scan,guard,mcp,cost", fmt="markdown"
+    )
     assert "Production Readiness" in report
     assert "Agent Governance" in report
     assert "MCP" in report or "Tool" in report
@@ -813,8 +904,10 @@ def test_integrated_evidence_skips_missing_sections(tmp_path: Path) -> None:
     """Sections omitted from include argument are not in report output."""
     scan_json = tmp_path / "scan.json"
     scan_json.write_text(json.dumps({"findings": []}), encoding="utf-8")
-    
-    report = run_generate_evidence(from_scan_json=str(scan_json), include="scan", fmt="markdown")
+
+    report = run_generate_evidence(
+        from_scan_json=str(scan_json), include="scan", fmt="markdown"
+    )
     assert "Agent Governance" not in report
     assert "MCP" not in report
     assert "Cost" not in report
@@ -831,12 +924,16 @@ def test_integrated_evidence_redacts_sensitive_values(tmp_path: Path) -> None:
                 "category": "secrets",
                 "severity": "critical",
                 "description": "Found api_key = ghp_abcdefghijklmnopqrstuvwxyz0123456789",
-                "recommendation": "Fix api_key = ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+                "recommendation": "Fix api_key = ghp_abcdefghijklmnopqrstuvwxyz0123456789",
             }
         ]
     }
     scan_json.write_text(json.dumps(scan_data), encoding="utf-8")
-    
-    report = run_generate_evidence(from_scan_json=str(scan_json), include="scan", fmt="markdown")
+
+    report = run_generate_evidence(
+        from_scan_json=str(scan_json), include="scan", fmt="markdown"
+    )
     assert "ghp_abcdef" not in report
-    assert "ghp_REDACTED" in report or "api_key=REDACTED" in report or "REDACTED" in report
+    assert (
+        "ghp_REDACTED" in report or "api_key=REDACTED" in report or "REDACTED" in report
+    )

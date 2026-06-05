@@ -397,7 +397,7 @@ def load_commands_policy(root: Path) -> dict:
 
 def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
     """Matches a command pattern against executed command arguments.
-    
+
     Uses token-aware matching for executable names and sequences,
     and fallback word-boundary regex matching for SQL/query patterns,
     excluding safe commands (like echo, cat, git commit, etc.).
@@ -422,7 +422,7 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
         # Check if the remaining pattern tokens are present in command arguments in order
         rem_pattern = pattern_tokens[1:]
         rem_args = cmd_args[1:]
-        
+
         idx = 0
         for token in rem_pattern:
             try:
@@ -440,9 +440,9 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
 
     command_str_normalized = " ".join(cmd_args)
     pattern_normalized = " ".join(pattern_tokens)
-    
+
     # Word-boundary check case-insensitively
-    pattern_regex = r'\b' + re.escape(pattern_normalized) + r'\b'
+    pattern_regex = r"\b" + re.escape(pattern_normalized) + r"\b"
     return bool(re.search(pattern_regex, command_str_normalized, re.IGNORECASE))
 
 
@@ -457,7 +457,7 @@ def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) ->
         # Skip options/flags
         if arg.startswith("-"):
             continue
-        
+
         arg_path = Path(arg)
         for f in protected_files:
             f_path = Path(f)
@@ -466,7 +466,7 @@ def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) ->
                 return True
             # Subpath match: check if the parts of protected path are a suffix of the arg path
             if len(f_path.parts) <= len(arg_path.parts):
-                if arg_path.parts[-len(f_path.parts):] == f_path.parts:
+                if arg_path.parts[-len(f_path.parts) :] == f_path.parts:
                     return True
     return False
 
@@ -480,13 +480,18 @@ def _prompt_confirm(console: Console, prompt: str) -> bool:
     # Check if we are running in tests (which mock stdin)
     if os.environ.get("NIYAM_TEST_NON_INTERACTIVE") == "1":
         is_interactive = False
-    elif os.environ.get("NIYAM_TEST") == "1" or os.environ.get("PYTEST_CURRENT_TEST") is not None:
+    elif (
+        os.environ.get("NIYAM_TEST") == "1"
+        or os.environ.get("PYTEST_CURRENT_TEST") is not None
+    ):
         is_interactive = True
     else:
         is_interactive = sys.stdin.isatty() and not os.environ.get("CI")
 
     if not is_interactive:
-        console.print("[bold red]Denied:[/] Non-interactive/CI environment detected. Auto-denying approval request.")
+        console.print(
+            "[bold red]Denied:[/] Non-interactive/CI environment detected. Auto-denying approval request."
+        )
         return False
 
     try:
@@ -495,10 +500,14 @@ def _prompt_confirm(console: Console, prompt: str) -> bool:
         return False
 
 
-def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, mode_override: str | None = None) -> None:
+def run_guard_run(
+    cmd_args: list[str],
+    capture_output: bool,
+    console: Console,
+    mode_override: str | None = None,
+) -> None:
     import sys
     import os
-    import re
     import time
     import json
     import uuid
@@ -545,7 +554,10 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
     if not actor_type:
         if sys.stdin.isatty():
             actor_type = "human"
-        elif os.environ.get("NIYAM_TEST") == "1" or os.environ.get("PYTEST_CURRENT_TEST") is not None:
+        elif (
+            os.environ.get("NIYAM_TEST") == "1"
+            or os.environ.get("PYTEST_CURRENT_TEST") is not None
+        ):
             actor_type = "agent"
         else:
             actor_type = "unknown"
@@ -612,7 +624,13 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
                 policy_decision = "approval_required"
                 break
 
-    def write_log(exit_code: int, duration_ms: int, final_decision: str, final_policy_decision: str, output_data: str | None = None) -> None:
+    def write_log(
+        exit_code: int,
+        duration_ms: int,
+        final_decision: str,
+        final_policy_decision: str,
+        output_data: str | None = None,
+    ) -> None:
         log_entry = {
             "schema_version": "1.0.0",
             "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -644,9 +662,13 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         write_log(1, 0, "blocked", "block")
         raise SystemExit(1)
 
-    elif (policy_decision == "block" and mode in ("approve", "approval")) or \
-         (policy_decision == "approval_required" and mode in ("block", "approve", "approval")):
-        allowed = _prompt_confirm(console, "Approval required for command. Allow execution?")
+    elif (policy_decision == "block" and mode in ("approve", "approval")) or (
+        policy_decision == "approval_required"
+        and mode in ("block", "approve", "approval")
+    ):
+        allowed = _prompt_confirm(
+            console, "Approval required for command. Allow execution?"
+        )
         if not allowed:
             console.print("[bold red]Denied:[/] User rejected execution.")
             write_log(1, 0, "denied", "approval_required")
@@ -694,7 +716,9 @@ def run_guard_run(cmd_args: list[str], capture_output: bool, console: Console, m
         output_data = str(e)
 
     duration_ms = int((time.perf_counter() - start_time) * 1000)
-    write_log(exit_code, duration_ms, decision_label, policy_decision_label, output_data)
+    write_log(
+        exit_code, duration_ms, decision_label, policy_decision_label, output_data
+    )
     raise SystemExit(exit_code)
 
 

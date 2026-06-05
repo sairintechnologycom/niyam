@@ -1,7 +1,7 @@
-import os
 import stat
 from pathlib import Path
 from niyam.mission.executor import apply_path_freeze, restore_path_freeze
+
 
 def test_apply_and_restore_path_freeze(tmp_path: Path):
     # Setup test workspace

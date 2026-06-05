@@ -46,7 +46,8 @@ def mcp_register(
     capability: Annotated[
         Optional[list[str]],
         typer.Option(
-            "--capability", help="Capability of the tool (can be specified multiple times)."
+            "--capability",
+            help="Capability of the tool (can be specified multiple times).",
         ),
     ] = None,
     data_access: Annotated[
@@ -161,7 +162,9 @@ def mcp_register(
             notes=redact_if_str(notes),
         )
 
-    now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_str = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
     # Redact string inputs
     redacted_command_or_url = redact_if_str(command_or_url)
@@ -173,14 +176,38 @@ def mcp_register(
     # Determine final field values
     if existing_tool is not None:
         final_type = type if type is not None else existing_tool.type
-        final_command_or_url = redacted_command_or_url if redacted_command_or_url is not None else existing_tool.command_or_url
-        final_owner = redacted_owner if redacted_owner is not None else existing_tool.owner
-        final_approved = approved_val if approved_val is not None else existing_tool.approved
-        final_data_access = redacted_data_access if redacted_data_access is not None else existing_tool.data_access
-        final_network_access = redacted_network_access if redacted_network_access is not None else existing_tool.network_access
-        final_requires_approval = requires_approval_val if requires_approval_val is not None else existing_tool.requires_approval
-        final_notes = redacted_notes if redacted_notes is not None else existing_tool.notes
-        final_created_at = existing_tool.created_at if existing_tool.created_at else now_str
+        final_command_or_url = (
+            redacted_command_or_url
+            if redacted_command_or_url is not None
+            else existing_tool.command_or_url
+        )
+        final_owner = (
+            redacted_owner if redacted_owner is not None else existing_tool.owner
+        )
+        final_approved = (
+            approved_val if approved_val is not None else existing_tool.approved
+        )
+        final_data_access = (
+            redacted_data_access
+            if redacted_data_access is not None
+            else existing_tool.data_access
+        )
+        final_network_access = (
+            redacted_network_access
+            if redacted_network_access is not None
+            else existing_tool.network_access
+        )
+        final_requires_approval = (
+            requires_approval_val
+            if requires_approval_val is not None
+            else existing_tool.requires_approval
+        )
+        final_notes = (
+            redacted_notes if redacted_notes is not None else existing_tool.notes
+        )
+        final_created_at = (
+            existing_tool.created_at if existing_tool.created_at else now_str
+        )
         final_updated_at = now_str
     else:
         final_type = type
@@ -189,7 +216,9 @@ def mcp_register(
         final_approved = approved_val if approved_val is not None else False
         final_data_access = redacted_data_access
         final_network_access = redacted_network_access
-        final_requires_approval = requires_approval_val if requires_approval_val is not None else True
+        final_requires_approval = (
+            requires_approval_val if requires_approval_val is not None else True
+        )
         final_notes = redacted_notes
         final_created_at = now_str
         final_updated_at = now_str
@@ -214,7 +243,6 @@ def mcp_register(
     save_mcp_registry(registry)
 
     console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully registered.")
-
 
 
 @mcp_app.command("list")
@@ -323,7 +351,9 @@ def mcp_approve(
         return
 
     tool.approved = True
-    tool.updated_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    tool.updated_at = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     registry.tools[name] = tool
     save_mcp_registry(registry)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import pytest
 
 from niyam.core.config import load_niyam_config, NiyamConfig
 
@@ -13,7 +12,7 @@ def test_legacy_config_without_governance_loads_successfully(tmp_path: Path) -> 
     niyam_dir = tmp_path / ".niyam"
     niyam_dir.mkdir()
     config_file = niyam_dir / "niyam.yaml"
-    
+
     # Write a classic config file
     config_file.write_text(
         "version: 0.1.0\n"
@@ -29,7 +28,7 @@ def test_legacy_config_without_governance_loads_successfully(tmp_path: Path) -> 
         "  frozen_paths:\n"
         "    - docs/\n"
     )
-    
+
     config = load_niyam_config(tmp_path)
     assert isinstance(config, NiyamConfig)
     assert config.project_name == "test-legacy-app"
@@ -48,11 +47,9 @@ def test_minimal_config_loads_with_defaults(tmp_path: Path) -> None:
     niyam_dir = tmp_path / ".niyam"
     niyam_dir.mkdir()
     config_file = niyam_dir / "niyam.yaml"
-    
-    config_file.write_text(
-        "version: 0.1.0\n"
-    )
-    
+
+    config_file.write_text("version: 0.1.0\n")
+
     config = load_niyam_config(tmp_path)
     assert isinstance(config, NiyamConfig)
     assert config.version == "0.1.0"

@@ -196,7 +196,9 @@ def calculate_readiness_score(
     dimension_scores = {}
     for dim, dim_weight in weights.items():
         dim_findings = findings_by_dimension.get(dim, [])
-        total_deduction = sum(DEDUCTIONS.get(f.get("severity", "info").lower(), 0) for f in dim_findings)
+        total_deduction = sum(
+            DEDUCTIONS.get(f.get("severity", "info").lower(), 0) for f in dim_findings
+        )
         dim_score = max(0, dim_weight - total_deduction)
         dimension_scores[dim] = dim_score
 

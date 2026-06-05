@@ -2,6 +2,7 @@
   "schema_version": "1.0.0",
   "tools": {
     "filesystem": {
+      "schema_version": "1.0.0",
       "name": "filesystem",
       "type": "mcp_server",
       "command_or_url": null,
@@ -10,9 +11,14 @@
       "approved": false,
       "capabilities": [],
       "data_access": null,
-      "notes": null
+      "network_access": null,
+      "requires_approval": true,
+      "notes": null,
+      "created_at": "2026-06-05T08:53:41Z",
+      "updated_at": "2026-06-05T08:53:41Z"
     },
     "docs-search": {
+      "schema_version": "1.0.0",
       "name": "docs-search",
       "type": "mcp_server",
       "command_or_url": null,
@@ -21,7 +27,11 @@
       "approved": true,
       "capabilities": [],
       "data_access": null,
-      "notes": null
+      "network_access": null,
+      "requires_approval": true,
+      "notes": null,
+      "created_at": "2026-06-05T08:53:41Z",
+      "updated_at": "2026-06-05T08:53:41Z"
     }
   }
 }

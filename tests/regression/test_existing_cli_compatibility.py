@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from typer.testing import CliRunner
 
 from niyam import __version__
@@ -47,7 +46,9 @@ def test_existing_commands_help() -> None:
     ]
     for cmd in commands:
         result = runner.invoke(app, cmd)
-        assert result.exit_code == 0, f"Command {' '.join(cmd)} failed with code {result.exit_code}"
+        assert result.exit_code == 0, (
+            f"Command {' '.join(cmd)} failed with code {result.exit_code}"
+        )
 
 
 def test_version_command() -> None:
@@ -60,6 +61,7 @@ def test_version_command() -> None:
 def test_cli_entrypoint_import() -> None:
     """Verify the package entrypoint main function can be imported and runs."""
     from niyam.cli import main
+
     assert callable(main)
 
 

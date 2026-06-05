@@ -31,7 +31,6 @@ class MCPTool(BaseModel):
     updated_at: str | None = None
 
 
-
 class MCPRegistry(BaseModel):
     """Pydantic model representing the local MCP/Tool registry file."""
 
@@ -65,12 +64,11 @@ def save_mcp_registry(registry: MCPRegistry, root: Path | None = None) -> None:
     """Save the MCP/tool registry locally to the JSON file with secret redaction."""
     path = get_mcp_registry_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     redacted_data = redact_secrets(registry.model_dump())
-    
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(redacted_data, f, indent=2)
-
 
 
 def classify_risk(
@@ -126,7 +124,21 @@ def classify_risk(
                 return True
         return False
 
-    text_critical = ["shell", "bash", "zsh", "terminal", "powershell", "aws", "gcp", "azure", "kubernetes", "k8s", "secret", "deploy", "publish"]
+    text_critical = [
+        "shell",
+        "bash",
+        "zsh",
+        "terminal",
+        "powershell",
+        "aws",
+        "gcp",
+        "azure",
+        "kubernetes",
+        "k8s",
+        "secret",
+        "deploy",
+        "publish",
+    ]
     text_high = ["file", "filesystem", "write", "create", "delete", "modify"]
     text_medium = ["docs", "doc", "wiki", "read-only", "repo", "repository"]
     text_low = ["search", "google", "query", "web"]

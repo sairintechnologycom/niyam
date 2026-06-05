@@ -37,7 +37,7 @@ uv run niyam evidence --help
 echo "2. Run scan"
 uv run niyam scan "$APP_DIR" \
   --profile startup \
-  --output json > "$REPORT_DIR/latest-scan.json"
+  --output json > "$REPORT_DIR/latest-scan.json" || [ $? -eq 2 ]
 test -f "$REPORT_DIR/latest-scan.json"
 
 echo "3. Generate evidence from scan"
@@ -55,11 +55,11 @@ echo "5. Register MCP tools"
 uv run niyam mcp register filesystem \
   --type mcp_server \
   --risk high \
-  --no-approved
+  --approved false
 uv run niyam mcp register docs-search \
   --type mcp_server \
   --risk medium \
-  --approved
+  --approved true
 uv run niyam mcp list
 uv run niyam mcp risk-report
 test -f ".niyam/mcp-registry.json"
@@ -76,6 +76,7 @@ test -f ".niyam/logs/cost-events.jsonl"
 
 echo "7. Generate integrated evidence"
 uv run niyam evidence generate \
+  --from "$REPORT_DIR/latest-scan.json" \
   --include scan,guard,mcp,cost \
   --format markdown \
   --output "$REPORT_DIR/integrated-evidence.md"

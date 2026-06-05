@@ -79,9 +79,7 @@ def guard_run(
     ] = False,
     mode: Annotated[
         Optional[str],
-        typer.Option(
-            "--mode", help="Guard mode: observe, block, warn, approve."
-        ),
+        typer.Option("--mode", help="Guard mode: observe, block, warn, approve."),
     ] = None,
 ) -> None:
     """Run a shell command under Niyam guard observation."""

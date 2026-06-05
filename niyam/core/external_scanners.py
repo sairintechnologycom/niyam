@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import tempfile
@@ -54,7 +53,9 @@ def run_gitleaks(root: Path) -> list[dict[str, Any]]:
             )
 
             # Read report if exit code is 8 (leaks found) or if file exists
-            if (res.returncode == 8 or report_file.exists()) and report_file.stat().st_size > 0:
+            if (
+                res.returncode == 8 or report_file.exists()
+            ) and report_file.stat().st_size > 0:
                 with open(report_file, encoding="utf-8") as f:
                     leaks = json.load(f)
                     for leak in leaks:
@@ -112,7 +113,9 @@ def run_semgrep(root: Path) -> list[dict[str, Any]]:
             for r in results:
                 file_path = r.get("path", "")
                 extra = r.get("extra", {})
-                sev = SEVERITY_MAPPINGS.get(extra.get("severity", "WARNING").upper(), "medium")
+                sev = SEVERITY_MAPPINGS.get(
+                    extra.get("severity", "WARNING").upper(), "medium"
+                )
                 check_id = r.get("check_id", "semgrep-finding")
 
                 findings.append(
@@ -122,7 +125,9 @@ def run_semgrep(root: Path) -> list[dict[str, Any]]:
                         "category": "security",
                         "severity": sev,
                         "file_path": file_path,
-                        "description": extra.get("message", "Semgrep security vulnerability found."),
+                        "description": extra.get(
+                            "message", "Semgrep security vulnerability found."
+                        ),
                         "recommendation": (
                             "Review the code logic, apply appropriate input/output sanitization, "
                             "or refactor using safe standard libraries."
@@ -162,7 +167,9 @@ def run_trivy(root: Path) -> list[dict[str, Any]]:
                 for v in vulns:
                     vuln_id = v.get("VulnerabilityID", "UNKNOWN")
                     pkg = v.get("PkgName", "package")
-                    sev = SEVERITY_MAPPINGS.get(v.get("Severity", "MEDIUM").upper(), "medium")
+                    sev = SEVERITY_MAPPINGS.get(
+                        v.get("Severity", "MEDIUM").upper(), "medium"
+                    )
                     installed = v.get("InstalledVersion", "")
                     fixed = v.get("FixedVersion", "N/A")
 
@@ -222,7 +229,9 @@ def run_checkov(root: Path) -> list[dict[str, Any]]:
                     if file_path.startswith("/"):
                         file_path = file_path[1:]
 
-                    sev = SEVERITY_MAPPINGS.get(c.get("severity", "MEDIUM").upper(), "medium")
+                    sev = SEVERITY_MAPPINGS.get(
+                        c.get("severity", "MEDIUM").upper(), "medium"
+                    )
 
                     findings.append(
                         {

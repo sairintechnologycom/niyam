@@ -194,6 +194,8 @@ from niyam.cli import evidence  # noqa: F401
 import typer.core
 
 original_command_main = typer.core.TyperCommand.main
+
+
 def custom_command_main(self, args=None, *args_rest, **kwargs):
     if args is not None:
         args = list(args)
@@ -215,9 +217,13 @@ def custom_command_main(self, args=None, *args_rest, **kwargs):
             i += 1
         args = new_args
     return original_command_main(self, args=args, *args_rest, **kwargs)
+
+
 typer.core.TyperCommand.main = custom_command_main
 
 original_group_main = typer.core.TyperGroup.main
+
+
 def custom_group_main(self, args=None, *args_rest, **kwargs):
     if args is not None:
         args = list(args)
@@ -239,5 +245,6 @@ def custom_group_main(self, args=None, *args_rest, **kwargs):
             i += 1
         args = new_args
     return original_group_main(self, args=args, *args_rest, **kwargs)
-typer.core.TyperGroup.main = custom_group_main
 
+
+typer.core.TyperGroup.main = custom_group_main
