@@ -94,19 +94,19 @@ Niyam turns any repository into a governed AI-development workspace with:
 You can install Niyam CLI globally using [pipx](https://github.com/pypa/pipx):
 
 ```bash
-pipx install niyam-dev
+pipx install niyam
 ```
 
 Alternatively, you can run it on the fly without installing using `uvx`:
 
 ```bash
-uvx --from niyam-dev niyam --help
+uvx --from niyam niyam --help
 ```
 
 For local development installation:
 
 ```bash
-git clone https://github.com/aincloudtools/niyam.git
+git clone https://github.com/sairintechnologycom/niyam.git
 cd niyam
 pip install -e .
 ```

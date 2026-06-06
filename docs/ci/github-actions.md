@@ -28,7 +28,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install niyam-dev
+          pip install niyam
 
       - name: Run Niyam scan
         run: |

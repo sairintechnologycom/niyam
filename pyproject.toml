@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "niyam-dev"
+name = "niyam"
 version = "0.4.1"
 description = "Governed autonomous development for AI coding agents."
 readme = "README.md"
@@ -55,9 +55,9 @@ niyam = "niyam.cli:app"
 sutra = "niyam.cli:deprecated_sutra"
 
 [project.urls]
-Homepage = "https://github.com/aincloudtools/niyam"
-Repository = "https://github.com/aincloudtools/niyam"
-Issues = "https://github.com/aincloudtools/niyam/issues"
+Homepage = "https://github.com/sairintechnologycom/niyam"
+Repository = "https://github.com/sairintechnologycom/niyam"
+Issues = "https://github.com/sairintechnologycom/niyam/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["niyam"]

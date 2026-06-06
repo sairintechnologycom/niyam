@@ -9,7 +9,7 @@ The product has officially transitioned from its codename **Sutra** to its produ
 - **CLI Command**: `niyam`
 - **Configuration Directory**: `.niyam/`
 - **Main Config File**: `niyam.yaml`
-- **PyPI Package**: `niyam-dev`
+- **PyPI Package**: `niyam`
 
 ---
 

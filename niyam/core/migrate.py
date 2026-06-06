@@ -63,7 +63,7 @@ def run_sutra_migration(
     con.print("[cyan]Updating file contents and names inside .niyam/...[/]")
 
     replacements = [
-        ("sutra-cli", "niyam-dev"),
+        ("sutra-cli", "niyam"),
         ("sutra_cli", "niyam"),
         ("SutraForge", "NiyamForge"),
         ("sutraforge", "niyamforge"),

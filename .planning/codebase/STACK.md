@@ -32,7 +32,7 @@
 - Pytest-cov >= 5.0.0 - Test coverage reporting.
 
 **Build/Dev:**
-- Hatchling - Build backend for the `niyam-dev` package.
+- Hatchling - Build backend for the `niyam` package.
 
 ## Key Dependencies
 

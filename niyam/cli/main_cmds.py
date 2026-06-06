@@ -788,7 +788,7 @@ def update() -> None:
     if is_pipx:
         console.print("Detected pipx installation. Updating via pipx...")
         try:
-            subprocess.run(["pipx", "upgrade", "niyam-dev"], check=True)
+            subprocess.run(["pipx", "upgrade", "niyam"], check=True)
             console.print("[green]Successfully updated via pipx.[/]")
         except Exception as exc:
             console.print(f"[red]Pipx update failed:[/] {exc}")
@@ -796,7 +796,7 @@ def update() -> None:
 
     # 3. Default to pip update.
     console.print("Updating via pip...")
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "niyam-dev"]
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "niyam"]
 
     # Check for PEP 668 externally managed environment.
     if sys.platform == "darwin" or os.path.exists("/etc/os-release"):
@@ -808,6 +808,6 @@ def update() -> None:
     except Exception as exc:
         console.print(f"[red]Pip update failed:[/] {exc}")
         console.print(
-            "\nTip: If you are on macOS, we recommend using 'pipx upgrade niyam-dev' or "
+            "\nTip: If you are on macOS, we recommend using 'pipx upgrade niyam' or "
             "'brew install pipx' if you haven't yet."
         )

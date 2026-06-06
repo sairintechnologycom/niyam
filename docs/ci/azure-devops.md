@@ -27,7 +27,7 @@ jobs:
 
   - script: |
       python -m pip install --upgrade pip
-      pip install niyam-dev
+      pip install niyam
     displayName: 'Install Niyam'
 
   - script: |
