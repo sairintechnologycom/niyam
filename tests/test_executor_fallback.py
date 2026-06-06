@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+import yaml
 
 from rich.console import Console
 
@@ -30,20 +31,8 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
     # Set up task directories and plan
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-
-    plan_data = {
-        "mission": {
-            "id": "test-mission",
-            "requirement": "Requirements doc",
-            "created": "2026-06-03T12:00:00Z",
-            "status": "running",
-            "orchestrator": "claude",
-            "parallel": 1,
-            "worktree": False,
-        },
-        "tasks": [],
-    }
-    save_plan(run_dir, plan_data)
+    task_dir = run_dir / "tasks" / "T1"
+    task_dir.mkdir(parents=True, exist_ok=True)
 
     task = {
         "id": "T1",
@@ -64,14 +53,14 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
             subprocess_runs.append(cmd)
             if "claude" in cmd_name:
                 # Mock quota exceeded error in parallel mode redirect log
-                log_path = run_dir / "task-T1-output.log"
+                log_path = task_dir / "output.log"
                 log_path.write_text(
                     "Fatal: quota exceeded on current plan.", encoding="utf-8"
                 )
                 raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
             else:
                 # Mock success for gemini
-                log_path = run_dir / "task-T1-output.log"
+                log_path = task_dir / "output.log"
                 log_path.write_text(
                     "Code generation completed successfully.", encoding="utf-8"
                 )
@@ -81,6 +70,20 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
         return original_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", mock_run)
+
+    # Create a mission-plan.yaml so transition_task can reload it
+    plan_data = {
+        "mission": {
+            "id": "test-mission",
+            "requirement": "req.md",
+            "created": "2026-06-03T12:00:00Z",
+            "status": "running",
+            "orchestrator": "claude",
+        },
+        "tasks": [task],
+    }
+    with open(run_dir / "mission-plan.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(plan_data, f)
 
     # Execute task headlessly (non_interactive=True)
     res = execute_single_task(
@@ -118,20 +121,8 @@ def test_executor_fallback_no_runtimes(niyam_repo: Path, monkeypatch):
 
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-
-    plan_data = {
-        "mission": {
-            "id": "test-mission",
-            "requirement": "Requirements doc",
-            "created": "2026-06-03T12:00:00Z",
-            "status": "running",
-            "orchestrator": "claude",
-            "parallel": 1,
-            "worktree": False,
-        },
-        "tasks": [],
-    }
-    save_plan(run_dir, plan_data)
+    task_dir = run_dir / "tasks" / "T1"
+    task_dir.mkdir(parents=True, exist_ok=True)
 
     task = {
         "id": "T1",
@@ -150,12 +141,26 @@ def test_executor_fallback_no_runtimes(niyam_repo: Path, monkeypatch):
         cmd_name = cmd[0] if isinstance(cmd, list) else cmd.split()[0]
         if "claude" in cmd_name or "gemini" in cmd_name:
             subprocess_runs.append(cmd)
-            log_path = run_dir / "task-T1-output.log"
+            log_path = task_dir / "output.log"
             log_path.write_text("Error: rate limit exceeded.", encoding="utf-8")
             raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
         return original_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", mock_run)
+
+    # Create a mission-plan.yaml
+    plan_data = {
+        "mission": {
+            "id": "test-mission",
+            "requirement": "req.md",
+            "created": "2026-06-03T12:00:00Z",
+            "status": "running",
+            "orchestrator": "claude",
+        },
+        "tasks": [task],
+    }
+    with open(run_dir / "mission-plan.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(plan_data, f)
 
     res = execute_single_task(
         task=task,
@@ -190,20 +195,8 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
 
     run_dir = niyam_dir / "runs" / "test-mission"
     run_dir.mkdir(parents=True, exist_ok=True)
-
-    plan_data = {
-        "mission": {
-            "id": "test-mission",
-            "requirement": "Requirements doc",
-            "created": "2026-06-03T12:00:00Z",
-            "status": "running",
-            "orchestrator": "claude",
-            "parallel": 1,
-            "worktree": False,
-        },
-        "tasks": [],
-    }
-    save_plan(run_dir, plan_data)
+    task_dir = run_dir / "tasks" / "T1"
+    task_dir.mkdir(parents=True, exist_ok=True)
 
     task = {
         "id": "T1",
@@ -222,7 +215,7 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
         cmd_name = cmd[0] if isinstance(cmd, list) else cmd.split()[0]
         if "claude" in cmd_name or "gemini" in cmd_name:
             subprocess_runs.append(cmd)
-            log_path = run_dir / "task-T1-output.log"
+            log_path = task_dir / "output.log"
             # Standard code syntax error or linter failure, no quota keywords
             log_path.write_text(
                 "SyntaxError: invalid syntax in models.py line 45", encoding="utf-8"
@@ -231,6 +224,20 @@ def test_executor_no_fallback_on_code_failure(niyam_repo: Path, monkeypatch):
         return original_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", mock_run)
+
+    # Create a mission-plan.yaml
+    plan_data = {
+        "mission": {
+            "id": "test-mission",
+            "requirement": "req.md",
+            "created": "2026-06-03T12:00:00Z",
+            "status": "running",
+            "orchestrator": "claude",
+        },
+        "tasks": [task],
+    }
+    with open(run_dir / "mission-plan.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(plan_data, f)
 
     res = execute_single_task(
         task=task,

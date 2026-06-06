@@ -89,7 +89,7 @@ def test_any_bypass_removed_and_contract_prompt_enrichment(niyam_repo: Path) -> 
     assert plan["tasks"][0]["status"] == "failed"
 
     # Verify that the enriched prompt was written and contains contract details
-    prompt_path = run_dir / "task-T1-prompt.md"
+    prompt_path = run_dir / "tasks" / "T1" / "prompt.md"
     assert prompt_path.exists()
     prompt_text = prompt_path.read_text(encoding="utf-8")
     assert "TASK CONTRACT" in prompt_text

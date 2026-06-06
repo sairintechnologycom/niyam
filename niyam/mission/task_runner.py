@@ -1138,6 +1138,12 @@ Do not perform destructive operations.
                 details=f"Task attempted unauthorized modifications to: {', '.join(violated_files)}",
                 type="WRITE_VIOLATION",
             )
+            log_policy_event(
+                run_dir,
+                niyam_dir,
+                "WRITE_VIOLATION",
+                f"Unauthorized write attempt by {task_id} to: {', '.join(violated_files)}",
+            )
             success = False
 
     if not is_git and backup_dir.exists():
