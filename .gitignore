@@ -118,22 +118,16 @@ pip-wheel-metadata/
 *.swo
 .DS_Store
 
-# Niyam workspace run directories (if initialized)
-.niyam/runs/
-.niyam/worktrees/
-.niyam/evidence/
-.niyam/logs/
-.niyam/hook-cache/
-.niyam/niyam.yaml
-.niyam/project.yaml
-.niyam/runtimes.yaml
-.niyam/pricing.json
-.niyam/cache/
-.niyam/mcp-registry.json
-.niyam/reports/
-
-# Local antigravity cli config
+# AI Coding Runtimes & Generated Context
+.claude/
 .antigravitycli/
+.sutra/
+.planning/
+
+# Niyam workspace (Local data & Generated hooks)
+# NOTE: If you want to share agents/policies with your team, 
+# you should track .niyam/agents/, .niyam/policies/, etc.
+.niyam/
 
 # Scratch workspace
 scratch/
