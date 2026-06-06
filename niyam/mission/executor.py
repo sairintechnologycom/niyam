@@ -202,7 +202,17 @@ def run_mission_start(
                         "[yellow]Mission execution paused. Waiting for active tasks to finish...[/]"
                     )
                 if futures_map:
-                    concurrent.futures.wait(futures_map.keys())
+                    done, _ = concurrent.futures.wait(futures_map.keys())
+                    _process_finished_tasks(
+                        done,
+                        futures_map,
+                        running_tasks,
+                        completed_tasks,
+                        failed_tasks,
+                        plan_data,
+                        run_dir,
+                        console,
+                    )
                 run_hooks(
                     "post_mission",
                     {"mission_id": mission_id, "mission_status": "paused"},
@@ -255,6 +265,11 @@ def run_mission_start(
                     t_id = t["id"]
                     running_tasks.add(t_id)
                     t["status"] = "running"
+                    
+                    # Update status from disk to avoid overwriting external changes
+                    disk_plan = load_plan(run_dir)
+                    plan_data["mission"]["status"] = disk_plan["mission"]["status"]
+                    
                     save_plan(run_dir, plan_data)
                     log_execution_event(
                         run_dir, "TASK_STARTED", t_id, f"Running task: {t['title']}"
@@ -290,57 +305,26 @@ def run_mission_start(
                 futures_map.keys(), return_when=concurrent.futures.FIRST_COMPLETED
             )
 
-            for future in done:
-                t = futures_map.pop(future)
-                t_id = t["id"]
-                running_tasks.remove(t_id)
-
-                try:
-                    success = future.result()
-                    if success:
-                        t["status"] = "completed"
-                        completed_tasks.add(t_id)
-                        save_plan(run_dir, plan_data)
-                        log_execution_event(
-                            run_dir,
-                            "TASK_COMPLETED",
-                            t_id,
-                            f"Completed task: {t['title']}",
-                        )
-                        with print_lock:
-                            console.print(
-                                f"[bold green]✓[/] Task {t_id} completed successfully.\n"
-                            )
-                    else:
-                        t["status"] = "failed"
-                        failed_tasks.add(t_id)
-                        save_plan(run_dir, plan_data)
-                        log_execution_event(
-                            run_dir, "TASK_FAILED", t_id, "Task execution failed."
-                        )
-                        with print_lock:
-                            console.print(f"[bold red]❌[/] Task {t_id} failed.\n")
-                except Exception as e:
-                    t["status"] = "failed"
-                    failed_tasks.add(t_id)
-                    save_plan(run_dir, plan_data)
-                    log_execution_event(
-                        run_dir,
-                        "TASK_FAILED",
-                        t_id,
-                        f"Exception during task execution: {e}",
-                    )
-                    with print_lock:
-                        console.print(
-                            f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n"
-                        )
+            _process_finished_tasks(
+                done,
+                futures_map,
+                running_tasks,
+                completed_tasks,
+                failed_tasks,
+                plan_data,
+                run_dir,
+                console,
+            )
 
     # Determine final mission status
     final_plan = load_plan(run_dir)
     tasks_list = final_plan.get("tasks", [])
     any_failed = any(t["status"] == "failed" for t in tasks_list)
     any_skipped_due_to_failure = any(t["status"] == "skipped" for t in tasks_list)
-
+    
+    # If we are here and not failed, it means we finished all tasks successfully
+    # UNLESS we exited because of a pause check (but that returns early)
+    
     if any_failed or any_skipped_due_to_failure:
         final_plan["mission"]["status"] = "failed"
         save_plan(run_dir, final_plan)
@@ -395,6 +379,79 @@ def run_mission_start(
             border_style="green",
         )
     )
+
+
+def _process_finished_tasks(
+    done: set[concurrent.futures.Future],
+    futures_map: dict,
+    running_tasks: set,
+    completed_tasks: set,
+    failed_tasks: set,
+    plan_data: dict,
+    run_dir: Path,
+    console: Console,
+) -> None:
+    """Helper to process results of finished tasks and update plan."""
+    for future in done:
+        t = futures_map.pop(future)
+        t_id = t["id"]
+        if t_id in running_tasks:
+            running_tasks.remove(t_id)
+
+        try:
+            success = future.result()
+            if success:
+                t["status"] = "completed"
+                completed_tasks.add(t_id)
+                
+                # Update mission status from disk to avoid overwriting pause
+                disk_plan = load_plan(run_dir)
+                plan_data["mission"]["status"] = disk_plan["mission"]["status"]
+                
+                save_plan(run_dir, plan_data)
+                log_execution_event(
+                    run_dir,
+                    "TASK_COMPLETED",
+                    t_id,
+                    f"Completed task: {t['title']}",
+                )
+                with print_lock:
+                    console.print(
+                        f"[bold green]✓[/] Task {t_id} completed successfully.\n"
+                    )
+            else:
+                t["status"] = "failed"
+                failed_tasks.add(t_id)
+                
+                # Update mission status from disk to avoid overwriting pause
+                disk_plan = load_plan(run_dir)
+                plan_data["mission"]["status"] = disk_plan["mission"]["status"]
+                
+                save_plan(run_dir, plan_data)
+                log_execution_event(
+                    run_dir, "TASK_FAILED", t_id, "Task execution failed."
+                )
+                with print_lock:
+                    console.print(f"[bold red]❌[/] Task {t_id} failed.\n")
+        except Exception as e:
+            t["status"] = "failed"
+            failed_tasks.add(t_id)
+            
+            # Update mission status from disk to avoid overwriting pause
+            disk_plan = load_plan(run_dir)
+            plan_data["mission"]["status"] = disk_plan["mission"]["status"]
+            
+            save_plan(run_dir, plan_data)
+            log_execution_event(
+                run_dir,
+                "TASK_FAILED",
+                t_id,
+                f"Exception during task execution: {e}",
+            )
+            with print_lock:
+                console.print(
+                    f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n"
+                )
 
 
 def run_mission_pause(console: Console, mission_id: str | None = None) -> None:

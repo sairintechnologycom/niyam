@@ -1219,24 +1219,28 @@ Do not perform destructive operations.
         elif hasattr(task_validation, "commands"):
             task_cmds = task_validation.commands
 
-        for name, cmd in checks:
-            if cmd:
-                cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
-                if not cmd_success:
-                    success = False
-            else:
-                val_path = run_dir / "validation-results.md"
-                timestamp = (
-                    datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                )
-                with validation_lock:
-                    mode = "a" if val_path.exists() else "w"
-                    with open(val_path, mode, encoding="utf-8") as f:
-                        f.write(f"\n## Validation Check - {name} - {timestamp}\n")
-                        f.write("**Status:** ℹ SKIPPED — Not configured\n\n")
+        # Only run project-wide validation for implementation/validation tasks 
+        # or if files were actually changed.
+        should_run_project_val = (
+            task.get("type") in ("implementation", "validation") or bool(changed_files)
+        )
+        
+        executed_cmds = set()
+
+        if should_run_project_val:
+            for name, cmd in checks:
+                if cmd:
+                    cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
+                    executed_cmds.add(cmd.strip())
+                    if not cmd_success:
+                        success = False
 
         if task_cmds:
             for i, cmd in enumerate(task_cmds, start=1):
+                # Skip if already run in project validation
+                if cmd.strip() in executed_cmds:
+                    continue
+                    
                 cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
                 if not cmd_success:
                     success = False

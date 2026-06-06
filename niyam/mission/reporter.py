@@ -103,8 +103,9 @@ def run_mission_report(
     base_sha = mission_meta.get("base_sha")
     try:
         if base_sha:
+            # Only include committed changes from the mission (exclude dirty working directory)
             res = subprocess.run(
-                ["git", "diff", base_sha], capture_output=True, text=True
+                ["git", "diff", f"{base_sha}..HEAD"], capture_output=True, text=True
             )
         else:
             res = subprocess.run(["git", "diff"], capture_output=True, text=True)
@@ -271,9 +272,29 @@ def run_mission_report(
         if full_path.exists():
             manifest_files[run_file] = compute_sha256(full_path)
 
-    changed_files = get_changed_files(repo_root)
-    for f in changed_files:
-        manifest_files[f] = compute_sha256(repo_root / f)
+    # Add files changed by the mission (committed)
+    if base_sha:
+        try:
+            res = subprocess.run(
+                ["git", "diff", "--name-only", f"{base_sha}..HEAD"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    rel_path = line.strip()
+                    if rel_path and not rel_path.startswith(".niyam"):
+                        f_path = repo_root / rel_path
+                        if f_path.exists():
+                            manifest_files[rel_path] = compute_sha256(f_path)
+        except Exception:
+            pass
+    else:
+        # Fallback to dirty files if no base_sha (non-worktree or single-task mode)
+        changed_files = get_changed_files(repo_root)
+        for f in changed_files:
+            manifest_files[f] = compute_sha256(repo_root / f)
 
     manifest = {
         "mission_id": mission_id,
