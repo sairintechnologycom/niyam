@@ -376,13 +376,35 @@ def mission_retry(
     """Retry failed or skipped tasks of the latest mission."""
     from niyam.mission.executor import run_mission_retry
 
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("replan")
+def mission_replan(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to re-plan."),
+    ] = None,
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", help="Context or reason for re-planning."),
+    ] = None,
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option("--runtime", "-r", help="Runtime override for re-planning."),
+    ] = None,
+) -> None:
+    """Invoke AI to revise the remaining tasks in a mission plan after roadblocks."""
+    from niyam.mission.planner import run_mission_replan
+
     try:
-        run_mission_retry(
-            console=console,
-            parallel=parallel,
-            worktree=worktree,
-            non_interactive=non_interactive,
+        run_mission_replan(
             mission_id=mission_id,
+            reason=reason,
+            runtime_override=runtime.value if runtime else None,
+            console=console,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")

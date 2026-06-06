@@ -1412,6 +1412,143 @@ def _run_refiner_loop(
                 console.print(f"[red]Validation error: {e}[/]")
 
 
+def build_replanner_prompt(
+    requirement: str, 
+    plan_data: dict, 
+    failure_context: str,
+    available_agents: list[str]
+) -> str:
+    agents_str = ", ".join(available_agents)
+    # Filter for completed tasks to show progress
+    completed = [t for t in plan_data.get("tasks", []) if t.get("status") == "completed"]
+    pending = [t for t in plan_data.get("tasks", []) if t.get("status") != "completed"]
+    
+    return f"""You are the Niyam adaptive orchestrator.
+The current AI-assisted development mission has encountered a roadblock.
+Your goal is to generate a 'Delta Plan' for the REMAINING tasks to successfully complete the original requirement.
+
+Original Requirement:
+{requirement}
+
+Workspace Agents:
+{agents_str}
+
+Completed Tasks (Progress):
+{yaml.dump(completed, default_flow_style=False) if completed else "None"}
+
+Pending/Failed Tasks (Current Plan):
+{yaml.dump(pending, default_flow_style=False)}
+
+Failure Context / Obstacle:
+{failure_context}
+
+Instructions:
+1. Analyze the Failure Context. Why did the current plan fail?
+2. Propose a revised list of tasks for the REMAINING work.
+3. You may:
+   - Add new intermediate tasks (e.g., 'Refactor X to support Y').
+   - Modify existing pending tasks.
+   - Remove tasks that are no longer necessary.
+4. Ensure the first new task addresses the roadblock.
+5. Return ONLY a valid YAML block containing the 'tasks' key. No prose, no explanation.
+
+Schema:
+```yaml
+tasks:
+  - id: T_NEW_1
+    title: "Correction: [Describe fix]"
+    type: "implementation"
+    agent: "..."
+    ...
+```
+"""
+
+
+def run_mission_replan(
+    console: Console,
+    mission_id: str | None = None,
+    reason: str | None = None,
+    runtime_override: str | None = None,
+) -> None:
+    """Invokes AI to revise the remaining tasks in a mission plan."""
+    from niyam.core.config import find_niyam_root
+    from niyam.core.errors import NiyamConfigError
+    from niyam.mission.utils import load_plan, save_plan
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
+    niyam_dir = get_niyam_dir(repo_root)
+
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise SystemExit(1)
+
+    run_dir = niyam_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+    requirement = (run_dir / "requirement.md").read_text(encoding="utf-8")
+
+    # Determine failure context
+    failure_context = reason or "Manual intervention requested by developer."
+    if not reason:
+        # Try to read the tail of the latest failed task log
+        failed_tasks = [t for t in plan_data.get("tasks", []) if t.get("status") == "failed"]
+        if failed_tasks:
+            f_id = failed_tasks[-1]["id"]
+            log_path = run_dir / f"task-{f_id}-output.log"
+            if log_path.exists():
+                log_tail = log_path.read_text(encoding="utf-8").splitlines()[-20:]
+                failure_context = f"Task {f_id} ('{failed_tasks[-1]['title']}') failed with logs:\n" + "\n".join(log_tail)
+
+    # Available agents
+    agents_dir = niyam_dir / "agents"
+    available_agents = [f.stem for f in agents_dir.glob("*.md")] if agents_dir.is_dir() else ["default-agent"]
+
+    orchestrator = runtime_override or plan_data["mission"]["orchestrator"]
+    prompt = build_replanner_prompt(requirement, plan_data, failure_context, available_agents)
+    
+    console.print(f"[cyan]Re-planning mission '{mission_id}' using '{orchestrator}'...[/]")
+    
+    # Simple execution (similar to run_mission_plan but simplified for replan)
+    cmd = [orchestrator, "-p", prompt]
+    if orchestrator == "gemini":
+        cmd.append("--skip-trust")
+    
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if res.returncode != 0:
+            raise RuntimeError(f"Planner failed with exit code {res.returncode}")
+        
+        parsed = extract_yaml_or_json(res.stdout)
+        if not parsed or "tasks" not in parsed:
+            raise RuntimeError("Could not parse AI response as a valid task list.")
+        
+        new_tasks = parsed["tasks"]
+        
+        # Merge logic: Keep COMPLETED, replace the rest
+        existing_tasks = plan_data.get("tasks", [])
+        completed = [t for t in existing_tasks if t.get("status") == "completed"]
+        
+        # Ensure new tasks have proper status and validation commands
+        for t in new_tasks:
+            t["status"] = "planned"
+        
+        inject_validation_commands(new_tasks, repo_root)
+        
+        plan_data["tasks"] = completed + new_tasks
+        plan_data["mission"]["status"] = "planned" # Reset to planned for re-approval
+        
+        save_plan(run_dir, plan_data)
+        
+        console.print(f"[bold green]✓[/] Mission '{mission_id}' plan has been revised.")
+        console.print(f"[dim]Added {len(new_tasks)} new/updated tasks. Run 'niyam mission approve' to proceed.[/]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error during re-planning:[/] {e}")
+        raise SystemExit(1)
+
+
 def run_mission_approve(
     console: Console, interactive: bool = False, mission_id: str | None = None
 ) -> None:

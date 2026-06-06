@@ -758,6 +758,36 @@ def brainstorm(
 
 
 @app.command()
+def replan(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to re-plan."),
+    ] = None,
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", help="Context or reason for re-planning."),
+    ] = None,
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option("--runtime", "-r", help="Runtime override for re-planning."),
+    ] = None,
+) -> None:
+    """Invoke AI to revise the remaining tasks in a mission plan after roadblocks."""
+    from niyam.mission.planner import run_mission_replan
+
+    try:
+        run_mission_replan(
+            mission_id=mission_id,
+            reason=reason,
+            runtime_override=runtime.value if runtime else None,
+            console=console,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def update() -> None:
     """Update Niyam CLI to the latest version."""
     import sys
@@ -811,3 +841,40 @@ def update() -> None:
             "\nTip: If you are on macOS, we recommend using 'pipx upgrade niyam' or "
             "'brew install pipx' if you haven't yet."
         )
+
+
+@app.command()
+def portal(
+    port: Annotated[
+        int,
+        typer.Option("--port", "-p", help="Port to run the API server on."),
+    ] = 8080,
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Host to bind the server to."),
+    ] = "127.0.0.1",
+    open_browser: Annotated[
+        bool,
+        typer.Option("--open", help="Automatically open the portal in the browser."),
+    ] = True,
+) -> None:
+    """Start the Niyam Portal API server to browse mission evidence and metrics."""
+    from niyam.api.server import start_server
+    import webbrowser
+    import threading
+    import time
+
+    if open_browser:
+        def open_url():
+            time.sleep(1.5)  # Wait for server to start
+            webbrowser.open(f"http://{host}:{port}/")
+
+        threading.Thread(target=open_url, daemon=True).start()
+
+    console.print(f"🚀 [bold cyan]Starting Niyam Portal API on http://{host}:{port}[/]")
+    console.print(f"[dim]Press Ctrl+C to stop the server.[/]\n")
+    
+    try:
+        start_server(host=host, port=port)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping Niyam Portal...[/]")
