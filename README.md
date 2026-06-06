@@ -40,9 +40,13 @@ niyam run "migrate all API endpoints to v2"
 *   **Path Freezing:** Restrict agents to specific scopes. Protect core files like `LICENSE` or sensitive `infra/` folders from unauthorized AI writes.
 *   **Credential Redaction:** A built-in engine that identifies and redacts secrets, API keys, and PII from agent logs and CLI outputs in real-time.
 
+![Niyam Action Governance](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-guard.png)
+
 ### 🔍 Production Readiness Scanning
 *   **Repo Audits:** Scan your repository against strict profiles (`startup`, `team`, `enterprise`, `regulated`) to detect missing documentation, unpinned dependencies, or secret exposures.
 *   **Readiness Scoring:** Get a numerical **Readiness Score (0-100)** and a clear **GO / NO-GO** decision for every branch or mission.
+
+![Niyam Readiness Scan](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-scan.png)
 
 ### 🤖 Multi-Agent Orchestration
 *   **Agent Roles:** Define specialized AI personas (e.g., `security-reviewer`, `qa-engineer`) with tailored system prompts and dedicated toolsets.
