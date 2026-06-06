@@ -16,6 +16,7 @@ class ReviewLens(str, Enum):
     engineering = "engineering"
     design = "design"
     security = "security"
+    evidence = "evidence"
 
 
 class ReviewMode(str, Enum):

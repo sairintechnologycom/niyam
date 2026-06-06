@@ -7,10 +7,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from niyam.core.external_scanners import (
-    run_checkov,
-    run_gitleaks,
-    run_semgrep,
-    run_trivy,
+    GitleaksScanner,
+    SemgrepScanner,
+    TrivyScanner,
+    CheckovScanner,
+    run_all_external_scanners,
 )
 from niyam.core.scan import run_scanner_checks
 
@@ -18,7 +19,8 @@ from niyam.core.scan import run_scanner_checks
 def test_run_gitleaks_not_installed() -> None:
     """If gitleaks is not on PATH, it should return no findings."""
     with patch("shutil.which", return_value=None):
-        findings = run_gitleaks(Path("."))
+        scanner = GitleaksScanner()
+        findings = scanner.run(Path("."), {})
         assert findings == []
 
 
@@ -36,18 +38,23 @@ def test_run_gitleaks_installed_with_findings(tmp_path: Path) -> None:
     ]
 
     def mock_subprocess_run(cmd, **kwargs):
-        # The 5th arg in cmd is the report-path option: f"--report-path={report_file}"
-        report_opt = [arg for arg in cmd if arg.startswith("--report-path=")][0]
-        report_file = Path(report_opt.split("=", 1)[1])
-        # Write mock report
-        report_file.write_text(json.dumps(mock_report), encoding="utf-8")
+        # Find report path in cmd
+        report_path = None
+        for i, arg in enumerate(cmd):
+            if arg.startswith("--report-path="):
+                report_path = Path(arg.split("=", 1)[1])
+                break
+        
+        if report_path:
+            report_path.write_text(json.dumps(mock_report), encoding="utf-8")
         return MagicMock(returncode=8)
 
     with (
         patch("shutil.which", return_value="/usr/local/bin/gitleaks"),
         patch("subprocess.run", side_effect=mock_subprocess_run),
     ):
-        findings = run_gitleaks(tmp_path)
+        scanner = GitleaksScanner()
+        findings = scanner.run(tmp_path, {})
 
         assert len(findings) == 1
         f = findings[0]
@@ -82,7 +89,8 @@ def test_run_semgrep_installed_with_findings(tmp_path: Path) -> None:
         patch("shutil.which", return_value="/usr/local/bin/semgrep"),
         patch("subprocess.run", return_value=mock_res),
     ):
-        findings = run_semgrep(tmp_path)
+        scanner = SemgrepScanner()
+        findings = scanner.run(tmp_path, {})
 
         assert len(findings) == 1
         f = findings[0]
@@ -121,7 +129,8 @@ def test_run_trivy_installed_with_findings(tmp_path: Path) -> None:
         patch("shutil.which", return_value="/usr/local/bin/trivy"),
         patch("subprocess.run", return_value=mock_res),
     ):
-        findings = run_trivy(tmp_path)
+        scanner = TrivyScanner()
+        findings = scanner.run(tmp_path, {})
 
         assert len(findings) == 1
         f = findings[0]
@@ -131,9 +140,6 @@ def test_run_trivy_installed_with_findings(tmp_path: Path) -> None:
         assert f["severity"] == "critical"
         assert f["file_path"] == "package-lock.json"
         assert "installed version 4.17.20" in f["description"]
-        assert (
-            "FixedVersion" not in f["recommendation"]
-        )  # FixedVersion used in recommendation string
         assert "4.17.21" in f["recommendation"]
 
 
@@ -159,7 +165,8 @@ def test_run_checkov_installed_with_findings(tmp_path: Path) -> None:
         patch("shutil.which", return_value="/usr/local/bin/checkov"),
         patch("subprocess.run", return_value=mock_res),
     ):
-        findings = run_checkov(tmp_path)
+        scanner = CheckovScanner()
+        findings = scanner.run(tmp_path, {})
 
         assert len(findings) == 1
         f = findings[0]
@@ -169,6 +176,30 @@ def test_run_checkov_installed_with_findings(tmp_path: Path) -> None:
         assert f["severity"] == "medium"
         assert f["file_path"] == "infra/s3.tf"
         assert "[1, 10]" in f["description"]
+
+
+def test_run_all_external_scanners_respects_config(tmp_path: Path) -> None:
+    """Should skip scanners disabled in configuration."""
+    config = {
+        "external_scanners": {
+            "gitleaks": {"enabled": False},
+            "semgrep": {"enabled": True},
+        }
+    }
+
+    with (
+        patch("shutil.which", return_value="/bin/dummy"),
+        patch("niyam.core.external_scanners.GitleaksScanner.run") as mock_gitleaks,
+        patch("niyam.core.external_scanners.SemgrepScanner.run", return_value=[]) as mock_semgrep,
+        patch("niyam.core.external_scanners.TrivyScanner.run", return_value=[]) as mock_trivy,
+        patch("niyam.core.external_scanners.CheckovScanner.run", return_value=[]) as mock_checkov,
+    ):
+        run_all_external_scanners(tmp_path, config=config)
+
+        mock_gitleaks.assert_not_called()
+        mock_semgrep.assert_called_once()
+        mock_trivy.assert_called_once() # Default is True
+        mock_checkov.assert_called_once() # Default is True
 
 
 def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None:

@@ -116,12 +116,38 @@ def run_review(
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
 
-    # 1. Fetch git diff
-    diff = get_git_diff(repo_root)
-    if not diff:
-        console.print(
-            "[yellow]No local changes detected to review. Try making some changes first.[/]"
-        )
+    # 1. Fetch review content
+    review_content = ""
+    if lens == "evidence":
+        from niyam.core.config import get_niyam_dir
+        from niyam.mission.planner import resolve_mission_id
+        niyam_dir = get_niyam_dir(repo_root)
+        mission_id = resolve_mission_id(niyam_dir)
+        if not mission_id:
+            console.print("[yellow]No active mission found to collect evidence from.[/]")
+            return
+        
+        evidence_path = niyam_dir / "runs" / mission_id / "evidence.md"
+        if not evidence_path.exists():
+            console.print("[yellow]Evidence report not found. Generating it...[/]")
+            from niyam.mission.reporter import run_mission_report
+            run_mission_report(console=console, mission_id=mission_id)
+        
+        if evidence_path.exists():
+            review_content = evidence_path.read_text(encoding="utf-8")
+        else:
+            console.print("[red]Error: Failed to generate or locate evidence.md[/]")
+            return
+    else:
+        review_content = get_git_diff(repo_root)
+
+    if not review_content:
+        if lens == "evidence":
+            console.print("[yellow]No evidence found to review.[/]")
+        else:
+            console.print(
+                "[yellow]No local changes detected to review. Try making some changes first.[/]"
+            )
         return
 
     # 2. Get template
@@ -142,10 +168,13 @@ def run_review(
             "> **ADVERSARIAL MODE ENABLED**\n"
             "> You are acting as an adversarial, highly critical reviewer. "
             "Aggressively seek out bugs, race conditions, design flaws, styling inconsistencies, and security issues. "
-            "Do not accept compromises. Critique every line of the changes below.\n\n"
+            "Do not accept compromises. Critique every line of the content below.\n\n"
         )
 
-    compiled_prompt = prefix + template_content.replace("{{git_diff}}", diff)
+    if lens == "evidence":
+        compiled_prompt = prefix + template_content.replace("{{evidence_content}}", review_content)
+    else:
+        compiled_prompt = prefix + template_content.replace("{{git_diff}}", review_content)
 
     # 4. Show or run prompt
     console.print(

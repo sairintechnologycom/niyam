@@ -235,18 +235,23 @@ def run_mission_start(
             # Submit ready tasks up to concurrency capacity
             for t in ready_tasks:
                 if len(running_tasks) < parallel_limit:
+                    t_writes = t.get("writes_files", True)
                     t_files = t.get("files_allowed") or t.get("allowed_files") or ["*"]
                     has_overlap = False
                     for active_id in running_tasks:
                         active_task = task_by_id[active_id]
-                        active_files = (
-                            active_task.get("files_allowed")
-                            or active_task.get("allowed_files")
-                            or ["*"]
-                        )
-                        if check_overlap(t_files, active_files):
-                            has_overlap = True
-                            break
+                        active_writes = active_task.get("writes_files", True)
+                        
+                        # Collision check: only needed if at least one task writes files
+                        if t_writes or active_writes:
+                            active_files = (
+                                active_task.get("files_allowed")
+                                or active_task.get("allowed_files")
+                                or ["*"]
+                            )
+                            if check_overlap(t_files, active_files):
+                                has_overlap = True
+                                break
                     if has_overlap:
                         continue
 

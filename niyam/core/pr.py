@@ -74,6 +74,49 @@ def fetch_pr_diff_gh(pr_id: str, repo_root: Path) -> str:
     return res.stdout
 
 
+def fetch_pr_body_api(owner: str, repo: str, pr_id: str, token: str) -> str:
+    """Fetch PR body via raw GitHub REST API."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_id}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"token {token}")
+    req.add_header("User-Agent", "Niyam-CLI")
+    try:
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            return res_data.get("body", "")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to fetch PR body from GitHub API: {e}")
+
+
+def fetch_pr_body_gh(pr_id: str, repo_root: Path) -> str:
+    """Fetch PR body using gh CLI."""
+    if not shutil.which("gh"):
+        raise RuntimeError("GitHub CLI ('gh') is not installed.")
+    res = subprocess.run(
+        ["gh", "pr", "view", pr_id, "--json", "body", "-q", ".body"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        raise RuntimeError(f"GitHub CLI failed to fetch PR body:\n{res.stderr}")
+    return res.stdout.strip()
+
+
+def get_pr_body(pr_id: str, token: str | None, repo_root: Path) -> str:
+    """Retrieve PR body using API or gh CLI fallback."""
+    token = token or os.environ.get("GITHUB_TOKEN")
+    owner_repo = get_github_repo_owner_name(repo_root)
+    if token and owner_repo:
+        owner, repo = owner_repo
+        try:
+            return fetch_pr_body_api(owner, repo, pr_id, token)
+        except Exception:
+            return fetch_pr_body_gh(pr_id, repo_root)
+    else:
+        return fetch_pr_body_gh(pr_id, repo_root)
+
+
 def get_pr_diff(pr_id: str, token: str | None, repo_root: Path) -> str:
     """Retrieve PR diff using API or gh CLI fallback."""
     token = token or os.environ.get("GITHUB_TOKEN")
@@ -164,14 +207,20 @@ def create_pr_api(
         raise RuntimeError(f"Failed to create PR via GitHub API: {e}")
 
 
-def create_pr_gh(title: str, body: str, base: str, repo_root: Path) -> str:
+def create_pr_gh(title: str, body: str, base: str, repo_root: Path, labels: list[str] | None = None) -> str:
     """Create a pull request using gh CLI."""
     if not shutil.which("gh"):
         raise RuntimeError(
             "GitHub CLI ('gh') is not installed and GITHUB_TOKEN is not set."
         )
+    
+    cmd = ["gh", "pr", "create", "--title", title, "--body", body, "--base", base]
+    if labels:
+        for label in labels:
+            cmd.extend(["--label", label])
+
     res = subprocess.run(
-        ["gh", "pr", "create", "--title", title, "--body", body, "--base", base],
+        cmd,
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -200,11 +249,54 @@ def run_pr_review(
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
     niyam_dir = get_niyam_dir(repo_root)
 
-    # 1. Fetch PR diff
-    console.print(f"[cyan]Fetching diff for Pull Request #{pr_id}...[/]")
-    diff = get_pr_diff(pr_id, token, repo_root)
-    if not diff:
-        console.print("[yellow]Pull request has no changes to review.[/]")
+    # 1. Fetch review content
+    review_content = ""
+    if lens == "evidence":
+        console.print(f"[cyan]Collecting evidence for review...[/]")
+        mission_id = resolve_mission_id(niyam_dir)
+        
+        # Try local first
+        evidence_path = None
+        if mission_id:
+            evidence_path = niyam_dir / "runs" / mission_id / "evidence.md"
+        
+        if evidence_path and evidence_path.exists():
+            console.print("[dim]Using local evidence report.[/]")
+            review_content = evidence_path.read_text(encoding="utf-8")
+        else:
+            # Try to fetch from PR body
+            console.print("[cyan]Local evidence not found. Fetching from PR description...[/]")
+            try:
+                pr_body = get_pr_body(pr_id, token, repo_root)
+                if "<details>" in pr_body and "</details>" in pr_body:
+                    review_content = pr_body.split("<details>")[1].split("</details>")[0]
+                    # Clean up summary and potential extra tags
+                    if "<summary>" in review_content:
+                        review_content = review_content.split("</summary>", 1)[1].strip()
+                elif "## Niyam Mission Evidence" in pr_body:
+                    review_content = pr_body.split("## Niyam Mission Evidence")[1].strip()
+                
+                if not review_content:
+                    # Fallback: if nothing else, maybe the mission id is in the body
+                    console.print("[yellow]Warning: Could not extract structured evidence from PR body.[/]")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Failed to fetch PR body: {e}[/]")
+
+        if not review_content and mission_id:
+            console.print("[yellow]Generating fresh local evidence...[/]")
+            from niyam.mission.reporter import run_mission_report
+            try:
+                run_mission_report(console=console, mission_id=mission_id)
+                if evidence_path and evidence_path.exists():
+                    review_content = evidence_path.read_text(encoding="utf-8")
+            except Exception:
+                pass
+    else:
+        console.print(f"[cyan]Fetching diff for Pull Request #{pr_id}...[/]")
+        review_content = get_pr_diff(pr_id, token, repo_root)
+
+    if not review_content:
+        console.print("[yellow]No content found to review.[/]")
         return
 
     # 2. Get template
@@ -223,10 +315,13 @@ def run_pr_review(
             "> **ADVERSARIAL MODE ENABLED**\n"
             "> You are acting as an adversarial, highly critical reviewer. "
             "Aggressively seek out bugs, race conditions, design flaws, styling inconsistencies, and security issues. "
-            "Do not accept compromises. Critique every line of the changes below.\n\n"
+            "Do not accept compromises. Critique every line of the content below.\n\n"
         )
 
-    compiled_prompt = prefix + template_content.replace("{{git_diff}}", diff)
+    if lens == "evidence":
+        compiled_prompt = prefix + template_content.replace("{{evidence_content}}", review_content)
+    else:
+        compiled_prompt = prefix + template_content.replace("{{git_diff}}", review_content)
 
     # 3. Save to a temporary prompt file for runtime reference
     runs_dir = niyam_dir / "runs"
@@ -318,10 +413,13 @@ def run_pr_create(
 
     # 2. Get evidence report
     evidence_content = ""
+    evidence_json = {}
     mission_id = resolve_mission_id(niyam_dir)
     if mission_id:
         run_dir = niyam_dir / "runs" / mission_id
         evidence_path = run_dir / "evidence.md"
+        evidence_json_path = run_dir / "evidence.json"
+
         if not evidence_path.exists():
             console.print(
                 "[yellow]Evidence report not found. Generating it automatically...[/]"
@@ -329,19 +427,69 @@ def run_pr_create(
             from niyam.mission.reporter import run_mission_report
 
             run_mission_report(console=console)
+
         if evidence_path.exists():
             evidence_content = evidence_path.read_text(encoding="utf-8")
+        
+        if evidence_json_path.exists():
+            try:
+                evidence_json = json.loads(evidence_json_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
 
-    # Combine description body with evidence report
-    pr_body = body or ""
+    # Build concise PR body
+    status_text = evidence_json.get("status", "unknown").upper()
+    orchestrator = evidence_json.get("orchestrator", "unknown")
+    task_count = len(evidence_json.get("tasks", []))
+    completed_tasks = sum(1 for t in evidence_json.get("tasks", []) if t.get("status") == "completed")
+
+    pr_summary = [
+        f"## Niyam Mission Summary: {mission_id}",
+        "",
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| **Status** | {status_text} |",
+        f"| **Orchestrator** | {orchestrator} |",
+        f"| **Tasks** | {completed_tasks} / {task_count} completed |",
+        f"| **Generated** | {evidence_json.get('completed', 'unknown')} |",
+        "",
+    ]
+
+    # Extract integrity manifest if present
+    integrity_block = ""
+    if "## Cryptographic Integrity Manifest" in evidence_content:
+        parts = evidence_content.split("## Cryptographic Integrity Manifest")
+        if len(parts) > 1:
+            integrity_block = "## Cryptographic Integrity Manifest" + parts[1].split("##")[0]
+            # Remove integrity block from full content to avoid duplication
+            evidence_content = parts[0] + (("##" + parts[1].split("##", 1)[1]) if len(parts[1].split("##")) > 1 else "")
+
+    pr_body = body or "Pull Request automatically created by Niyam."
+    pr_body += "\n\n" + "\n".join(pr_summary)
+
+    if integrity_block:
+        pr_body += "\n" + integrity_block.strip() + "\n"
+
+    # Embed full evidence.json as a hidden comment for programmatic retrieval
+    if evidence_json:
+        pr_body += f"\n<!-- NIYAM_EVIDENCE_JSON_START\n{json.dumps(evidence_json)}\nNIYAM_EVIDENCE_JSON_END -->\n"
+
     if evidence_content:
-        pr_body += f"\n\n## Niyam Mission Evidence\n\n{evidence_content}"
+        pr_body += "\n<details>\n<summary>Click to expand full Evidence Package</summary>\n\n"
+        pr_body += evidence_content.strip()
+        pr_body += "\n\n</details>\n"
 
     # 3. Create PR
     console.print(
         f"[cyan]Creating Pull Request for branch '{branch_name}' targeting '{base}'...[/]"
     )
     pr_url = ""
+    labels = ["niyam-governed"]
+    if status_text == "COMPLETED":
+        labels.append("niyam-go")
+    elif status_text == "FAILED":
+        labels.append("niyam-no-go")
+
     if is_test:
         console.print("[dim]Mocking PR creation...[/]")
         pr_url = "https://github.com/mock/repo/pull/42"
@@ -351,16 +499,20 @@ def run_pr_create(
         if token and owner_repo:
             owner, repo = owner_repo
             try:
-                pr_url = create_pr_api(
-                    owner, repo, title, pr_body, branch_name, base, token
-                )
+                # API doesn't support labels in PR creation easily, but we'll try gh first
+                if shutil.which("gh"):
+                    pr_url = create_pr_gh(title, pr_body, base, repo_root, labels=labels)
+                else:
+                    pr_url = create_pr_api(
+                        owner, repo, title, pr_body, branch_name, base, token
+                    )
             except Exception as e:
                 try:
-                    pr_url = create_pr_gh(title, pr_body, base, repo_root)
+                    pr_url = create_pr_gh(title, pr_body, base, repo_root, labels=labels)
                 except Exception:
                     raise e
         else:
-            pr_url = create_pr_gh(title, pr_body, base, repo_root)
+            pr_url = create_pr_gh(title, pr_body, base, repo_root, labels=labels)
 
     console.print(
         Panel(

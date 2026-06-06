@@ -453,12 +453,23 @@ def run_scanner_checks(
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # 1. Determine profile and load rules
+    config = None
+    try:
+        from niyam.core.config import load_niyam_config
+
+        config = load_niyam_config(root)
+    except Exception:
+        pass
+
     if custom_rules_path:
         rules = load_rules_from_yaml(custom_rules_path)
         profile_name = "custom"
     else:
         if profile is None:
-            profile = get_project_profile(root)
+            if config and config.governance and config.governance.scan:
+                profile = config.governance.scan.profile
+            else:
+                profile = "startup"
         rules = load_profile_rules(profile)
         profile_name = profile
 
@@ -474,7 +485,11 @@ def run_scanner_checks(
     try:
         from niyam.core.external_scanners import run_all_external_scanners
 
-        findings.extend(run_all_external_scanners(root))
+        findings.extend(
+            run_all_external_scanners(
+                root, config=config.model_dump() if config else None
+            )
+        )
     except Exception:
         pass
 
@@ -510,17 +525,15 @@ def run_scanner_checks(
     )
 
     # Check for missing/skipped external scanners
-    import shutil
+    from niyam.core.external_scanners import SCANNER_REGISTRY
 
     skipped_scanners = []
-    for scanner_name, binary in [
-        ("gitleaks", "gitleaks"),
-        ("semgrep", "semgrep"),
-        ("trivy", "trivy"),
-        ("checkov", "checkov"),
-    ]:
-        if not shutil.which(binary):
-            skipped_scanners.append(scanner_name)
+    scanner_config = config.model_dump().get("external_scanners", {}) if config else {}
+    for scanner in SCANNER_REGISTRY:
+        # Only report as skipped if it's enabled in config but binary is missing
+        if scanner_config.get(scanner.name, {}).get("enabled", True):
+            if not scanner.is_available():
+                skipped_scanners.append(scanner.name)
 
     # 6. Calculate summary metrics
     summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}

@@ -132,3 +132,38 @@ class TestReview:
         assert "[REDACTED_AWS_KEY]" in diff
         assert "my-super-secret-token" not in diff
         assert "[REDACTED_SECRET]" in diff
+
+    def test_run_review_evidence_lens(self, niyam_repo: Path) -> None:
+        """Should run review with evidence lens using local evidence report."""
+        os.chdir(niyam_repo)
+        console = Console(quiet=True)
+
+        # Write dummy evidence report
+        niyam_dir = niyam_repo / ".niyam"
+        run_dir = niyam_dir / "runs" / "test-mission-123"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "evidence.md").write_text("# Mission Evidence\nLOCAL_EVIDENCE", encoding="utf-8")
+
+        from unittest.mock import patch
+        with patch("niyam.mission.planner.resolve_mission_id", return_value="test-mission-123"):
+            os.environ["NIYAM_TEST"] = "1"
+            try:
+                run_review(
+                    lens="evidence",
+                    runtime="claude",
+                    mode="collaborative",
+                    console=console,
+                )
+
+                # Check prompt was saved to runs directory
+                prompt_files = list(
+                    (niyam_repo / ".niyam" / "runs").glob(
+                        "review-evidence-collaborative-prompt.md"
+                    )
+                )
+                assert len(prompt_files) == 1
+                content = prompt_files[0].read_text(encoding="utf-8")
+                assert "# Evidence-Only AI Development Review" in content
+                assert "LOCAL_EVIDENCE" in content
+            finally:
+                del os.environ["NIYAM_TEST"]
