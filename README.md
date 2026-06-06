@@ -13,54 +13,62 @@
 
 Niyam bridges the gap between fast "vibe coding" and production-grade safety. It turns any repository into a governed AI-development workspace where you define the rules, and AI agents (Claude Code, Codex, Gemini) follow them.
 
-### Key Capabilities:
-*   **🛡️ Active Guardrails:** Intercept dangerous shell commands and redact secrets in real-time.
-*   **🤖 Multi-Agent Orchestration:** Define specialized roles (Backend, QA, Security) with custom prompts.
-*   **Isolated Missions:** Run complex, multi-step tasks in isolated Git worktrees with strict contracts.
-*   **🔍 Readiness Scanning:** Audit your repo against `startup`, `enterprise`, or `regulated` profiles.
-*   **📑 Evidence Hub:** Automatically compile audit trails, scan results, and cost reports for every session.
-
 ---
 
-## 🎬 How it Works
-
-```mermaid
-flowchart LR
-    User[Developer Goal] --> Niyam[Niyam CLI]
-    Niyam --> Plan[1. Plan Mission]
-    Plan --> Execute[2. Isolated Tasks]
-    Execute --> Validate[3. Quality Gates]
-    Validate --> Evidence[4. Compile Evidence]
-    Evidence --> Ship[5. Verified Ship]
-```
+## 🎬 Niyam in Action
 
 ### 1. Interactive Development (Day-to-Day)
-Use Niyam-defined slash commands directly inside your AI agent:
+Niyam acts as a governance layer inside your AI agent. Use team-standard slash commands:
 ```bash
-/implement "add JWT authentication"
+/implement "add password complexity rules to auth service"
 ```
-*Niyam ensures the agent writes tests first and follows your team's architecture.*
+*Niyam ensures the agent writes tests first, respects file freezes, and follows the approved TDD workflow.*
 
 ### 2. Autonomous Missions (Batch Tasks)
-Let Niyam orchestrate multiple sub-agents for you:
+Orchestrate complex migrations or large-scale refactors with ease:
 ```bash
 niyam run "migrate all API endpoints to v2"
 ```
-*Tasks run in parallel, isolated in branches, and merged only after passing validation.*
+*Niyam plans the mission, spawns sub-agents in isolated **Git worktrees**, runs parallel validations, and merges only what passes.*
 
 ---
 
-## 📸 Guided Tour
+## 💎 Key Features
 
-> **Note to maintainers:** Capture and add these screenshots to `docs/images/` to make the README pop!
+### 🛡️ Active Action Governance
+*   **Command Guardrails:** Intercept and block dangerous shell commands (e.g., destructive database drops or global file deletions) before execution.
+*   **Path Freezing:** Restrict agents to specific scopes. Protect core files like `LICENSE` or sensitive `infra/` folders from unauthorized AI writes.
+*   **Credential Redaction:** A built-in engine that identifies and redacts secrets, API keys, and PII from agent logs and CLI outputs in real-time.
 
-### 🟢 Readiness Scan
-![Niyam Scan Result](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-scan.png)
-*Detailed audit report with scoring and compliance checks.*
+### 🔍 Production Readiness Scanning
+*   **Repo Audits:** Scan your repository against strict profiles (`startup`, `team`, `enterprise`, `regulated`) to detect missing documentation, unpinned dependencies, or secret exposures.
+*   **Readiness Scoring:** Get a numerical **Readiness Score (0-100)** and a clear **GO / NO-GO** decision for every branch or mission.
 
-### 🔴 Active Guardrails
-![Niyam Guardrail Interception](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-guard.png)
-*Niyam blocking a destructive command and redacting a leaked API key.*
+### 🤖 Multi-Agent Orchestration
+*   **Agent Roles:** Define specialized AI personas (e.g., `security-reviewer`, `qa-engineer`) with tailored system prompts and dedicated toolsets.
+*   **Isolated Execution:** Run tasks in parallel using **Git Worktrees**, preventing agent cross-talk and ensuring clean, atomic PRs.
+
+### 📑 Evidence & Compliance Hub
+*   **Joint Evidence Reports:** Automatically synthesize scan findings, observed command logs, and cost data into standardized, audit-ready compliance documents.
+*   **FinOps Cost Tracking:** A local ledger that logs every token consumed and estimates USD spend against customizable pricing tables.
+
+---
+
+## 📊 Live Mission Dashboard
+
+Monitor your autonomous agents in real-time with the built-in terminal dashboard:
+
+```bash
+niyam dashboard --watch
+```
+
+![Niyam Mission Dashboard](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-dashboard.png)
+
+### What the Dashboard Tracks:
+*   **Live Task Progress:** Visual status of all mission tasks (Pending, Running, Completed, Failed).
+*   **Real-time Logs:** View active output from implementation agents as they work in isolated worktrees.
+*   **Validation Monitor:** Watch unit tests and lint checks run and report results live.
+*   **Resource Efficiency:** Track actual token spend vs. baseline estimates to optimize your AI engineering budget.
 
 ---
 
@@ -78,52 +86,32 @@ uvx --from niyam niyam --help
 
 ---
 
-## ⏱️ Quick Start (in 60 seconds)
+## ⏱️ Quick Start
 
 1. **Initialize your workspace:**
    ```bash
    niyam init --profile fullstack --runtime claude
    ```
-2. **Refresh project context:**
-   ```bash
-   niyam context refresh
-   ```
-3. **Synchronize with AI agent:**
+2. **Synchronize with AI agent:**
    ```bash
    niyam sync
    ```
-4. **Start building:**
+3. **Start building:**
    Open your agent (e.g. `claude`) and use `/implement`, `/review`, or `/ship`.
 
 ---
 
 ## 📚 Documentation & Architecture
 
-Niyam is designed to be the "AI Orchestrator" sitting above your coding tools.
-
 *   [**CLI Reference Guide**](docs/cli-reference.md)
 *   [**Governance Specification**](docs/governance.md)
-*   [**Migration from Sutra**](docs/migration-from-sutra.md)
-
-### Target Architecture
-```
-.niyam/              ← Source of truth (Versioned in Git)
-├── niyam.yaml       ← Workspace configuration
-├── agents/          ← Agent role definitions (Backend, Frontend, etc.)
-├── skills/          ← Composable methodology packs (TDD, Plan, Review)
-├── commands/        ← Custom slash-command workflows
-└── policies/        ← Active guardrails and path freezes
-```
+*   [**Migration Guide**](docs/migration-from-sutra.md)
 
 ---
 
 ## 🗺️ Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for our vision on parallel execution, web dashboards, and enterprise CI/CD integration.
-
-## 🤝 Contributing
-
-We welcome contributions! See our [Contribution Guide](CONTRIBUTING.md) to get started.
+See [ROADMAP.md](ROADMAP.md) for our vision on parallel worker pools, web dashboards, and enterprise CI/CD integration.
 
 ## 📄 License
 
