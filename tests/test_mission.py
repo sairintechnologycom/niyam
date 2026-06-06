@@ -123,14 +123,22 @@ class TestMission:
         for task in plan["tasks"]:
             assert task["status"] == "completed"
 
-        # Check execution log
-        exec_log_path = run_dir / "execution-log.json"
-        assert exec_log_path.exists()
-        with open(exec_log_path, encoding="utf-8") as f:
-            logs = json.load(f)
-        assert len(logs) > 0
-        assert logs[0]["event"] == "MISSION_STARTED"
-        assert logs[-1]["event"] == "MISSION_COMPLETED"
+        # Check mission events
+        events_path = run_dir / "events.jsonl"
+        assert events_path.exists()
+        events = []
+        with open(events_path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    events.append(json.loads(line))
+        
+        assert len(events) > 0
+        # First event should be mission transition to running
+        assert events[0]["event"] == "MISSION_STATE_TRANSITION"
+        assert events[0]["to_status"] == "running"
+        # Last event should be mission transition to completed
+        assert events[-1]["event"] == "MISSION_STATE_TRANSITION"
+        assert events[-1]["to_status"] == "completed"
 
         acceptance_path = run_dir / "acceptance-checks.json"
         assert acceptance_path.exists()
@@ -147,7 +155,7 @@ class TestMission:
         assert (run_dir / "evidence.md").exists()
         report_content = (run_dir / "evidence.md").read_text(encoding="utf-8")
         assert "Niyam Mission Evidence Package" in report_content
-        assert "Execution Log" in report_content
+        assert "Mission Timeline" in report_content
         assert "Task Checklist" in report_content
         assert "Acceptance Criteria Evidence" in report_content
 

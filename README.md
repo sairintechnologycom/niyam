@@ -69,7 +69,7 @@ niyam dashboard --watch
 ![Niyam Mission Dashboard](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-dashboard.png)
 
 ### What the Dashboard Tracks:
-*   **Live Task Progress:** Visual status of all mission tasks (Pending, Running, Completed, Failed).
+*   **Live Task Progress:** Visual status of all mission tasks (Planned, Running, Completed, Failed).
 *   **Real-time Logs:** View active output from implementation agents as they work in isolated worktrees.
 *   **Validation Monitor:** Watch unit tests and lint checks run and report results live.
 *   **Resource Efficiency:** Track actual token spend vs. baseline estimates to optimize your AI engineering budget.

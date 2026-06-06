@@ -1,0 +1,156 @@
+"""Niyam mission state machine — manage task and mission lifecycles."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Literal
+
+from niyam.mission.utils import load_plan, save_plan
+
+
+# ── State Definitions ──────────────────────────────────────────────────
+
+TaskStatus = Literal[
+    "planned",
+    "approved",
+    "queued",
+    "preparing",
+    "awaiting_approval",
+    "running",
+    "validating",
+    "reviewing",
+    "merging",
+    "blocked",
+    "needs_human",
+    "retry_ready",
+    "completed",
+    "failed",
+    "skipped",
+    "cancelled",
+    "rolled_back",
+]
+
+MissionStatus = Literal[
+    "planned",
+    "approved",
+    "running",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
+    "rolled_back",
+]
+
+
+def log_mission_event(
+    run_dir: Path,
+    event_type: str,
+    task_id: str | None = None,
+    details: str | None = None,
+    **kwargs: Any,
+) -> None:
+    """Append a structured event to events.jsonl."""
+    events_path = run_dir / "events.jsonl"
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "mission_id": run_dir.name,
+        "event": event_type,
+    }
+    if task_id:
+        event["task_id"] = task_id
+    if details:
+        event["details"] = details
+    
+    event.update(kwargs)
+
+    with open(events_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+def transition_task(
+    run_dir: Path,
+    task_id: str,
+    to_status: TaskStatus,
+    reason: str | None = None,
+    actor: str | None = None,
+) -> None:
+    """Transition a task to a new status, log the event, and update the plan."""
+    plan_data = load_plan(run_dir)
+    tasks = plan_data.get("tasks", [])
+    
+    target_task = None
+    for t in tasks:
+        if t["id"] == task_id:
+            target_task = t
+            break
+    
+    if not target_task:
+        raise ValueError(f"Task {task_id} not found in mission plan.")
+
+    from_status = target_task.get("status", "planned")
+    if from_status == to_status:
+        return
+
+    # Update task status
+    target_task["status"] = to_status
+    
+    # Save plan
+    save_plan(run_dir, plan_data)
+    
+    # Update task-specific status snapshot
+    task_dir = run_dir / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    status_snapshot = {
+        "task_id": task_id,
+        "status": to_status,
+        "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "actor": actor,
+        "reason": reason,
+    }
+    (task_dir / "status.json").write_text(json.dumps(status_snapshot, indent=2), encoding="utf-8")
+
+    # Log event
+    log_mission_event(
+        run_dir,
+        "TASK_STATE_TRANSITION",
+        task_id=task_id,
+        from_status=from_status,
+        to_status=to_status,
+        reason=reason,
+        actor=actor,
+    )
+
+
+def transition_mission(
+    run_dir: Path,
+    to_status: MissionStatus,
+    reason: str | None = None,
+    actor: str | None = None,
+) -> None:
+    """Transition a mission to a new status, log the event, and update the plan."""
+    plan_data = load_plan(run_dir)
+    mission_meta = plan_data.get("mission", {})
+    
+    from_status = mission_meta.get("status", "planned")
+    if from_status == to_status:
+        return
+
+    # Update mission status
+    mission_meta["status"] = to_status
+    
+    # Save plan
+    save_plan(run_dir, plan_data)
+    
+    # Log event
+    log_mission_event(
+        run_dir,
+        "MISSION_STATE_TRANSITION",
+        from_status=from_status,
+        to_status=to_status,
+        reason=reason,
+        actor=actor,
+    )

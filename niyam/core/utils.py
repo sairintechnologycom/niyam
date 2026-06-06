@@ -16,10 +16,13 @@ def format_date_iso(dt: datetime) -> str:
 
 def compute_sha256(file_path: Path) -> str:
     """Compute SHA256 hash of a file."""
+    if not file_path.exists():
+        return f"ERROR: File not found: {file_path}"
+    if file_path.is_dir():
+        return "DIRECTORY"
+    
     h = hashlib.sha256()
     try:
-        if not file_path.is_file():
-            return "DIRECTORY"
         with open(file_path, "rb") as f:
             while chunk := f.read(8192):
                 h.update(chunk)

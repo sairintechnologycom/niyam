@@ -204,7 +204,25 @@ class TaskContract(BaseModel):
     id: str
     title: str
     type: Literal["discovery", "implementation", "review", "validation"]
-    status: Literal["pending", "running", "completed", "failed", "paused", "skipped"]
+    status: Literal[
+        "planned",
+        "approved",
+        "queued",
+        "preparing",
+        "awaiting_approval",
+        "running",
+        "validating",
+        "reviewing",
+        "merging",
+        "blocked",
+        "needs_human",
+        "retry_ready",
+        "completed",
+        "failed",
+        "skipped",
+        "cancelled",
+        "rolled_back",
+    ]
     agent: str
     runtime: Optional[str] = None
     depends_on: list[str] = Field(default_factory=list)
@@ -234,7 +252,16 @@ class MissionMeta(BaseModel):
     id: str
     requirement: str
     created: str
-    status: str
+    status: Literal[
+        "planned",
+        "approved",
+        "running",
+        "paused",
+        "completed",
+        "failed",
+        "cancelled",
+        "rolled_back",
+    ]
     orchestrator: str
     parallel: int = 1
     worktree: bool = True

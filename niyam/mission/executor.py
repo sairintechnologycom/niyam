@@ -16,7 +16,7 @@ from rich.panel import Panel
 
 from niyam.core.config import get_niyam_dir, load_niyam_config, load_project_config
 from niyam.mission.planner import resolve_mission_id
-from niyam.mission.utils import print_lock
+from niyam.mission.utils import print_lock, load_plan, save_plan
 from niyam.mission.worktree import (
     is_git_repo,
     git_has_commits,
@@ -24,13 +24,12 @@ from niyam.mission.worktree import (
     delete_mission_branches,
 )
 from niyam.mission.task_runner import (
-    load_plan,
-    save_plan,
     log_execution_event,
     run_hooks,
     execute_single_task,
     check_overlap,
 )
+from niyam.mission.state_machine import transition_task, transition_mission, log_mission_event
 
 
 def run_mission_start(
@@ -159,7 +158,6 @@ def run_mission_start(
     # Save resolved settings and update status to running
     plan_data["mission"]["parallel"] = parallel_limit
     plan_data["mission"]["worktree"] = use_worktree
-    plan_data["mission"]["status"] = "running"
     if (
         is_git
         and git_has_commits(repo_root)
@@ -170,13 +168,9 @@ def run_mission_start(
         )
         if res.returncode == 0:
             plan_data["mission"]["base_sha"] = res.stdout.strip()
+    
     save_plan(run_dir, plan_data)
-    log_execution_event(
-        run_dir,
-        "MISSION_STARTED",
-        "",
-        f"Mission execution started (parallel={parallel_limit}, worktree={use_worktree}).",
-    )
+    transition_mission(run_dir, "running", reason=f"Mission execution started (parallel={parallel_limit}, worktree={use_worktree}).")
     run_hooks("pre_mission", {"mission_id": mission_id}, niyam_dir, console)
 
     # Read project.yaml validation commands
@@ -209,7 +203,7 @@ def run_mission_start(
                         running_tasks,
                         completed_tasks,
                         failed_tasks,
-                        plan_data,
+                        current_plan,
                         run_dir,
                         console,
                     )
@@ -223,24 +217,18 @@ def run_mission_start(
 
             # Find ready tasks
             ready_tasks = []
+            tasks = current_plan.get("tasks", [])
             task_by_id = {task["id"]: task for task in tasks}
             for t in tasks:
                 t_id = t["id"]
-                if t["status"] == "pending" and t_id not in running_tasks:
+                if t["status"] in ("planned", "retry_ready") and t_id not in running_tasks:
                     deps = t.get("depends_on", [])
                     finished_statuses = {"completed", "failed", "skipped"}
                     dep_tasks = [task_by_id[dep] for dep in deps if dep in task_by_id]
 
                     if all(dt["status"] in finished_statuses for dt in dep_tasks):
                         if any(dt["status"] == "failed" for dt in dep_tasks):
-                            t["status"] = "skipped"
-                            save_plan(run_dir, plan_data)
-                            log_execution_event(
-                                run_dir,
-                                "TASK_SKIPPED",
-                                t_id,
-                                "Dependency failed, skipping task.",
-                            )
+                            transition_task(run_dir, t_id, "skipped", reason="Dependency failed.")
                             continue
                         ready_tasks.append(t)
 
@@ -264,21 +252,14 @@ def run_mission_start(
 
                     t_id = t["id"]
                     running_tasks.add(t_id)
-                    t["status"] = "running"
                     
-                    # Update status from disk to avoid overwriting external changes
-                    disk_plan = load_plan(run_dir)
-                    plan_data["mission"]["status"] = disk_plan["mission"]["status"]
-                    
-                    save_plan(run_dir, plan_data)
-                    log_execution_event(
-                        run_dir, "TASK_STARTED", t_id, f"Running task: {t['title']}"
-                    )
+                    # transition_task will handle status update and logging
+                    transition_task(run_dir, t_id, "queued", reason=f"Task queued for execution: {t['title']}")
 
                     with print_lock:
                         console.print(
                             Panel(
-                                f"Running Task [cyan]{t_id}[/]: {t['title']}\nAgent: [bold]{t['agent']}[/]",
+                                f"Queued Task [cyan]{t_id}[/]: {t['title']}\nAgent: [bold]{t['agent']}[/]",
                                 title=f"[bold]Task {t_id}[/]",
                                 border_style="cyan",
                             )
@@ -326,14 +307,7 @@ def run_mission_start(
     # UNLESS we exited because of a pause check (but that returns early)
     
     if any_failed or any_skipped_due_to_failure:
-        final_plan["mission"]["status"] = "failed"
-        save_plan(run_dir, final_plan)
-        log_execution_event(
-            run_dir,
-            "MISSION_FAILED",
-            "",
-            "Mission execution failed due to task failures.",
-        )
+        transition_mission(run_dir, "failed", reason="Mission execution failed due to task failures.")
         run_hooks(
             "post_mission",
             {"mission_id": mission_id, "mission_status": "failed"},
@@ -356,16 +330,11 @@ def run_mission_start(
             delete_mission_branches(repo_root, mission_id, tasks_list, console)
         except Exception as e:
             console.print(f"[bold red]Error integrating final changes:[/] {e}")
-            final_plan["mission"]["status"] = "failed"
-            save_plan(run_dir, final_plan)
+            transition_mission(run_dir, "failed", reason=f"Merge error: {e}")
             raise SystemExit(1)
 
     # Complete mission
-    final_plan["mission"]["status"] = "completed"
-    save_plan(run_dir, final_plan)
-    log_execution_event(
-        run_dir, "MISSION_COMPLETED", "", "All tasks completed successfully."
-    )
+    transition_mission(run_dir, "completed", reason="All tasks completed successfully.")
     run_hooks(
         "post_mission",
         {"mission_id": mission_id, "mission_status": "completed"},
@@ -401,53 +370,20 @@ def _process_finished_tasks(
         try:
             success = future.result()
             if success:
-                t["status"] = "completed"
                 completed_tasks.add(t_id)
-                
-                # Update mission status from disk to avoid overwriting pause
-                disk_plan = load_plan(run_dir)
-                plan_data["mission"]["status"] = disk_plan["mission"]["status"]
-                
-                save_plan(run_dir, plan_data)
-                log_execution_event(
-                    run_dir,
-                    "TASK_COMPLETED",
-                    t_id,
-                    f"Completed task: {t['title']}",
-                )
+                transition_task(run_dir, t_id, "completed", reason=f"Completed task: {t['title']}")
                 with print_lock:
                     console.print(
                         f"[bold green]✓[/] Task {t_id} completed successfully.\n"
                     )
             else:
-                t["status"] = "failed"
                 failed_tasks.add(t_id)
-                
-                # Update mission status from disk to avoid overwriting pause
-                disk_plan = load_plan(run_dir)
-                plan_data["mission"]["status"] = disk_plan["mission"]["status"]
-                
-                save_plan(run_dir, plan_data)
-                log_execution_event(
-                    run_dir, "TASK_FAILED", t_id, "Task execution failed."
-                )
+                transition_task(run_dir, t_id, "failed", reason="Task execution failed.")
                 with print_lock:
                     console.print(f"[bold red]❌[/] Task {t_id} failed.\n")
         except Exception as e:
-            t["status"] = "failed"
             failed_tasks.add(t_id)
-            
-            # Update mission status from disk to avoid overwriting pause
-            disk_plan = load_plan(run_dir)
-            plan_data["mission"]["status"] = disk_plan["mission"]["status"]
-            
-            save_plan(run_dir, plan_data)
-            log_execution_event(
-                run_dir,
-                "TASK_FAILED",
-                t_id,
-                f"Exception during task execution: {e}",
-            )
+            transition_task(run_dir, t_id, "failed", reason=f"Exception during task execution: {e}")
             with print_lock:
                 console.print(
                     f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n"
@@ -477,9 +413,7 @@ def run_mission_pause(console: Console, mission_id: str | None = None) -> None:
         console.print(f"[yellow]Mission is not running (current status: {status}).[/]")
         return
 
-    plan_data["mission"]["status"] = "paused"
-    save_plan(run_dir, plan_data)
-    log_execution_event(run_dir, "MISSION_PAUSED", "", "Mission paused by user.")
+    transition_mission(run_dir, "paused", reason="Mission paused by user.")
     console.print(f"[bold green]✓[/] Mission '[cyan]{mission_id}[/]' has been paused.")
 
 
@@ -550,26 +484,26 @@ def run_mission_retry(
     failed_any = False
 
     def reset_downstream(task_id: str):
-        for t in tasks:
+        # We need to reload plan every time because transition_task saves to disk
+        current_plan = load_plan(run_dir)
+        for t in current_plan.get("tasks", []):
             if task_id in t.get("depends_on", []) and t["status"] == "skipped":
-                t["status"] = "pending"
+                transition_task(run_dir, t["id"], "planned", reason="Upstream task retried.")
                 reset_downstream(t["id"])
 
-    for t in tasks:
-        if t["status"] in ("failed", "skipped"):
-            t["status"] = "pending"
-            failed_any = True
-            reset_downstream(t["id"])
+    # First pass: find all failed/skipped tasks that should be retried directly
+    to_retry = [t["id"] for t in tasks if t["status"] in ("failed", "skipped")]
+    
+    for t_id in to_retry:
+        transition_task(run_dir, t_id, "retry_ready", reason="Marked for retry.")
+        failed_any = True
+        reset_downstream(t_id)
 
     if not failed_any:
         console.print("[yellow]No failed or skipped tasks found to retry.[/]")
         return
 
-    plan_data["mission"]["status"] = "approved"
-    save_plan(run_dir, plan_data)
-    log_execution_event(
-        run_dir, "MISSION_RETRIED", "", "Retrying failed/skipped tasks."
-    )
+    transition_mission(run_dir, "approved", reason="Retrying failed/skipped tasks.")
     console.print(
         f"[bold green]✓[/] Re-queued tasks. Resuming mission [cyan]{mission_id}[/]..."
     )
@@ -620,12 +554,8 @@ def run_mission_skip(
         )
         raise SystemExit(1)
 
-    target_task["status"] = "skipped"
-    plan_data["mission"]["status"] = "approved"
-    save_plan(run_dir, plan_data)
-    log_execution_event(
-        run_dir, "TASK_SKIPPED_BY_USER", task_id, "Task skipped by user intervention."
-    )
+    transition_task(run_dir, task_id, "skipped", reason="Task skipped by user intervention.", actor="human")
+    transition_mission(run_dir, "approved", reason="Resuming after task skip.")
     console.print(
         f"[bold green]✓[/] Marked task [cyan]{task_id}[/] as skipped. Resuming mission..."
     )
@@ -673,8 +603,7 @@ def run_mission_rollback(console: Console, mission_id: str | None = None) -> Non
         text=True,
     )
     if res.returncode == 0:
-        plan_data["mission"]["status"] = "failed"
-        save_plan(run_dir, plan_data)
+        transition_mission(run_dir, "rolled_back", reason="Workspace rolled back to base commit by user.", actor="human")
         console.print("[bold green]✓[/] Workspace rolled back successfully.")
     else:
         console.print(

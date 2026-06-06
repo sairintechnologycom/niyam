@@ -11,6 +11,7 @@ from rich.table import Table
 
 from niyam.cli import console, mission_app
 from niyam.cli.main_cmds import Runtime
+from niyam.mission.state_machine import transition_task, transition_mission
 
 
 @mission_app.command("plan")
@@ -99,7 +100,7 @@ def mission_show(
     table.add_column("Status", style="bold")
 
     status_colors = {
-        "pending": "white",
+        "planned": "white",
         "running": "yellow",
         "completed": "green",
         "failed": "red",
@@ -113,7 +114,7 @@ def mission_show(
         t_rt = t.get("runtime") or mission_meta.get("orchestrator", "claude")
         t_deps = ", ".join(t.get("depends_on", [])) or "-"
         t_writes = "Yes" if t.get("writes_files", True) else "No"
-        t_status = t.get("status", "pending")
+        t_status = t.get("status", "planned")
         col = status_colors.get(t_status.lower(), "white")
         table.add_row(
             t_id,
@@ -549,3 +550,289 @@ def mission_active(
         console.print(f"Active Mission: [cyan]{mission_id}[/]")
         console.print(f"Status: [yellow]{status}[/]")
         console.print(f"Path: {active_dir}")
+
+
+@mission_app.command("next")
+def mission_next(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to inspect."),
+    ] = None,
+) -> None:
+    """Suggest the next logical action for the current mission."""
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+    from niyam.mission.executor import load_plan
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not in a Niyam workspace.")
+        raise typer.Exit(1)
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[yellow]No missions found.[/]")
+        return
+
+    run_dir = niyam_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+    mission_meta = plan_data.get("mission", {})
+    tasks = plan_data.get("tasks", [])
+    status = mission_meta.get("status", "planned")
+
+    console.print(f"Mission: [bold cyan]{mission_id}[/]")
+    console.print(f"Status: [bold]{status.upper()}[/]\n")
+
+    if status == "planned":
+        console.print("Next Recommended Action:")
+        console.print(f"  [bold]niyam mission approve --mission {mission_id}[/]")
+        console.print("  [dim]The mission plan needs your approval before it can start.[/]")
+        return
+
+    if status == "paused":
+        console.print("Next Recommended Action:")
+        console.print(f"  [bold]niyam mission resume --mission {mission_id}[/]")
+        console.print("  [dim]The mission is currently paused and ready to continue.[/]")
+        return
+
+    if status == "completed":
+        console.print("Mission completed successfully.")
+        console.print("Next Recommended Action:")
+        console.print(f"  [bold]niyam mission report --mission {mission_id}[/]")
+        return
+
+    # Check for blocking tasks
+    awaiting = [t for t in tasks if t["status"] == "awaiting_approval"]
+    if awaiting:
+        console.print("Action Required: [bold yellow]Human Approval Needed[/]")
+        for t in awaiting:
+            console.print(f"  - Task [cyan]{t['id']}[/]: {t['title']}")
+            console.print(f"    [bold]niyam mission approve-task {t['id']} --mission {mission_id}[/]")
+        return
+
+    blocked = [t for t in tasks if t["status"] == "blocked"]
+    if blocked:
+        console.print("Action Required: [bold red]Blocked Tasks[/]")
+        for t in blocked:
+            console.print(f"  - Task [cyan]{t['id']}[/]: {t['title']}")
+            console.print(f"    Check evidence at: [dim]{run_dir}/tasks/{t['id']}/[/]")
+        return
+
+    failed = [t for t in tasks if t["status"] == "failed"]
+    if failed:
+        console.print("Action Required: [bold red]Task Failures[/]")
+        for t in failed:
+            console.print(f"  - Task [cyan]{t['id']}[/]: {t['title']}")
+            console.print(f"    [bold]niyam mission retry --mission {mission_id}[/]")
+        return
+
+    if status == "running":
+        running = [t for t in tasks if t["status"] == "running"]
+        if running:
+            console.print("Mission is actively running.")
+            for t in running:
+                console.print(f"  - Task [cyan]{t['id']}[/] is running by [bold]{t['agent']}[/].")
+            console.print(f"\nView live dashboard: [bold]niyam mission dashboard --mission {mission_id}[/]")
+        else:
+            console.print("Mission is running but no tasks are currently executing.")
+            console.print("It might be waiting for dependencies or concurrency slots.")
+        return
+
+    console.print("No specific recommendation. Check status with [bold]niyam mission status[/].")
+
+
+@mission_app.command("inspect")
+def mission_inspect(
+    task_id: Annotated[str, typer.Argument(help="ID of the task to inspect.")],
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID containing the task."),
+    ] = None,
+) -> None:
+    """Show detailed artifacts and history for a specific task."""
+    import json
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not in a Niyam workspace.")
+        raise typer.Exit(1)
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    task_dir = niyam_dir / "runs" / mission_id / "tasks" / task_id
+    if not task_dir.is_dir():
+        console.print(f"[bold red]Error:[/] Artifact directory for task '{task_id}' not found.")
+        console.print(f"Path: {task_dir}")
+        raise typer.Exit(1)
+
+    console.print(Panel(f"Task Inspection: [bold cyan]{task_id}[/] in Mission [bold]{mission_id}[/]", border_style="cyan"))
+
+    # Status
+    status_file = task_dir / "status.json"
+    if status_file.exists():
+        status_data = json.loads(status_file.read_text(encoding="utf-8"))
+        console.print(f"Current Status: [bold magenta]{status_data.get('status', 'unknown').upper()}[/]")
+        console.print(f"Last Actor: [bold]{status_data.get('actor', '-')}[/]")
+        console.print(f"Last Updated: [dim]{status_data.get('updated_at', '-')}[/]")
+        if status_data.get("reason"):
+            console.print(f"Reason: {status_data.get('reason')}")
+    
+    # Prompt
+    if (task_dir / "prompt.md").exists():
+        console.print("\n[bold]Task Prompt (excerpt):[/]")
+        prompt_content = (task_dir / "prompt.md").read_text(encoding="utf-8")
+        console.print(f"[dim]{prompt_content[:500]}...[/]")
+
+    # Diffs
+    if (task_dir / "diff.patch").exists():
+        diff_content = (task_dir / "diff.patch").read_text(encoding="utf-8")
+        if diff_content.strip():
+            console.print(f"\n[bold green]Changes Detected ({len(diff_content.splitlines())} lines of diff)[/]")
+        else:
+            console.print("\n[yellow]No changes detected in files.[/]")
+
+    # Validation
+    val_file = task_dir / "validation.json"
+    if val_file.exists():
+        val_data = json.loads(val_file.read_text(encoding="utf-8"))
+        table = Table(title="Validation Results", box=None)
+        table.add_column("Check")
+        table.add_column("Result")
+        for v in val_data:
+            res = "[green]PASS[/]" if v.get("success") else "[red]FAIL[/]"
+            table.add_row(v.get("name", "unknown"), res)
+        console.print("\n")
+        console.print(table)
+
+    console.print(f"\nFull artifacts available at: [bold]{task_dir}[/]")
+
+
+@mission_app.command("timeline")
+def mission_timeline(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to display."),
+    ] = None,
+) -> None:
+    """Display a chronological timeline of mission events."""
+    import json
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not in a Niyam workspace.")
+        raise typer.Exit(1)
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    events_path = niyam_dir / "runs" / mission_id / "events.jsonl"
+    if not events_path.exists():
+        console.print("[yellow]No event history found for this mission.[/]")
+        return
+
+    table = Table(title=f"Timeline: [bold cyan]{mission_id}[/]", box=None, expand=True)
+    table.add_column("Timestamp", style="dim", width=20)
+    table.add_column("Actor", style="bold yellow", width=15)
+    table.add_column("Event", width=25)
+    table.add_column("Details")
+
+    with open(events_path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                ev = json.loads(line)
+                ts = ev.get("timestamp", "").split(".")[0].replace("T", " ")
+                actor = ev.get("actor") or ev.get("task_id") or "system"
+                event_type = ev.get("event", "UNKNOWN")
+                
+                details = ev.get("details", "")
+                if event_type == "TASK_STATE_TRANSITION":
+                    details = f"Task [cyan]{ev.get('task_id')}[/] status: [dim]{ev.get('from_status')}[/] -> [bold magenta]{ev.get('to_status')}[/]"
+                    if ev.get("reason"):
+                        details += f" ({ev.get('reason')})"
+                elif event_type == "MISSION_STATE_TRANSITION":
+                    details = f"Mission status: [dim]{ev.get('from_status')}[/] -> [bold green]{ev.get('to_status')}[/]"
+                    if ev.get("reason"):
+                        details += f" ({ev.get('reason')})"
+
+                table.add_row(ts, str(actor), event_type, details)
+            except Exception:
+                continue
+
+    console.print(table)
+
+
+@mission_app.command("approve-task")
+def mission_approve_task(
+    task_id: Annotated[str, typer.Argument(help="ID of the task to approve.")],
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID containing the task."),
+    ] = None,
+) -> None:
+    """Manually approve a task that is awaiting approval."""
+    import json
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+
+    repo_root = find_niyam_root()
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    task_dir = niyam_dir / "runs" / mission_id / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    
+    approval_data = {
+        "approved": True,
+        "approver": "human-cli",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    (task_dir / "approval.json").write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+    console.print(f"[bold green]✓[/] Task [cyan]{task_id}[/] approved. If the mission is running, it will proceed shortly.")
+
+
+@mission_app.command("reject-task")
+def mission_reject_task(
+    task_id: Annotated[str, typer.Argument(help="ID of the task to reject.")],
+    reason: Annotated[str, typer.Option("--reason", help="Reason for rejection.")] = "Rejected via CLI.",
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID containing the task."),
+    ] = None,
+) -> None:
+    """Manually reject a task that is awaiting approval."""
+    import json
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+
+    repo_root = find_niyam_root()
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    task_dir = niyam_dir / "runs" / mission_id / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    
+    approval_data = {
+        "approved": False,
+        "reason": reason,
+        "approver": "human-cli",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    (task_dir / "approval.json").write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+    console.print(f"[bold red]❌[/] Task [cyan]{task_id}[/] rejected.")

@@ -44,7 +44,7 @@ def test_comparison_runs_multiple_executors(niyam_repo: Path) -> None:
             "id": "T1",
             "title": "Discovery task",
             "type": "discovery",
-            "status": "pending",
+            "status": "planned",
             "agent": "backend-specialist",
             "runtime": "claude",
         }

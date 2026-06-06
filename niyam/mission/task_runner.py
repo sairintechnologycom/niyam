@@ -21,75 +21,9 @@ from rich.console import Console
 from rich.panel import Panel
 
 from niyam.core.config import load_niyam_config, find_niyam_root
-from niyam.mission.utils import print_lock, validation_lock, plan_lock, compute_sha256
+from niyam.mission.utils import print_lock, validation_lock, plan_lock, compute_sha256, load_plan, save_plan
 from niyam.mission.worktree import create_worktree, cleanup_worktree, is_git_repo, commit_worktree_changes
-
-
-def save_plan(run_dir: Path, plan_data: dict) -> None:
-    """Save mission plan YAML and update task-list.yaml."""
-    with plan_lock:
-        import fcntl
-        import tempfile
-
-        lock_path = run_dir / ".mission-plan.lock"
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(lock_path, "a+", encoding="utf-8") as lock_f:
-            fcntl.flock(lock_f, fcntl.LOCK_EX)
-            try:
-                plan_path = run_dir / "mission-plan.yaml"
-                tasks_path = run_dir / "task-list.yaml"
-
-                with tempfile.NamedTemporaryFile(
-                    "w",
-                    encoding="utf-8",
-                    dir=run_dir,
-                    prefix=".mission-plan.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as f:
-                    yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
-                    plan_tmp = Path(f.name)
-                plan_tmp.replace(plan_path)
-
-                with tempfile.NamedTemporaryFile(
-                    "w",
-                    encoding="utf-8",
-                    dir=run_dir,
-                    prefix=".task-list.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as f:
-                    yaml.dump(
-                        plan_data.get("tasks", []),
-                        f,
-                        default_flow_style=False,
-                        sort_keys=False,
-                    )
-                    tasks_tmp = Path(f.name)
-                tasks_tmp.replace(tasks_path)
-            finally:
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
-
-
-def load_plan(run_dir: Path) -> dict:
-    """Load mission plan YAML and validate schema."""
-    from niyam.core.config import MissionPlan
-    from niyam.core.security import safe_load_yaml
-
-    with plan_lock:
-        import fcntl
-
-        lock_path = run_dir / ".mission-plan.lock"
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(lock_path, "a+", encoding="utf-8") as lock_f:
-            fcntl.flock(lock_f, fcntl.LOCK_SH)
-            try:
-                plan_path = run_dir / "mission-plan.yaml"
-                data = safe_load_yaml(plan_path)
-                validated = MissionPlan(**data)
-                return validated.model_dump()
-            finally:
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+from niyam.mission.state_machine import transition_task, log_mission_event
 
 
 def log_execution_event(
@@ -789,6 +723,9 @@ def execute_single_task(
 ) -> bool:
     """Execute a single task, isolating in worktree if enabled."""
     task_id = task["id"]
+    task_dir = run_dir / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    
     task_cwd = repo_root
     worktree_path = None
     if branch_name is None:
@@ -796,11 +733,13 @@ def execute_single_task(
     run_hooks("pre_task", {"mission_id": mission_id, "task": task}, niyam_dir, console)
 
     if task.get("approval_required") and not non_interactive:
+        transition_task(run_dir, task_id, "awaiting_approval", reason="Manual approval required by contract.")
         with print_lock:
             console.print(
                 Panel(
                     f"Task [bold cyan]{task_id}[/] requires approval before execution.\n"
-                    "Notification sent to Dashboard. Waiting for approval...",
+                    f"Evidence dir: [bold]{task_dir}[/]\n"
+                    "Waiting for approval...",
                     title="[bold yellow]Awaiting Approval[/]",
                     border_style="yellow",
                 )
@@ -809,31 +748,35 @@ def execute_single_task(
         _notify_saas_event(run_dir, "TASK_APPROVAL_REQUESTED", {"task_id": task_id, "title": task["title"]})
         
         # Simple polling logic or wait for local approval.json
-        approval_file = run_dir / f"approval-{task_id}.json"
+        approval_file = task_dir / "approval.json"
         while not approval_file.exists():
-            # For now, we wait for a local file to be created (either manually or by some remote agent)
-            # In a full implementation, SaaSClient could have a poll_approval() method
+            # For now, we wait for a local file to be created in the task dir
             time.sleep(5)
             
         try:
             with open(approval_file, encoding="utf-8") as f:
                 approval_data = json.load(f)
             if not approval_data.get("approved"):
+                transition_task(run_dir, task_id, "failed", reason="Task denied by reviewer.", actor="human")
                 with print_lock:
                     console.print(f"[{task_id}] [bold red]Task denied by reviewer.[/]")
                 return False
+            
+            transition_task(run_dir, task_id, "approved", reason="Task approved by human.", actor="human")
             with print_lock:
                 console.print(f"[{task_id}] [bold green]Task approved. Proceeding...[/]")
         except Exception:
             return False
 
     if use_worktree:
+        transition_task(run_dir, task_id, "preparing", reason="Setting up worktree isolation.")
         try:
             worktree_path = create_worktree(
                 repo_root, run_dir, mission_id, task, console, branch_name=branch_name
             )
             task_cwd = worktree_path
         except Exception as e:
+            transition_task(run_dir, task_id, "failed", reason=f"Failed to setup worktree: {e}")
             with print_lock:
                 console.print(f"[{task_id}] [bold red]Failed to setup worktree:[/] {e}")
             return False
@@ -899,16 +842,16 @@ Only modify files matching the allowed patterns above.
 Do not modify files matching blocked patterns.
 Do not perform destructive operations.
 """
-    prompt_path = (
-        worktree_path if use_worktree else run_dir
-    ) / f"task-{task_id}-prompt.md"
+    prompt_path = task_dir / "prompt.md"
     prompt_path.write_text(prompt_text, encoding="utf-8")
+
+    transition_task(run_dir, task_id, "running", actor=task["agent"])
 
     is_test = os.environ.get("NIYAM_TEST") == "1"
     success = True
 
     is_git = is_git_repo(repo_root)
-    backup_dir = run_dir / "backups" / task_id
+    backup_dir = task_dir / "backup"
     if not is_git:
         backup_non_git_workspace(task_cwd, backup_dir)
 
@@ -917,8 +860,8 @@ Do not perform destructive operations.
     if is_test:
         with print_lock:
             console.print(f"[{task_id}] [dim]Mocking execution of {task_id}...[/]")
-        log_execution_event(
-            run_dir, "TASK_EXECUTION_MOCK", task_id, "Mocked execution successfully."
+        log_mission_event(
+            run_dir, "TASK_EXECUTION_MOCK", task_id=task_id, details="Mocked execution successfully."
         )
 
         if use_worktree and worktree_path and task.get("writes_files", True):
@@ -1007,9 +950,7 @@ Do not perform destructive operations.
                 timeout = task.get("timeout_seconds") or task.get("timeout") or 600
                 run_failed = False
                 exhaustion_detected = False
-                task_log_path = (
-                    worktree_path if use_worktree else run_dir
-                ) / f"task-{task_id}-output.log"
+                task_log_path = task_dir / "output.log"
 
                 try:
                     args = [current_orchestrator]
@@ -1088,6 +1029,7 @@ Do not perform destructive operations.
                 restore_path_freeze(original_modes)
 
     if success:
+        transition_task(run_dir, task_id, "validating")
         after_snapshot = get_snapshot(task_cwd, is_git)
 
         changed_files = []
@@ -1103,6 +1045,18 @@ Do not perform destructive operations.
             for f in all_keys:
                 if before_snapshot.get(f) != after_snapshot.get(f):
                     changed_files.append(f)
+
+        # Capture task-specific diff
+        if changed_files and is_git:
+            try:
+                # If using worktree, diff HEAD~1..HEAD (since we haven't committed yet, wait, 
+                # we commit at the end of the function. So right now it's just dirty changes in worktree)
+                diff_cmd = ["git", "diff"]
+                res_diff = subprocess.run(diff_cmd, cwd=task_cwd, capture_output=True, text=True)
+                if res_diff.returncode == 0:
+                    (task_dir / "diff.patch").write_text(res_diff.stdout, encoding="utf-8")
+            except Exception:
+                pass
 
         violated_files = []
         writes_files = task.get("writes_files", True)
@@ -1177,11 +1131,12 @@ Do not perform destructive operations.
                 for f in violated_files:
                     restore_non_git_file(f, backup_dir, task_cwd)
 
-            log_policy_event(
-                run_dir=run_dir,
-                niyam_dir=niyam_dir,
-                event_type="WRITE_VIOLATION",
-                details=f"Task {task_id} attempted unauthorized modifications to: {', '.join(violated_files)}",
+            log_mission_event(
+                run_dir,
+                "POLICY_VIOLATION",
+                task_id=task_id,
+                details=f"Task attempted unauthorized modifications to: {', '.join(violated_files)}",
+                type="WRITE_VIOLATION",
             )
             success = False
 
@@ -1195,13 +1150,14 @@ Do not perform destructive operations.
         criteria = task["acceptance_criteria"]
         record_acceptance_criteria(run_dir, task_id, criteria)
         for i, criterion in enumerate(criteria, 1):
-            log_execution_event(
-                run_dir=run_dir,
-                event_type="CRITERIA_CHECK",
+            log_mission_event(
+                run_dir,
+                "CRITERIA_CHECK",
                 task_id=task_id,
                 details=f"Criterion {i}: {criterion}",
             )
 
+    validation_results = []
     if success and project_config and project_config.validation:
         v_cmds = project_config.validation
         checks = [
@@ -1231,6 +1187,7 @@ Do not perform destructive operations.
             for name, cmd in checks:
                 if cmd:
                     cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
+                    validation_results.append({"name": name, "command": cmd, "success": cmd_success})
                     executed_cmds.add(cmd.strip())
                     if not cmd_success:
                         success = False
@@ -1242,14 +1199,16 @@ Do not perform destructive operations.
                     continue
                     
                 cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
+                validation_results.append({"name": f"task_val_{i}", "command": cmd, "success": cmd_success})
                 if not cmd_success:
                     success = False
 
+    if validation_results:
+        (task_dir / "validation.json").write_text(json.dumps(validation_results, indent=2), encoding="utf-8")
+
     try:
         parsed_usage = None
-        task_log_path = (
-            worktree_path if use_worktree else run_dir
-        ) / f"task-{task_id}-output.log"
+        task_log_path = task_dir / "output.log"
         if task_log_path.exists():
             try:
                 log_content = task_log_path.read_text(encoding="utf-8")
@@ -1333,10 +1292,23 @@ Do not perform destructive operations.
             estimation_method=estimation_method,
             cost_override=cost_usd,
         )
+        
+        # Also save to task dir
+        token_usage = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+            "cost_usd": cost_usd,
+            "estimated": estimated,
+            "runtime": orchestrator,
+        }
+        (task_dir / "token-usage.json").write_text(json.dumps(token_usage, indent=2), encoding="utf-8")
+
     except Exception:
         pass
 
     if success and use_worktree and worktree_path:
+        transition_task(run_dir, task_id, "merging", reason="Committing and merging changes from worktree.")
         try:
             commit_worktree_changes(worktree_path, task_id, console)
             res = subprocess.run(

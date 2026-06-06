@@ -127,18 +127,30 @@ def generate_dashboard_renderable(
     tasks_table.add_column("Duration", style="green", justify="right")
 
     status_icons = {
-        "pending": "[white]⧖ pending[/]",
+        "planned": "[white]⧖ planned[/]",
+        "approved": "[magenta]★ approved[/]",
+        "queued": "[cyan]⌛ queued[/]",
+        "preparing": "[blue]⚙ preparing[/]",
+        "awaiting_approval": "[yellow]⚠ needs approval[/]",
         "running": "[yellow]⚡ running[/]",
+        "validating": "[green]🔍 validating[/]",
+        "reviewing": "[magenta]📖 reviewing[/]",
+        "merging": "[blue]🔀 merging[/]",
+        "blocked": "[red]🛑 blocked[/]",
+        "needs_human": "[bold yellow]? needs human[/]",
+        "retry_ready": "[cyan]↻ retry ready[/]",
         "completed": "[green]✓ completed[/]",
         "failed": "[red]❌ failed[/]",
         "skipped": "[dim]↷ skipped[/]",
+        "cancelled": "[dim]⊘ cancelled[/]",
+        "rolled_back": "[yellow]↶ rolled back[/]",
     }
 
     for t in tasks:
         t_id = t.get("id")
         t_title = t.get("title")
         t_agent = t.get("agent")
-        t_status = t.get("status", "pending")
+        t_status = t.get("status", "planned")
         t_deps = ", ".join(t.get("depends_on", [])) or "-"
 
         status_disp = status_icons.get(t_status.lower(), t_status)

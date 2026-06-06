@@ -11,7 +11,7 @@ from rich.panel import Panel
 
 from niyam.core.config import get_niyam_dir
 from niyam.mission.planner import resolve_mission_id
-from niyam.mission.executor import load_plan
+from niyam.mission.utils import load_plan
 import hashlib
 import hmac
 import os
@@ -114,31 +114,27 @@ def run_mission_report(
     except Exception:
         pass
 
-    # Write diff to run directory
-    diff_path = run_dir / "diff-summary.md"
-    if git_diff:
-        diff_path.write_text(
-            f"### Git Diff Summary\n\n```diff\n{git_diff}\n```\n", encoding="utf-8"
-        )
-    else:
-        diff_path.write_text("No changes detected in Git.\n", encoding="utf-8")
-
-    # 2. Collect Validation Results
-    val_path = run_dir / "validation-results.md"
-    val_results = ""
-    if val_path.exists():
-        val_results = val_path.read_text(encoding="utf-8")
-    else:
-        val_results = "*No validation runs recorded for this mission.*\n"
+    # 2. Collect Validation Results (Aggregate from tasks)
+    val_summary = []
+    tasks_dir = run_dir / "tasks"
+    if tasks_dir.is_dir():
+        for t_dir in tasks_dir.iterdir():
+            if t_dir.is_dir():
+                v_file = t_dir / "validation.json"
+                if v_file.exists():
+                    try:
+                        v_data = json.loads(v_file.read_text(encoding="utf-8"))
+                        for v in v_data:
+                            v["task_id"] = t_dir.name
+                            val_summary.append(v)
+                    except Exception:
+                        pass
 
     # 3. Collect Policy Events
     policy_events_path = run_dir / "policy-events.json"
     policy_events: list[dict] = []
-
-    # Also check the global policy events and filter by time if possible
     global_policy_path = niyam_dir / "evidence" / "policy-events.json"
 
-    # Combine events
     for path in (policy_events_path, global_policy_path):
         if path.exists():
             try:
@@ -151,18 +147,17 @@ def run_mission_report(
             except Exception:
                 pass
 
-    # Sort events by timestamp
-    policy_events.sort(key=lambda e: e.get("timestamp", ""))
-
-    # 4. Collect Execution Log
-    exec_log_path = run_dir / "execution-log.json"
-    exec_log: list[dict] = []
-    if exec_log_path.exists():
-        try:
-            with open(exec_log_path, encoding="utf-8") as f:
-                exec_log = json.load(f)
-        except Exception:
-            pass
+    # 4. Collect Events from events.jsonl
+    events_jsonl_path = run_dir / "events.jsonl"
+    mission_events = []
+    if events_jsonl_path.exists():
+        with open(events_jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        mission_events.append(json.loads(line))
+                    except Exception:
+                        continue
 
     # 4b. Collect Acceptance Criteria Evidence
     acceptance_path = run_dir / "acceptance-checks.json"
@@ -189,6 +184,11 @@ def run_mission_report(
     report_sections.append(f"- **Status:** `{status.upper()}`")
     report_sections.append(f"- **Orchestrator:** `{orchestrator}`")
     report_sections.append("")
+    
+    if base_sha:
+        report_sections.append(f"- **Base Commit:** `{base_sha}`")
+        report_sections.append("")
+
     report_sections.append("## Task Checklist")
     report_sections.append("")
     for task in plan_data.get("tasks", []):
@@ -201,16 +201,26 @@ def run_mission_report(
         )
     report_sections.append("")
 
-    report_sections.append("## Execution Log")
+    report_sections.append("## Mission Timeline")
     report_sections.append("")
-    if exec_log:
-        for event in exec_log:
-            task_str = f" [{event.get('task_id')}]" if event.get("task_id") else ""
-            report_sections.append(
-                f"- `{event.get('timestamp')}` **{event.get('event')}**{task_str}: {event.get('details')}"
-            )
+    if mission_events:
+        report_sections.append("| Timestamp | Actor | Event | Details |")
+        report_sections.append("|-----------|-------|-------|---------|")
+        for ev in mission_events:
+            ts = ev.get("timestamp", "").split(".")[0].replace("T", " ")
+            actor = ev.get("actor") or ev.get("task_id") or "system"
+            etype = ev.get("event", "UNKNOWN")
+            details = ev.get("details", "")
+            if etype == "TASK_STATE_TRANSITION":
+                details = f"Task {ev.get('task_id')} -> {ev.get('to_status')}"
+                if ev.get("reason"): details += f" ({ev.get('reason')})"
+            elif etype == "MISSION_STATE_TRANSITION":
+                details = f"Mission -> {ev.get('to_status')}"
+                if ev.get("reason"): details += f" ({ev.get('reason')})"
+            
+            report_sections.append(f"| `{ts}` | `{actor}` | `{etype}` | {details} |")
     else:
-        report_sections.append("*No execution logs recorded.*")
+        report_sections.append("*No event history recorded.*")
     report_sections.append("")
 
     report_sections.append("## Acceptance Criteria Evidence")
@@ -233,22 +243,18 @@ def run_mission_report(
         )
     report_sections.append("")
 
-    report_sections.append("## Policy Guard Audit Trail")
+    report_sections.append("## Validation Summary")
     report_sections.append("")
-    if policy_events:
-        report_sections.append("| Timestamp | Type | Event Details |")
-        report_sections.append("|-----------|------|---------------|")
-        for event in policy_events:
+    if val_summary:
+        report_sections.append("| Task | Check | Result | Command |")
+        report_sections.append("|------|-------|--------|---------|")
+        for v in val_summary:
+            res = "✅ PASS" if v.get("success") else "❌ FAIL"
             report_sections.append(
-                f"| `{event.get('timestamp')}` | `{event.get('type')}` | {event.get('details')} |"
+                f"| `{v.get('task_id')}` | {v.get('name')} | {res} | `{v.get('command')}` |"
             )
     else:
-        report_sections.append("*No policy events triggered.*")
-    report_sections.append("")
-
-    report_sections.append("## Validation Results")
-    report_sections.append("")
-    report_sections.append(val_results)
+        report_sections.append("*No structured validation results found.*")
     report_sections.append("")
 
     report_sections.append("## Changes Made (Git Diff)")
@@ -261,13 +267,23 @@ def run_mission_report(
 
     # Generate cryptographic manifest signature block
     manifest_files = {}
-    for run_file in (
+    manifest_candidates = [
         "mission-plan.yaml",
-        "execution-log.json",
-        "validation-results.md",
+        "events.jsonl",
         "policy-events.json",
         "acceptance-checks.json",
-    ):
+    ]
+    
+    # Add files in task directories
+    if tasks_dir.is_dir():
+        for t_dir in tasks_dir.iterdir():
+            if t_dir.is_dir():
+                for f_path in t_dir.iterdir():
+                    if f_path.is_file():
+                        rel_path = f"tasks/{t_dir.name}/{f_path.name}"
+                        manifest_files[rel_path] = compute_sha256(f_path)
+
+    for run_file in manifest_candidates:
         full_path = run_dir / run_file
         if full_path.exists():
             manifest_files[run_file] = compute_sha256(full_path)
@@ -329,7 +345,7 @@ def run_mission_report(
         "orchestrator": orchestrator,
         "tasks": plan_data.get("tasks", []),
         "policy_events": policy_events,
-        "execution_log": exec_log,
+        "execution_log": mission_events,
         "signature_manifest": manifest,
     }
     with open(evidence_json, "w", encoding="utf-8") as f:
@@ -393,10 +409,10 @@ def run_verify_report(evidence_path: str, console: Console) -> None:
     for rel_file, expected_hash in manifest.get("files", {}).items():
         if rel_file in (
             "mission-plan.yaml",
-            "execution-log.json",
-            "validation-results.md",
+            "events.jsonl",
             "policy-events.json",
-        ):
+            "acceptance-checks.json",
+        ) or rel_file.startswith("tasks/"):
             file_path = run_dir / rel_file
         else:
             file_path = repo_root / rel_file

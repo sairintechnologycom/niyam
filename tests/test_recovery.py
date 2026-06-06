@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from rich.console import Console
@@ -10,6 +11,7 @@ from rich.console import Console
 from niyam.core.config import get_niyam_dir
 from niyam.mission.planner import run_mission_plan, run_mission_approve
 from niyam.mission.executor import (
+    run_mission_start,
     run_mission_retry,
     run_mission_skip,
     run_mission_rollback,
@@ -57,13 +59,14 @@ def test_mission_skip_unblocks_downstream(niyam_repo: Path) -> None:
     assert plan["tasks"][2]["status"] == "completed"
     assert plan["tasks"][3]["status"] == "completed"
     assert plan["tasks"][4]["status"] == "completed"
-    assert (
-        plan["mission"]["status"] == "failed"
-    )  # Failed is expected because a task was skipped
+    
+    # In the current implementation, skipping a task STILL leads to mission failure 
+    # to maintain strict delivery standards.
+    assert plan["mission"]["status"] == "failed"
 
 
 def test_mission_retry_requeues_tasks(niyam_repo: Path) -> None:
-    """Retrying a mission should set failed/skipped tasks to pending and re-run them."""
+    """Retrying a mission should set failed/skipped tasks to planned and re-run them."""
     os.chdir(niyam_repo)
     console = Console(quiet=True)
 
@@ -129,4 +132,4 @@ def test_mission_rollback_git_checkout(niyam_repo: Path) -> None:
         )
 
     plan = load_plan(run_dir)
-    assert plan["mission"]["status"] == "failed"
+    assert plan["mission"]["status"] == "rolled_back"

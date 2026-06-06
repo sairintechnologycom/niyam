@@ -8,7 +8,7 @@ from rich.panel import Panel
 
 from niyam.core.config import get_niyam_dir
 from niyam.mission.planner import resolve_mission_id
-from niyam.mission.executor import load_plan
+from niyam.mission.utils import load_plan
 
 
 def run_mission_status(console: Console, mission_id: str | None = None) -> None:
@@ -40,6 +40,8 @@ def run_mission_status(console: Console, mission_id: str | None = None) -> None:
         "paused": "yellow",
         "completed": "bold green",
         "failed": "bold red",
+        "cancelled": "dim white",
+        "rolled_back": "bold yellow",
     }
     color = status_colors.get(status, "white")
 
@@ -58,18 +60,30 @@ def run_mission_status(console: Console, mission_id: str | None = None) -> None:
     table.add_column("ID", style="dim", width=4)
     table.add_column("Task Title", style="bold", width=45)
     table.add_column("Agent", style="cyan", width=20)
-    table.add_column("Status", style="magenta", width=12)
+    table.add_column("Status", style="magenta", width=15)
 
     status_icons = {
-        "pending": "[dim]Pending[/]",
+        "planned": "[dim]Planned[/]",
+        "approved": "[magenta]Approved[/]",
+        "queued": "[cyan]Queued[/]",
+        "preparing": "[blue]Preparing[/]",
+        "awaiting_approval": "[yellow]! Needs Approval[/]",
         "running": "[yellow]▶ Running[/]",
+        "validating": "[green]Validating[/]",
+        "reviewing": "[magenta]Reviewing[/]",
+        "merging": "[blue]Merging[/]",
+        "blocked": "[red]✖ Blocked[/]",
+        "needs_human": "[bold yellow]? Needs Human[/]",
+        "retry_ready": "[cyan]Retry Ready[/]",
         "completed": "[green]✓ Completed[/]",
         "failed": "[red]✗ Failed[/]",
         "skipped": "[dim]Skipped[/]",
+        "cancelled": "[dim]Cancelled[/]",
+        "rolled_back": "[yellow]Rolled Back[/]",
     }
 
     for task in plan_data.get("tasks", []):
-        t_status = task.get("status", "pending")
+        t_status = task.get("status", "planned")
         icon = status_icons.get(t_status, t_status)
         table.add_row(
             task.get("id", ""), task.get("title", ""), task.get("agent", ""), icon
