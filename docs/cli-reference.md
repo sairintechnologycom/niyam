@@ -20,6 +20,10 @@ Initialize a governed AI-development workspace in the current directory.
   - `--profile` (e.g. `fullstack`, `backend`, `frontend`)
   - `--runtime` (e.g. `claude`, `gemini`, `codex`)
 
+### `niyam info`
+Display system and workspace information.
+- Shows OS, Python version, Niyam version, and workspace status.
+
 ### `niyam sync`
 Synchronize files and settings under `.niyam/` source of truth to all active AI runtime environments (e.g., `CLAUDE.md`, `.claude/`, `AGENTS.md`).
 
@@ -112,14 +116,18 @@ Insert or update a tool in the local catalog (`.niyam/mcp-registry.json`).
 - **Arguments:**
   - `name`: Name of the tool.
 - **Options:**
-  - `--type` (Required): `mcp_server`, `api`, `cli`, `local_tool`, `browser`, `other`.
+  - `--type`: `mcp_server`, `api`, `cli`, `local_tool`, `browser`, `other`. (Required for new registrations).
   - `--command-or-url`: Execution command or URL endpoint.
   - `--owner`: Tool provider owner.
-  - `--risk`: Manual risk rating (`low`, `medium`, `high`, `critical`).
+  - `--risk`: Risk level: `low`, `medium`, `high`, `critical`. If omitted, heuristic classification is used.
   - `--approved` / `--no-approved`: Explicit approval status.
-  - `--capabilities`: Comma-separated list of tool methods.
+  - `--capabilities`: Comma-separated list of tool capabilities.
+  - `--capability`: Individual capability of the tool. Can be specified multiple times.
   - `--data-access`: Description of data accessed by the tool.
+  - `--network-access`: Network access details.
+  - `--requires-approval` / `--no-requires-approval`: Sets whether the tool requires approval.
   - `--notes`: Additional descriptions.
+  - `--update`: Updates the tool if it is already registered.
 
 #### `niyam mcp list`
 Renders a tabular view of all registered tools.
@@ -128,6 +136,11 @@ Renders a tabular view of all registered tools.
 Display detailed configuration parameters, owner, and notes for a tool.
 - **Arguments:**
   - `name`: Name of the registered tool to view.
+
+#### `niyam mcp approve`
+Approves a registered tool or MCP server for usage.
+- **Arguments:**
+  - `name`: Name of the tool to approve.
 
 #### `niyam mcp risk-report`
 Perform a security risk analysis of registered tools based on heuristic indicators.

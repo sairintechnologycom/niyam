@@ -109,6 +109,7 @@ uvx --from niyam niyam --help
 
 *   [**CLI Reference Guide**](docs/cli-reference.md)
 *   [**Governance Specification**](docs/governance.md)
+*   [**MCP Registry Guide**](docs/mcp.md)
 *   [**Migration Guide**](docs/migration-from-sutra.md)
 
 ---
