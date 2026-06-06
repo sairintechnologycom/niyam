@@ -9,6 +9,7 @@ jobs:
   pypi-release:
     name: Publish to PyPI
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       id-token: write # Mandatory for Trusted Publishing (OIDC)
       contents: read
