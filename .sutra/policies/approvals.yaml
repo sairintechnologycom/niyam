@@ -1,9 +1,0 @@
-# Approval policy — changes that require human approval
-approval_required_for:
-  - auth_changes
-  - payment_changes
-  - infrastructure_changes
-  - secrets
-  - database_migrations
-  - production_config_changes
-  - ci_cd_changes

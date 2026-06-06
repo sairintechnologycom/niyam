@@ -1,4 +1,0 @@
-claude:
-  generate_claude_md: true
-  generate_hooks: true
-  generate_settings: true
