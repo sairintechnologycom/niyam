@@ -65,6 +65,16 @@ class GuardConfig(BaseModel):
     approval_required: list[str] = Field(default_factory=list)
 
 
+class SaaSConfig(BaseModel):
+    """Configuration for Niyam Dashboard integration."""
+
+    enabled: bool = False
+    base_url: str = "https://api.niyam.ai"
+    api_key: Optional[str] = None
+    project_id: Optional[str] = None
+    organization_id: Optional[str] = None
+
+
 class GovernanceConfig(BaseModel):
     """Governance and production-readiness configuration."""
 
@@ -75,6 +85,8 @@ class GovernanceConfig(BaseModel):
 class NiyamConfig(BaseModel):
     """Top-level Niyam workspace configuration."""
 
+    model_config = {"extra": "allow"}
+
     version: str = "0.1.0"
     project_name: str = ""
     profile: str = "fullstack"
@@ -82,6 +94,9 @@ class NiyamConfig(BaseModel):
     packs: list[str] = Field(default_factory=list)
     guard: GuardState = Field(default_factory=GuardState)
     governance: Optional[GovernanceConfig] = None
+    saas: SaaSConfig = Field(default_factory=SaaSConfig)
+    show_marketing_metrics: bool = False
+    baseline_multiplier: float = 5.0
 
 
 # ── project.yaml ───────────────────────────────────────────────────────

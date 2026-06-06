@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Default severity mappings from external tools to Niyam severities
 SEVERITY_MAPPINGS = {
@@ -83,8 +86,10 @@ def run_gitleaks(root: Path) -> list[dict[str, Any]]:
                                 ),
                             }
                         )
-        except Exception:
-            pass
+        except subprocess.TimeoutExpired:
+            logger.warning("Gitleaks execution timed out")
+        except Exception as e:
+            logger.debug("Failed to run Gitleaks: %s", e, exc_info=True)
 
     return findings
 
@@ -134,8 +139,10 @@ def run_semgrep(root: Path) -> list[dict[str, Any]]:
                         ),
                     }
                 )
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Semgrep execution timed out")
+    except Exception as e:
+        logger.debug("Failed to run Semgrep: %s", e, exc_info=True)
 
     return findings
 
@@ -187,8 +194,10 @@ def run_trivy(root: Path) -> list[dict[str, Any]]:
                             "recommendation": f"Upgrade '{pkg}' to version {fixed} or higher to resolve this vulnerability.",
                         }
                     )
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Trivy execution timed out")
+    except Exception as e:
+        logger.debug("Failed to run Trivy: %s", e, exc_info=True)
 
     return findings
 
@@ -247,8 +256,10 @@ def run_checkov(root: Path) -> list[dict[str, Any]]:
                             ),
                         }
                     )
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning("Checkov execution timed out")
+    except Exception as e:
+        logger.debug("Failed to run Checkov: %s", e, exc_info=True)
 
     return findings
 

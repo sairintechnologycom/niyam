@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
 
 from niyam.core.config import find_niyam_root
+
+logger = logging.getLogger(__name__)
 
 
 class CostEvent(BaseModel):
@@ -59,13 +63,14 @@ def load_pricing(root: Path | None = None) -> dict:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_PRICING, f, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to create default pricing file at %s: %s", path, e)
         return DEFAULT_PRICING
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to load pricing file %s: %s", path, e)
         return DEFAULT_PRICING
 
 
@@ -113,8 +118,8 @@ def get_repo_name(root: Path) -> str:
             if name.endswith(".git"):
                 name = name[:-4]
             return name
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to get git repo name: %s", e)
     return root.name
 
 
@@ -132,13 +137,13 @@ def get_branch_name(root: Path) -> str:
         )
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to get git branch name: %s", e)
     return "main"
 
 
 def log_cost_event(event: CostEvent, root: Path | None = None) -> None:
-    """Log a cost event locally to JSONL file."""
+    """Log a cost event locally to JSONL file with cross-platform locking."""
     if root is None:
         root = find_niyam_root()
     if root is None:
@@ -146,8 +151,48 @@ def log_cost_event(event: CostEvent, root: Path | None = None) -> None:
     log_dir = root / ".niyam" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     path = log_dir / "cost-events.jsonl"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(event.model_dump_json() + "\n")
+
+    try:
+        import fcntl
+        with open(path, "a", encoding="utf-8") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                f.write(event.model_dump_json() + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            finally:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+                except Exception:
+                    pass
+    except ImportError:
+        # Windows fallback using msvcrt
+        try:
+            import msvcrt
+            with open(path, "a", encoding="utf-8") as f:
+                # Seek to end and lock 1 byte at current position
+                # This is a basic way to lock on Windows without external deps
+                f.seek(0, os.SEEK_END)
+                try:
+                    # msrvcrt.locking uses sizes, we lock a small range
+                    # This is indicative; better to use a proper file lock if available
+                    # but for Niyam core we avoid new heavy dependencies.
+                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                    f.write(event.model_dump_json() + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+                finally:
+                    try:
+                        f.seek(0, os.SEEK_END)
+                        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                    except Exception:
+                        pass
+        except ImportError:
+            # Fallback to no locking if neither is available
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(event.model_dump_json() + "\n")
+                f.flush()
+                os.fsync(f.fileno())
 
 
 def load_cost_events(root: Path | None = None) -> list[CostEvent]:
@@ -165,8 +210,8 @@ def load_cost_events(root: Path | None = None) -> list[CostEvent]:
             if line.strip():
                 try:
                     events.append(CostEvent.model_validate_json(line))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to parse cost event line: %s", e)
     return events
 
 

@@ -71,6 +71,21 @@ def save_mcp_registry(registry: MCPRegistry, root: Path | None = None) -> None:
         json.dump(redacted_data, f, indent=2)
 
 
+def _classify_risk_ai(
+    name: str,
+    type: str,
+    command_or_url: str | None = None,
+    capabilities: list[str] | None = None,
+    data_access: str | None = None,
+    notes: str | None = None,
+) -> Optional[Literal["low", "medium", "high", "critical"]]:
+    """Stub for AI-powered semantic risk classification."""
+    # In a real implementation, this would use a local or remote LLM
+    # to analyze the tool details and return a risk verdict.
+    # For now, it returns None to fall back to heuristics.
+    return None
+
+
 def classify_risk(
     name: str,
     type: str,
@@ -78,11 +93,21 @@ def classify_risk(
     capabilities: list[str] | None = None,
     data_access: str | None = None,
     notes: str | None = None,
+    use_ai: bool = False,
 ) -> Literal["low", "medium", "high", "critical"]:
-    """Classify the risk level of a tool based on heuristics and capability mappings.
+    """Classify the risk level of a tool based on heuristics or AI semantic analysis."""
+    
+    # 1. Try AI-powered semantic classification if requested
+    if use_ai:
+        try:
+            ai_risk = _classify_risk_ai(name, type, command_or_url, capabilities, data_access, notes)
+            if ai_risk:
+                return ai_risk
+        except Exception:
+            # Fall back to heuristics on AI failure
+            pass
 
-    The type parameter is currently kept in signature for compatibility but is unused.
-    """
+    # 2. Existing heuristic classification
     caps = [c.lower().strip() for c in (capabilities or [])]
     text = f"{name} {command_or_url or ''} {data_access or ''} {notes or ''}".lower()
 

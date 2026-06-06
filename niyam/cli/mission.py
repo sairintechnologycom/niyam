@@ -457,12 +457,16 @@ def mission_report(
         Optional[str],
         typer.Option("--mission", help="Mission ID to report."),
     ] = None,
+    upload: Annotated[
+        bool,
+        typer.Option("--upload", "-u", help="Upload report to Niyam Dashboard."),
+    ] = False,
 ) -> None:
     """Generate final evidence package for the latest mission."""
     from niyam.mission.reporter import run_mission_report
 
     try:
-        run_mission_report(console=console, mission_id=mission_id)
+        run_mission_report(console=console, mission_id=mission_id, upload=upload)
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

@@ -1,0 +1,133 @@
+# Niyam Governance & Production Readiness Evidence Report
+
+## 1. Executive Summary
+This document serves as an audit-ready evidence record for the repository readiness and AI agent governance. It aggregates static analysis, dependency health, and runtime agent execution safety logs.
+
+## 2. Project Metadata
+* **Project Name:** {{ project }}
+* **Generated At:** {{ generated_at }}
+* **Git Branch / Commit:** `{{ source }}`
+
+{% if "scan" in include %}
+## 3. Readiness Score
+* **Readiness Score:** **{{ readiness_score }}/100**
+
+## 4. Launch Decision
+* **Launch Decision:** **{{ decision.replace('_', ' ') }}**
+
+## 5. Decision Reason
+* **Decision Reason:** *{{ decision_reason }}*
+
+## 6. Critical and High Findings
+{% if scan.critical_high_findings %}
+| ID | Title | Category | Severity | File Path |
+| --- | --- | --- | --- | --- |
+{% for f in scan.critical_high_findings -%}
+| {{ f.id }} | {{ f.title }} | {{ f.category }} | **{{ f.severity.upper() }}** | `{{ f.file_path or 'Global' }}` |
+{% endfor %}
+{% else %}
+✓ No Critical or High findings detected in the repository scan.
+{% endif %}
+
+## 7. Risk Register
+{% if risk_summary %}
+| Severity | Count |
+| --- | --- |
+| Critical | {{ risk_summary.critical }} |
+| High | {{ risk_summary.high }} |
+| Medium | {{ risk_summary.medium }} |
+| Low | {{ risk_summary.low }} |
+| Info | {{ risk_summary.info }} |
+{% else %}
+No risk register data available.
+{% endif %}
+
+## 8. Recommended Remediation Plan
+{% if remediation_plan %}
+Remediation actions are recommended below:
+{% for item in remediation_plan -%}
+* **[{{ item.id }}] {{ item.title }}** ({{ item.severity.upper() }}): {{ item.recommendation }}
+{% endfor %}
+{% else %}
+✓ No remediation actions required.
+{% endif %}
+{% endif %}
+
+## 9. AI-Assisted Development Governance Notes
+* **AI-Risk Placeholders / Commented Assertions:** Checked.
+{% if "guard" in include -%}
+* **Agent Governance / Guardrails Status:** {{ governance.guard_status }}
+{% if guard_summary and guard_summary.total_actions > 0 -%}
+### Agent Governance Summary (Niyam Guard)
+* **Total Actions:** {{ guard_summary.total_actions }}
+* **Total Blocked:** {{ guard_summary.total_blocked }}
+* **Total Warned:** {{ guard_summary.total_warned }}
+* **Total Approval Required:** {{ guard_summary.total_approval_required }}
+* **Total Failed:** {{ guard_summary.total_failed }}
+{% if guard_summary.top_command_categories -%}
+* **Top Command Categories:** {{ guard_summary.top_command_categories|join(', ') }}
+{%- endif %}
+
+{% if guard_summary.latest_session and guard_summary.latest_session.session_id -%}
+#### Latest Session Details
+* **Session ID:** `{{ guard_summary.latest_session.session_id }}`
+* **Session Total Actions:** {{ guard_summary.latest_session.total_actions }}
+* **Session Blocked:** {{ guard_summary.latest_session.total_blocked }}
+* **Session Warned:** {{ guard_summary.latest_session.total_warned }}
+* **Session Failed:** {{ guard_summary.latest_session.total_failed }}
+{%- endif %}
+
+### Recent Observed Actions (Agent Governance)
+| Timestamp | Actor | Command | Policy Decision | Exit Code |
+| --- | --- | --- | --- | --- |
+{% for log in guard_summary.latest_actions_summary -%}
+| {{ log.timestamp }} | {{ log.actor_type }} | `{{ log.command }}` | {{ log.policy_decision or log.decision or 'allow' }} | {{ log.exit_code }} |
+{% endfor %}
+{% endif %}
+{% if violations %}
+### Policy Violations (Agent Governance)
+| Timestamp | Command | Exit Code |
+| --- | --- | --- |
+{% for v in violations -%}
+| {{ v.timestamp }} | `{{ v.command }}` | {{ v.exit_code }} |
+{% endfor %}
+{% endif %}
+{%- endif %}
+{%- if "mcp" in include -%}
+{% if mcp.exists %}
+* **MCP / Tool Approval Posture:** {{ mcp.approved }}/{{ mcp.total }} tools approved.
+  * **Total Registered Tools:** {{ mcp.total }}
+  * **Approved Tools:** {{ mcp.approved }}
+  * **Unapproved Tools:** {{ mcp.unapproved }}
+  * **High-risk Tools:** {{ mcp.high_risk }}
+  * **Critical-risk Tools:** {{ mcp.critical_risk }}
+  * **High/Critical Unapproved Tools:** {{ mcp.unapproved_high_critical_count }}
+
+{% if mcp.tools %}
+### Registered Tools (MCP)
+| Name | Type | Risk Level | Approved | Owner |
+| --- | --- | --- | --- | --- |
+{% for t in mcp.tools -%}
+| {{ t.name }} | {{ t.type }} | **{{ t.risk_level.upper() }}** | {{ 'Yes' if t.approved else 'No' }} | {{ t.owner or 'N/A' }} |
+{% endfor %}
+{% endif %}
+
+{% if mcp.recommended_actions %}
+### Recommended MCP Actions
+{% for action in mcp.recommended_actions -%}
+* **[{{ action.tool }}]** {{ action.action }}
+{% endfor %}
+{% endif %}
+{% else %}
+* **MCP / Tool Approval Posture:** MCP Registry not found. Skipping MCP governance posture.
+{% endif %}
+{%- endif %}
+{%- if "cost" in include and cost.total_cost is not none -%}
+* **AI Engineering Cost Summary:** Estimated Cost: ${{ "%.4f"|format(cost.total_cost) }} (Input tokens: {{ cost.total_input_tokens }}, Output tokens: {{ cost.total_output_tokens }})
+{%- endif %}
+
+## 10. Appendix Summary
+* **Redaction Status:** Redacted: {{ redaction_status.redacted }} (Engine: {{ redaction_status.engine }})
+* **Branch:** `{{ metadata.branch }}`
+* **Commit SHA:** `{{ metadata.commit_sha }}`
+* **Commit Author:** {{ metadata.commit_author }}

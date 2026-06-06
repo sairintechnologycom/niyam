@@ -1,6 +1,11 @@
 import stat
 from pathlib import Path
-from niyam.mission.executor import apply_path_freeze, restore_path_freeze
+from niyam.mission.task_runner import (
+    apply_path_freeze,
+    restore_path_freeze,
+    _emergency_cleanup_permissions,
+    _active_frozen_modes,
+)
 
 
 def test_apply_and_restore_path_freeze(tmp_path: Path):
@@ -33,11 +38,6 @@ def test_apply_and_restore_path_freeze(tmp_path: Path):
 
 
 def test_emergency_cleanup_on_exit(tmp_path: Path):
-    from niyam.mission.executor import (
-        _emergency_cleanup_permissions,
-        _active_frozen_modes,
-    )
-
     frozen_dir = tmp_path / "emergency_dir"
     frozen_dir.mkdir()
     frozen_file = frozen_dir / "frozen.txt"

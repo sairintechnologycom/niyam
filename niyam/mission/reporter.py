@@ -31,22 +31,18 @@ def compute_sha256(file_path: Path) -> str:
         return f"ERROR: {e}"
 
 
-def _get_signing_key() -> bytes | None:
-    """Get HMAC signing key from environment or .niyam/signing-key file."""
-    env_key = os.environ.get("NIYAM_SIGNING_KEY")
-    if env_key:
-        return env_key.encode("utf-8")
-    return None
+from niyam.core.identity import ensure_identity, sign_data, verify_signature
 
 
-def compute_manifest_hmac(manifest_files: dict[str, str], signing_key: bytes) -> str:
-    """Compute HMAC-SHA256 over canonical manifest content.
+def _get_signing_key(repo_root: Path | None = None) -> str:
+    """Get or create the local identity key."""
+    return ensure_identity(repo_root)
 
-    Creates a deterministic string from sorted file paths and their hashes,
-    then signs it with the provided key.
-    """
+
+def compute_manifest_signature(manifest_files: dict[str, str], signing_key: str) -> str:
+    """Compute HMAC-SHA256 over canonical manifest content."""
     canonical = "\n".join(f"{k}:{v}" for k, v in sorted(manifest_files.items()))
-    return hmac.new(signing_key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+    return sign_data(canonical, signing_key)
 
 
 def get_changed_files(repo_root: Path) -> list[str]:
@@ -74,7 +70,12 @@ def get_changed_files(repo_root: Path) -> list[str]:
         return []
 
 
-def run_mission_report(console: Console, mission_id: str | None = None) -> None:
+from niyam.core.saas import SaaSClient
+
+
+def run_mission_report(
+    console: Console, mission_id: str | None = None, upload: bool = False
+) -> None:
     """Generate final evidence package for the latest mission."""
     from niyam.core.config import find_niyam_root
     from niyam.core.errors import NiyamConfigError
@@ -280,13 +281,11 @@ def run_mission_report(console: Console, mission_id: str | None = None) -> None:
         "files": manifest_files,
     }
 
-    # Add HMAC signature if signing key is available
-    signing_key = _get_signing_key()
-    if signing_key:
-        manifest["hmac_sha256"] = compute_manifest_hmac(manifest_files, signing_key)
-        manifest["signed"] = True
-    else:
-        manifest["signed"] = False
+    # Add signature using the local identity key
+    signing_key = _get_signing_key(repo_root)
+    manifest["signature"] = compute_manifest_signature(manifest_files, signing_key)
+    manifest["signed"] = True
+    manifest["identity_path"] = str(get_niyam_dir(repo_root) / "identity.key")
 
     report_sections.append("## Cryptographic Integrity Manifest")
     report_sections.append("")
@@ -314,6 +313,15 @@ def run_mission_report(console: Console, mission_id: str | None = None) -> None:
     }
     with open(evidence_json, "w", encoding="utf-8") as f:
         json.dump(json_data, f, indent=2)
+
+    if upload:
+        try:
+            client = SaaSClient(repo_root)
+            console.print("[cyan]Uploading evidence to dashboard...[/]")
+            client.upload_report(json_data)
+            console.print("[bold green]✓[/] Dashboard sync complete.")
+        except Exception as e:
+            console.print(f"[bold yellow]Warning: Dashboard upload failed:[/] {e}")
 
     console.print(
         Panel(
@@ -388,30 +396,30 @@ def run_verify_report(evidence_path: str, console: Console) -> None:
             )
         raise SystemExit(1)
 
-    # Verify HMAC signature if the manifest was signed
-    hmac_status = "not signed"
+    # Verify signature
+    status_msg = "not signed"
     if manifest.get("signed"):
-        signing_key = _get_signing_key()
-        if signing_key:
-            expected_hmac = manifest.get("hmac_sha256", "")
-            actual_hmac = compute_manifest_hmac(manifest.get("files", {}), signing_key)
-            if not hmac.compare_digest(expected_hmac, actual_hmac):
-                console.print(
-                    "[bold red]❌ HMAC signature verification FAILED.[/] The manifest may have been tampered with."
-                )
-                raise SystemExit(1)
-            hmac_status = "[bold green]VERIFIED[/]"
-        else:
-            hmac_status = (
-                "[yellow]signed but NIYAM_SIGNING_KEY not set — cannot verify[/]"
+        signing_key = _get_signing_key(repo_root)
+        actual_signature = compute_manifest_signature(manifest.get("files", {}), signing_key)
+        expected_signature = manifest.get("signature") or manifest.get("hmac_sha256")
+        
+        if not expected_signature:
+             console.print("[bold red]❌ Signature verification FAILED.[/] No signature found in manifest.")
+             raise SystemExit(1)
+
+        if not hmac.compare_digest(actual_signature, expected_signature):
+            console.print(
+                "[bold red]❌ Cryptographic signature verification FAILED.[/] The manifest may have been tampered with or signed by a different identity."
             )
+            raise SystemExit(1)
+        status_msg = "[bold green]VERIFIED[/]"
 
     console.print(
         Panel(
             f"Mission ID: [bold cyan]{manifest.get('mission_id')}[/]\n"
             f"Signed On: [bold cyan]{manifest.get('timestamp')}[/]\n"
             f"Verified Files: [bold green]{verified_count}[/]\n"
-            f"HMAC Signature: {hmac_status}",
+            f"Signature: {status_msg}",
             title="[bold green]✓ Evidence Report Verified Successfully[/]",
             border_style="green",
         )

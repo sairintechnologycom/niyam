@@ -18,7 +18,7 @@ from niyam.core.config import (
     load_niyam_config,
     save_niyam_config,
 )
-from niyam.core.context import _scan_repo
+from niyam.core.scanner.stack_detector import detect_stack as _scan_repo
 from niyam.core.init import run_init
 from niyam.mission.planner import run_mission_plan
 

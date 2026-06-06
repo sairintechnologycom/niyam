@@ -6,7 +6,7 @@ import json
 import yaml
 from pathlib import Path
 
-from niyam.mission.executor import parse_cli_token_usage, update_token_ledger
+from niyam.mission.task_runner import parse_cli_token_usage, update_token_ledger
 
 
 def test_parse_claude_cli_output() -> None:

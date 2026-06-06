@@ -129,6 +129,14 @@ def validate_command(cmd: str, repo_root: Path | None = None) -> list[str]:
                 # Skip flags/options (e.g., -r, -f, --recursive)
                 if arg.startswith("-"):
                     continue
+
+                # BLOCK WILDCARDS (*) to prevent destructive broad matches
+                if "*" in arg:
+                    raise CommandSecurityError(
+                        f"Wildcards ('*') are blocked in '{executable}' arguments for safety. "
+                        "Specify individual file paths instead."
+                    )
+
                 # Check if this argument resolves outside repo_root
                 try:
                     resolved_arg = (repo_resolved / arg).resolve()
@@ -139,7 +147,31 @@ def validate_command(cmd: str, repo_root: Path | None = None) -> list[str]:
                         "File manipulation outside the repository root is blocked."
                     )
 
-        # 2. Check Docker volume/mount arguments
+                # Special protection for root-level critical files/dirs
+                if resolved_arg == repo_resolved:
+                    raise CommandSecurityError(
+                        f"Command '{executable}' is blocked from targeting the repository root directly."
+                    )
+
+        # 2. Check Git commands
+        elif executable == "git":
+            blocked_git_args = {"--force", "-f", "--mirror", "--delete"}
+            # Specifically block destructive operations on protected branches or force updates
+            for arg in parts[1:]:
+                if arg in blocked_git_args:
+                    raise CommandSecurityError(
+                        f"Destructive Git flag '{arg}' is blocked for safety. Force updates are not allowed."
+                    )
+            
+            # Block push to main/master directly if detected
+            if "push" in parts:
+                for arg in parts:
+                    if arg in ("main", "master", "prod", "production"):
+                        raise CommandSecurityError(
+                            f"Direct Git push to protected branch '{arg}' is blocked. Use a pull request instead."
+                        )
+
+        # 3. Check Docker volume/mount arguments
         elif executable in {"docker", "docker-compose"}:
             for arg in parts[1:]:
                 # Check for volume mapping flags like -v host_path:container_path
@@ -147,22 +179,16 @@ def validate_command(cmd: str, repo_root: Path | None = None) -> list[str]:
                 if ":" in arg and not arg.startswith("-"):
                     parts_mount = arg.split(":")
                     host_part = parts_mount[0]
-                    if (
-                        "/" in host_part
-                        or "\\" in host_part
-                        or ".." in host_part
-                        or host_part.startswith(".")
-                    ):
-                        if host_part == "/var/run/docker.sock":
-                            continue
-                        try:
-                            resolved_host = (repo_resolved / host_part).resolve()
-                            resolved_host.relative_to(repo_resolved)
-                        except ValueError:
-                            raise CommandSecurityError(
-                                f"Docker volume host path '{host_part}' resolves outside the repository root. "
-                                "Mounting directories outside the repository root is blocked."
-                            )
+                    if host_part == "/var/run/docker.sock":
+                        continue
+                    try:
+                        resolved_host = (repo_resolved / host_part).resolve()
+                        resolved_host.relative_to(repo_resolved)
+                    except ValueError:
+                        raise CommandSecurityError(
+                            f"Docker volume host path '{host_part}' resolves outside the repository root. "
+                            "Mounting directories outside the repository root is blocked."
+                        )
                 elif "source=" in arg:
                     for sub in arg.split(","):
                         if sub.startswith("source="):

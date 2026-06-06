@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from niyam.governance.common.redaction import contains_secret
+
+logger = logging.getLogger(__name__)
 
 
 def evaluate_decision(
@@ -67,8 +70,8 @@ def evaluate_decision(
                             triggered_blockers.append(
                                 "Committed environment configuration file (.env) with possible secrets."
                             )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to check .env file %s: %s", fpath, e)
 
         # Blocker 2: private key exposure
         # Check both finding descriptions and file content if available
@@ -86,8 +89,8 @@ def evaluate_decision(
                         triggered_blockers.append(
                             f"Obvious private key committed in source code: {fpath}"
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to check file content for private keys in %s: %s", fpath, e)
 
         # Check for public cloud exposure patterns in file content
         if project_root and fpath:
@@ -100,8 +103,8 @@ def evaluate_decision(
                         triggered_blockers.append(
                             f"Public cloud exposure pattern detected in source code: {fpath}"
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to check file content for cloud patterns in %s: %s", fpath, e)
 
     # 2. Blocker 3: no auth on detected API in enterprise profile
     # Let's inspect findings to see if there is a missing auth on API

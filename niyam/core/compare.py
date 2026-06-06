@@ -11,11 +11,8 @@ from rich.table import Table
 
 from niyam.core.config import find_niyam_root, get_niyam_dir, load_project_config
 from niyam.mission.planner import resolve_mission_id
-from niyam.mission.executor import (
-    load_plan,
-    execute_single_task,
-    cleanup_worktree,
-)
+from niyam.mission.task_runner import load_plan, execute_single_task
+from niyam.mission.worktree import cleanup_worktree
 
 
 def run_comparison(task_id: str, executors_str: str, console: Console) -> None:

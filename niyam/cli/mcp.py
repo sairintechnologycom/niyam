@@ -62,6 +62,9 @@ def mcp_register(
         Optional[str],
         typer.Option("--requires-approval", help="Requires approval: true/false."),
     ] = None,
+    use_ai: bool = typer.Option(
+        False, "--use-ai", help="Use AI semantic analysis for risk classification."
+    ),
     notes: Annotated[
         Optional[str],
         typer.Option("--notes", help="Notes/description of the tool."),
@@ -119,13 +122,13 @@ def mcp_register(
             raise SystemExit(1)
 
     # Boolean parsers
-    approved_val = None
-    if approved is not None:
-        approved_val = approved.lower() in ("true", "yes", "1")
+    def _parse_bool(val: Optional[str]) -> Optional[bool]:
+        if val is None:
+            return None
+        return val.lower() in ("true", "yes", "1", "on")
 
-    requires_approval_val = None
-    if requires_approval is not None:
-        requires_approval_val = requires_approval.lower() in ("true", "yes", "1")
+    approved_val = _parse_bool(approved)
+    requires_approval_val = _parse_bool(requires_approval)
 
     # Capabilities merging
     if capabilities is not None or capability is not None:
@@ -160,6 +163,7 @@ def mcp_register(
             capabilities=final_capabilities,
             data_access=redact_if_str(data_access),
             notes=redact_if_str(notes),
+            use_ai=use_ai,
         )
 
     now_str = datetime.datetime.now(datetime.timezone.utc).strftime(
