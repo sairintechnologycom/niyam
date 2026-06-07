@@ -775,6 +775,37 @@ def execute_single_task(
                 repo_root, run_dir, mission_id, task, console, branch_name=branch_name
             )
             task_cwd = worktree_path
+
+            # Inject task-specific active guardrails (Task Isolation)
+            try:
+                allowed_list = task.get("allowed_files") or task.get("files_allowed") or ["*"]
+                blocked_list = task.get("blocked_list") or task.get("blocked_files") or []
+                
+                hook_cache_dir = worktree_path / ".niyam" / "hook-cache"
+                hook_cache_dir.mkdir(parents=True, exist_ok=True)
+                hook_config_path = hook_cache_dir / "guard-config.json"
+                
+                # Load existing base config to preserve global deny lists
+                base_config = {}
+                if hook_config_path.exists():
+                    try:
+                        base_config = json.loads(hook_config_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+                
+                task_hook_config = {
+                    "guard_enabled": True,
+                    "deny_patterns": base_config.get("deny_patterns", []),
+                    "warn_patterns": base_config.get("warn_patterns", []),
+                    "deny_write_patterns": blocked_list + base_config.get("deny_write_patterns", []),
+                    "allow_write_patterns": base_config.get("allow_write_patterns", []),
+                    "frozen_paths": allowed_list, # Restrict active writes to this task's scope
+                }
+                hook_config_path.write_text(json.dumps(task_hook_config, indent=2), encoding="utf-8")
+            except Exception as e:
+                with print_lock:
+                    console.print(f"[{task_id}] [dim yellow]Warning: Failed to inject task-specific guardrails: {e}[/]")
+
         except Exception as e:
             transition_task(run_dir, task_id, "failed", reason=f"Failed to setup worktree: {e}")
             with print_lock:

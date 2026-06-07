@@ -1,0 +1,47 @@
+rules:
+  - id: PY001
+    title: Missing Python Dependency Specification
+    category: dependencies
+    severity: high
+    match:
+      type: file_missing
+      patterns:
+        - requirements.txt
+        - pyproject.toml
+        - setup.py
+        - Pipfile
+        - uv.lock
+    description: Python projects should specify dependencies in a standard file.
+    recommendation: Create a requirements.txt or pyproject.toml file.
+    remediation_effort: medium
+    tags: [python, dependencies]
+
+  - id: PY002
+    title: Missing Python Test Suite
+    category: dependencies
+    severity: medium
+    match:
+      type: directory_missing
+      patterns:
+        - tests
+        - test
+    description: No tests directory found.
+    recommendation: Create a tests/ directory and add unit tests.
+    remediation_effort: medium
+    tags: [python, testing]
+
+  - id: PY003
+    title: Python Linter Config Missing
+    category: production_ops
+    severity: low
+    match:
+      type: file_missing
+      patterns:
+        - .ruff.toml
+        - ruff.toml
+        - .flake8
+        - .pylintrc
+    description: Linting helps maintain code quality and catch errors early.
+    recommendation: Add a configuration file for ruff, flake8, or pylint.
+    remediation_effort: low
+    tags: [python, quality]

@@ -56,22 +56,63 @@ DEFAULT_PRICING = {
 
 
 def load_pricing(root: Path | None = None) -> dict:
-    """Load configurable model pricing rates, creating default configuration if missing."""
+    """Load configurable model pricing rates, creating default configuration if missing.
+
+    If saas.pricing_url is configured in niyam.yaml, attempts to fetch and update
+    the local pricing cache.
+    """
+    from niyam.core.config import load_niyam_config
+    import urllib.request
+    import urllib.error
+
     path = get_pricing_path(root)
-    if not path.exists():
+    pricing = DEFAULT_PRICING
+
+    # 1. Load local pricing if it exists
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                pricing = json.load(f)
+        except Exception as e:
+            logger.debug("Failed to load local pricing file %s: %s", path, e)
+
+    # 2. Check for remote pricing URL
+    remote_url = None
+    try:
+        config_root = root if root else find_niyam_root()
+        if config_root:
+            config = load_niyam_config(config_root)
+            remote_url = config.saas.pricing_url
+    except Exception:
+        pass
+
+    # 3. Fetch remote pricing if URL is set
+    if remote_url:
+        try:
+            with urllib.request.urlopen(remote_url, timeout=5) as response:
+                remote_data = json.loads(response.read().decode("utf-8"))
+                if isinstance(remote_data, dict):
+                    pricing = remote_data
+                    # Update local cache
+                    try:
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(path, "w", encoding="utf-8") as f:
+                            json.dump(pricing, f, indent=2)
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug("Failed to fetch remote pricing from %s: %s", remote_url, e)
+
+    # 4. Initialize default if still empty or missing and local doesn't exist
+    if not path.exists() and not remote_url:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_PRICING, f, indent=2)
-        except Exception as e:
-            logger.debug("Failed to create default pricing file at %s: %s", path, e)
-        return DEFAULT_PRICING
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.debug("Failed to load pricing file %s: %s", path, e)
-        return DEFAULT_PRICING
+        except Exception:
+            pass
+
+    return pricing
 
 
 def calculate_cost(

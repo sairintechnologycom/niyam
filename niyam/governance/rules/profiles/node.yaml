@@ -1,0 +1,28 @@
+rules:
+  - id: NODE001
+    title: Missing Node.js Lockfile
+    category: dependencies
+    severity: high
+    match:
+      type: file_missing
+      patterns:
+        - package-lock.json
+        - yarn.lock
+        - pnpm-lock.yaml
+    description: Node.js projects should use a lockfile to ensure reproducible builds.
+    recommendation: Run npm install, yarn install, or pnpm install to generate a lockfile.
+    remediation_effort: low
+    tags: [node, dependencies]
+
+  - id: NODE002
+    title: Node.js package.json Missing
+    category: dependencies
+    severity: critical
+    match:
+      type: file_missing
+      patterns:
+        - package.json
+    description: Node.js projects must have a package.json file.
+    recommendation: Run npm init to create a package.json file.
+    remediation_effort: low
+    tags: [node, dependencies]

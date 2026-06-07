@@ -376,9 +376,14 @@ def check_file_path(file_path):
         }}
 
     if FROZEN_PATHS:
-        for allowed_path in FROZEN_PATHS:
-            if file_path.startswith(allowed_path):
+        # If "*" is in frozen_paths, everything is allowed (unless blocked by other policies)
+        if "*" in FROZEN_PATHS:
+            return {{"allowed": True}}
+            
+        for allowed_pat in FROZEN_PATHS:
+            if fnmatch.fnmatch(file_path, allowed_pat) or file_path.startswith(allowed_pat):
                 return {{"allowed": True}}
+        
         log_policy_event("BLOCKED", "File outside frozen scope: " + file_path)
         return {{
             "allowed": False,
@@ -387,6 +392,7 @@ def check_file_path(file_path):
             + "' is outside the allowed scope: "
             + str(FROZEN_PATHS),
         }}
+
 
     return {{"allowed": True}}
 

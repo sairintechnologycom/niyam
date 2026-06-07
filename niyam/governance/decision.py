@@ -195,15 +195,16 @@ def evaluate_decision(
         overridden_score = min(69, score)
         decision_reason = "Hard blocker triggered: " + " | ".join(triggered_blockers)
     else:
-        # Map normal score thresholds
-        if score >= 85:
+        # Decision based on score
+        if score >= 90:
             decision = "GO"
-        elif score >= 70:
+        elif score >= 75:
             decision = "CONDITIONAL_GO"
         elif score >= 50:
             decision = "HIGH_RISK"
         else:
             decision = "NO_GO"
             decision_reason = "Readiness score is below 50."
+
 
     return decision, decision_reason, overridden_score

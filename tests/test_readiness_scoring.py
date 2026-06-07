@@ -105,7 +105,7 @@ def test_no_auth_on_api_in_enterprise_profile() -> None:
     )
     # startup auth weight is 15, deduction is 15 => auth score is 0. Total score = 100 - 15 = 85.
     assert score_startup == 85
-    assert decision_startup == "GO"
+    assert decision_startup == "CONDITIONAL_GO"
 
     # 2. Enterprise profile (should trigger blocker override -> NO_GO)
     score_ent, _, _ = calculate_readiness_score(findings, profile="enterprise")
@@ -203,7 +203,7 @@ def test_scoring_medium_only_findings() -> None:
     # startup dependencies weight is 15, deduction is 3*8 = 24 => score for dependencies is 0. Total score = 85.
     assert score_3 == 85
     decision_3, _, _ = evaluate_decision(findings_3, score_3, profile="startup")
-    assert decision_3 == "GO"
+    assert decision_3 == "CONDITIONAL_GO"
 
     # 4 medium findings across different categories
     findings_4 = [
@@ -253,7 +253,7 @@ def test_scoring_medium_only_findings() -> None:
     # Total score = 20 (secrets) + 15 (auth) + 7 (dependencies) + 7 (cloud) + 2 (ops) + 10 (ai) + 10 (data) + 0 (docs) = 71
     assert score_4 == 71
     decision_4, _, _ = evaluate_decision(findings_4, score_4, profile="startup")
-    assert decision_4 == "CONDITIONAL_GO"
+    assert decision_4 == "HIGH_RISK"
 
 
 def test_scoring_clamping() -> None:

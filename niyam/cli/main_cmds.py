@@ -480,6 +480,18 @@ Format your response as a numbered list of 3 questions.
 
 
 @app.command()
+def status(
+    mission: Annotated[
+        Optional[str], typer.Option("--mission", help="Mission ID to show status for.")
+    ] = None,
+) -> None:
+    """Display the status of the latest planned or active mission (Alias for 'niyam mission show')."""
+    from niyam.cli.mission import mission_show
+
+    mission_show(mission_id=mission)
+
+
+@app.command()
 def start(
     runtime: Annotated[
         Optional[Runtime],

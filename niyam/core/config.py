@@ -73,6 +73,7 @@ class SaaSConfig(BaseModel):
     api_key: Optional[str] = None
     project_id: Optional[str] = None
     organization_id: Optional[str] = None
+    pricing_url: Optional[str] = None
 
 
 class GovernanceConfig(BaseModel):
