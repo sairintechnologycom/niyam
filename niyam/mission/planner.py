@@ -428,6 +428,7 @@ def run_mission_plan(
     console: Console = None,
     template: str | None = None,
     runtime_override: str | None = None,
+    auto_heal_override: bool | None = None,
 ) -> str:
     """Generate a mission plan from a requirements file."""
     if console is None:
@@ -615,6 +616,7 @@ def run_mission_plan(
                 "orchestrator": runtime_override
                 or (config.runtimes[0] if config and config.runtimes else "claude"),
                 "parallel": 1,
+                "auto_heal": False if auto_heal_override is None else auto_heal_override,
             },
             "tasks": rendered_tasks,
         }
@@ -914,6 +916,7 @@ def run_mission_plan(
                     "status": "planned",
                     "orchestrator": runtime_override or "claude",
                     "parallel": 1,
+                    "auto_heal": False if auto_heal_override is None else auto_heal_override,
                 },
                 "tasks": rendered_tasks,
             }
@@ -929,6 +932,7 @@ def run_mission_plan(
                     "status": "planned",
                     "orchestrator": runtime_override or "claude",
                     "parallel": 1,
+                    "auto_heal": False if auto_heal_override is None else auto_heal_override,
                 },
                 "tasks": [
                     {

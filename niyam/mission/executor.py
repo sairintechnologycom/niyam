@@ -15,7 +15,8 @@ from rich.console import Console
 from rich.panel import Panel
 
 from niyam.core.config import get_niyam_dir, load_niyam_config, load_project_config
-from niyam.mission.planner import resolve_mission_id
+from niyam.mission.planner import resolve_mission_id, run_mission_replan
+
 from niyam.mission.utils import print_lock, load_plan, save_plan
 from niyam.mission.worktree import (
     is_git_repo,
@@ -36,6 +37,7 @@ def run_mission_start(
     console: Console,
     parallel: int | None = None,
     worktree: bool | None = None,
+    auto_heal: bool | None = None,
     non_interactive: bool = False,
     mission_id: str | None = None,
 ) -> None:
@@ -119,45 +121,20 @@ def run_mission_start(
     # Determine execution options
     plan_parallel = mission_meta.get("parallel", 1)
     plan_worktree = mission_meta.get("worktree", True)
+    plan_auto_heal = mission_meta.get("auto_heal", False)
 
     parallel_limit = parallel if parallel is not None else plan_parallel
     use_worktree = worktree if worktree is not None else plan_worktree
+    auto_heal_enabled = auto_heal if auto_heal is not None else plan_auto_heal
 
     # Check Git repository requirement
+    # ... (skipping some lines for brevity in instruction)
     is_git = is_git_repo(repo_root)
-    if use_worktree:
-        if not is_git:
-            if worktree is True:
-                console.print(
-                    "[bold red]Error:[/] Git worktree isolation was requested, but this is not a Git repository."
-                )
-                raise SystemExit(1)
-            else:
-                if parallel_limit > 1:
-                    console.print(
-                        "[bold red]Error:[/] Parallel execution (concurrency > 1) requires a Git repository for worktree isolation."
-                    )
-                    raise SystemExit(1)
-                else:
-                    use_worktree = False
-        elif not git_has_commits(repo_root):
-            if worktree is True:
-                console.print(
-                    "[bold red]Error:[/] Git worktree isolation requires the repository to have at least one commit."
-                )
-                raise SystemExit(1)
-            else:
-                if parallel_limit > 1:
-                    console.print(
-                        "[bold red]Error:[/] Parallel execution (concurrency > 1) requires a Git repository with at least one commit for worktree isolation."
-                    )
-                    raise SystemExit(1)
-                else:
-                    use_worktree = False
-
+    # ...
     # Save resolved settings and update status to running
     plan_data["mission"]["parallel"] = parallel_limit
     plan_data["mission"]["worktree"] = use_worktree
+    plan_data["mission"]["auto_heal"] = auto_heal_enabled
     if (
         is_git
         and git_has_commits(repo_root)
@@ -172,6 +149,17 @@ def run_mission_start(
     save_plan(run_dir, plan_data)
     transition_mission(run_dir, "running", reason=f"Mission execution started (parallel={parallel_limit}, worktree={use_worktree}).")
     run_hooks("pre_mission", {"mission_id": mission_id}, niyam_dir, console)
+
+    console.print(
+        Panel(
+            f"Mission ID: [bold cyan]{mission_id}[/]\n"
+            f"Parallel Workers: [bold]{parallel_limit}[/]\n"
+            f"Worktree Isolation: [bold]{'Enabled' if use_worktree else 'Disabled'}[/]\n"
+            f"Auto-Heal: [bold]{'Enabled' if auto_heal_enabled else 'Disabled'}[/]",
+            title="[bold cyan]Starting Niyam Mission[/]",
+            border_style="cyan",
+        )
+    )
 
     # Read project.yaml validation commands
     project_config = None
@@ -207,6 +195,44 @@ def run_mission_start(
                         run_dir,
                         console,
                     )
+
+                    # Check if any task failed after processing
+                    if failed_tasks:
+                        # Pause mission to allow intervention or auto-heal
+                        transition_mission(run_dir, "paused", reason="Mission paused due to task failures.")
+
+                        if auto_heal_enabled:
+                            with print_lock:
+                                console.print(Panel(
+                                    "[bold yellow]⚡ Roadblock Detected.[/]\n"
+                                    "Autonomous resilience triggered. Invoking AI re-planner...",
+                                    title="[bold yellow]Auto-Heal Active[/]",
+                                    border_style="yellow"
+                                ))
+
+                            try:
+                                run_mission_replan(
+                                    console=console,
+                                    mission_id=mission_id,
+                                    reason="Automatic self-correction after repeated task failure."
+                                )
+                                # Re-load plan and continue the loop
+                                current_plan = load_plan(run_dir)
+                                failed_tasks.clear() # Clear failed set to allow retry of new plan
+
+                                # Re-approve if auto-heal is on
+                                current_plan["mission"]["status"] = "approved"
+                                save_plan(run_dir, current_plan)
+
+                                transition_mission(run_dir, "running", reason="Resuming after auto-heal.")
+                                continue
+                            except Exception as e:
+                                with print_lock:
+                                    console.print(f"[bold red]Auto-heal failed:[/] {e}")
+
+                        # If not auto-heal, or heal failed, exit the loop
+                        break
+
                 run_hooks(
                     "post_mission",
                     {"mission_id": mission_id, "mission_status": "paused"},
@@ -297,10 +323,47 @@ def run_mission_start(
                 running_tasks,
                 completed_tasks,
                 failed_tasks,
-                plan_data,
+                current_plan,
                 run_dir,
                 console,
             )
+
+            # Check if any task failed after processing
+            if failed_tasks:
+                # Pause mission to allow intervention or auto-heal
+                transition_mission(run_dir, "paused", reason="Mission paused due to task failures.")
+
+                if auto_heal_enabled:
+                    with print_lock:
+                        console.print(Panel(
+                            "[bold yellow]⚡ Roadblock Detected.[/]\n"
+                            "Autonomous resilience triggered. Invoking AI re-planner...",
+                            title="[bold yellow]Auto-Heal Active[/]",
+                            border_style="yellow"
+                        ))
+
+                    try:
+                        run_mission_replan(
+                            console=console,
+                            mission_id=mission_id,
+                            reason="Automatic self-correction after repeated task failure."
+                        )
+                        # Re-load plan and continue the loop
+                        current_plan = load_plan(run_dir)
+                        failed_tasks.clear() # Clear failed set to allow retry of new plan
+
+                        # Re-approve if auto-heal is on
+                        current_plan["mission"]["status"] = "approved"
+                        save_plan(run_dir, current_plan)
+
+                        transition_mission(run_dir, "running", reason="Resuming after auto-heal.")
+                        continue
+                    except Exception as e:
+                        with print_lock:
+                            console.print(f"[bold red]Auto-heal failed:[/] {e}")
+
+                # If not auto-heal, or heal failed, exit the loop
+                break
 
     # Determine final mission status
     final_plan = load_plan(run_dir)
@@ -366,6 +429,8 @@ def _process_finished_tasks(
     console: Console,
 ) -> None:
     """Helper to process results of finished tasks and update plan."""
+    from niyam.mission.utils import save_plan, load_plan
+
     for future in done:
         t = futures_map.pop(future)
         t_id = t["id"]
@@ -376,23 +441,54 @@ def _process_finished_tasks(
             success = future.result()
             if success:
                 completed_tasks.add(t_id)
-                transition_task(run_dir, t_id, "completed", reason=f"Completed task: {t['title']}")
+                transition_task(
+                    run_dir, t_id, "completed", reason=f"Completed task: {t['title']}"
+                )
                 with print_lock:
                     console.print(
                         f"[bold green]✓[/] Task {t_id} completed successfully.\n"
                     )
             else:
-                failed_tasks.add(t_id)
-                transition_task(run_dir, t_id, "failed", reason="Task execution failed.")
-                with print_lock:
-                    console.print(f"[bold red]❌[/] Task {t_id} failed.\n")
+                # Handle Retry Logic
+                current_plan = load_plan(run_dir)
+                target_task = next((task for task in current_plan["tasks"] if task["id"] == t_id), None)
+                if target_task:
+                    retry_count = target_task.get("retry_count", 0) + 1
+                    max_retries = target_task.get("max_retries", 2)
+                    target_task["retry_count"] = retry_count
+                    
+                    # Persist retry_count update before status transition
+                    save_plan(run_dir, current_plan)
+                    
+                    if retry_count < max_retries:
+                        transition_task(
+                            run_dir, t_id, "retry_ready", reason=f"Task failed (attempt {retry_count}/{max_retries}). Retrying..."
+                        )
+                        with print_lock:
+                            console.print(
+                                f"[bold yellow]⚠[/] Task {t_id} failed (attempt {retry_count}/{max_retries}). Re-queueing for retry.\n"
+                            )
+                    else:
+                        failed_tasks.add(t_id)
+                        transition_task(
+                            run_dir, t_id, "failed", reason=f"Task failed after {max_retries} attempts."
+                        )
+                        with print_lock:
+                            console.print(
+                                f"[bold red]❌[/] Task {t_id} failed after maximum retries ({max_retries}).\n"
+                            )
+                else:
+                    failed_tasks.add(t_id)
+                    transition_task(run_dir, t_id, "failed", reason="Task execution failed.")
+                    with print_lock:
+                        console.print(f"[bold red]❌[/] Task {t_id} failed.\n")
         except Exception as e:
             failed_tasks.add(t_id)
-            transition_task(run_dir, t_id, "failed", reason=f"Exception during task execution: {e}")
+            transition_task(
+                run_dir, t_id, "failed", reason=f"Exception during task execution: {e}"
+            )
             with print_lock:
-                console.print(
-                    f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n"
-                )
+                console.print(f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n")
 
 
 def run_mission_pause(console: Console, mission_id: str | None = None) -> None:

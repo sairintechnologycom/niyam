@@ -242,6 +242,8 @@ class TaskContract(BaseModel):
     approval_required: bool = False
     tdd_required: Optional[bool] = None
     commit_sha: Optional[str] = None
+    retry_count: int = 0
+    max_retries: int = 2
 
 
 class MissionMeta(BaseModel):
@@ -265,6 +267,7 @@ class MissionMeta(BaseModel):
     orchestrator: str
     parallel: int = 1
     worktree: bool = True
+    auto_heal: bool = False
     base_sha: Optional[str] = None
 
 

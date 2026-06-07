@@ -250,18 +250,27 @@ def mission_start(
         Optional[str],
         typer.Option("--mission", help="Mission ID to start."),
     ] = None,
-) -> None:
+    auto_heal: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--auto-heal/--no-auto-heal",
+            help="Enable or disable autonomous resilience mid-mission.",
+        ),
+    ] = None,
+    ) -> None:
     """Start or resume the latest approved mission."""
     from niyam.mission.executor import run_mission_start
 
     try:
         run_mission_start(
+            console=console,
             parallel=parallel,
             worktree=worktree,
+            auto_heal=auto_heal,
             non_interactive=non_interactive,
-            console=console,
             mission_id=mission_id,
         )
+
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

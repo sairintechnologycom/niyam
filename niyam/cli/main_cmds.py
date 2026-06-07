@@ -167,6 +167,7 @@ def run(
         console=console,
         template=template,
         runtime_override=runtime.value if runtime else None,
+        auto_heal_override=auto_heal,
     )
 
     # 4. Approve plan
@@ -178,6 +179,7 @@ def run(
     run_mission_start(
         parallel=parallel,
         worktree=worktree,
+        auto_heal=auto_heal,
         non_interactive=auto_approve,
         console=console,
     )

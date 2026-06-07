@@ -212,6 +212,21 @@ def mission_action(mission_id: str, action: str):
             message="Mission cancelled successfully.",
             new_status="cancelled",
         )
+    elif action == "replan":
+        from niyam.mission.planner import run_mission_replan
+        try:
+            run_mission_replan(
+                console=Console(quiet=True),
+                mission_id=mission_id,
+                reason="Re-plan requested via API Portal."
+            )
+            return ActionResponse(
+                success=True,
+                message="Mission re-planned successfully.",
+                new_status="planned",
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported action: {action}")
 
