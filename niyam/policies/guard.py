@@ -624,6 +624,28 @@ def run_guard_run(
                 policy_decision = "approval_required"
                 break
 
+    # 4. MCP/Tool Registry Check
+    if not matched_rule:
+        try:
+            from niyam.core.mcp import load_mcp_registry
+            registry = load_mcp_registry(root)
+            for tool_name, tool in registry.tools.items():
+                # Check if command string contains the tool command or name
+                if tool.command_or_url and (tool.command_or_url in command_str or tool_name in command_str):
+                    if not tool.approved:
+                        if tool.risk_level in ("high", "critical"):
+                            matched_rule = f"mcp_unapproved:{tool_name}"
+                            reason = f"Unapproved {tool.risk_level} risk tool from registry: '{tool_name}'"
+                            policy_decision = "block"
+                            break
+                        elif tool.risk_level == "medium":
+                            matched_rule = f"mcp_unapproved:{tool_name}"
+                            reason = f"Unapproved medium risk tool from registry: '{tool_name}'"
+                            policy_decision = "approval_required"
+                            break
+        except Exception:
+            pass
+
     def write_log(
         exit_code: int,
         duration_ms: int,

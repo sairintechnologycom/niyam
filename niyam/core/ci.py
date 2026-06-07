@@ -21,7 +21,10 @@ from niyam.policies.guard import load_security_policy
 
 
 def run_ci_verify(
-    target_branch: str = "main", strict: bool = True, console: Console = None
+    target_branch: str = "main", 
+    strict: bool = True, 
+    min_score: int = 50,
+    console: Console = None
 ) -> None:
     """Verify cryptographic integrity, guardrails, and validation status for CI/CD."""
     if console is None:
@@ -38,18 +41,57 @@ def run_ci_verify(
     mission_id = resolve_mission_id(niyam_dir)
     run_dir = niyam_dir / "runs" / mission_id if mission_id else None
     evidence_path = run_dir / "evidence.md" if run_dir else None
+    scan_results_path = run_dir / "scan-report.json" if run_dir else None
+    if not scan_results_path or not scan_results_path.exists():
+        # Check fallback names
+        if run_dir:
+            for fname in ["scan.json", "evidence.json"]:
+                if (run_dir / fname).exists():
+                    scan_results_path = run_dir / fname
+                    break
 
     integrity_status = "skipped"
     policy_status = "passed"
     validation_status = "passed"
+    governance_status = "passed"
     failures = []
 
     console.print("[cyan]Niyam CI/CD Verification[/]")
     console.print(f"Target Branch: [bold cyan]{target_branch}[/]")
     console.print(f"Strict Mode: [bold]{'Enabled' if strict else 'Disabled'}[/]")
+    console.print(f"Min Readiness Score: [bold]{min_score}[/]")
     console.print(f"Latest Mission: [bold cyan]{mission_id or 'None'}[/]\n")
 
-    # 1. Cryptographic Evidence Integrity Check
+    # 1. Readiness Score Check
+    if scan_results_path and scan_results_path.exists():
+        console.print("[cyan]Checking governance readiness score...[/]")
+        try:
+            with open(scan_results_path, encoding="utf-8") as f:
+                scan_data = json.load(f)
+                score = scan_data.get("score") or scan_data.get("readiness_score")
+                decision = scan_data.get("decision", "UNKNOWN")
+                
+                if score is not None:
+                    console.print(f"  Current Score: [bold]{score}[/] (Decision: [bold]{decision}[/])")
+                    if score < min_score:
+                        failures.append(f"Readiness score {score} is below minimum requirement of {min_score}.")
+                        governance_status = "failed"
+                    elif decision == "NO_GO":
+                        failures.append("Governance decision is NO_GO due to hard blockers.")
+                        governance_status = "failed"
+                    else:
+                        console.print(f"  [bold green]✓[/] Readiness score passes threshold.")
+        except Exception as e:
+            console.print(f"[bold yellow]⚠ Warning:[/] Failed to parse scan results: {e}")
+    else:
+        if strict:
+            failures.append("No scan results or evidence found for latest mission.")
+            governance_status = "failed"
+            console.print("[bold red]❌ Governance check failed:[/] No scan report found.")
+        else:
+            console.print("[bold yellow]⚠ Warning:[/] No scan report found. Skipping score checks (non-strict mode).")
+
+    # 2. Cryptographic Evidence Integrity Check
     if not evidence_path or not evidence_path.exists():
         if strict:
             failures.append("Evidence report (evidence.md) not found.")
@@ -208,6 +250,7 @@ def run_ci_verify(
     report_data = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "mission_id": mission_id or "",
+        "governance_status": governance_status,
         "integrity_status": integrity_status,
         "policy_status": policy_status,
         "validation_status": validation_status,
@@ -224,6 +267,7 @@ def run_ci_verify(
     # Summary Panel
     success = len(failures) == 0
     summary_text = (
+        f"Governance score: [bold {'green]PASSED' if governance_status == 'passed' else 'red]FAILED'}\n"
         f"Integrity check: [bold {'green]PASSED' if integrity_status == 'passed' else 'red]FAILED' if integrity_status == 'failed' else 'yellow]SKIPPED'}\n"
         f"Policy checks: [bold {'green]PASSED' if policy_status == 'passed' else 'red]FAILED'}\n"
         f"Validation checks: [bold {'green]PASSED' if validation_status == 'passed' else 'red]FAILED'}\n"

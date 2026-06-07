@@ -10,6 +10,7 @@ def execute_generate_evidence(
     fmt: str = "markdown",
     output: str | None = None,
     include: str = "scan,guard,mcp,cost",
+    mission_id: str | None = None,
 ) -> str:
     """Generate evidence report (Experimental)."""
     return run_generate_evidence(
@@ -17,4 +18,5 @@ def execute_generate_evidence(
         fmt=fmt,
         output=output,
         include=include,
+        mission_id=mission_id,
     )

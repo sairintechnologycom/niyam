@@ -171,6 +171,18 @@ def run_mission_report(
         except Exception:
             pass
 
+    # 4c. Collect Scan Results
+    scan_results = None
+    for fname in ["scan-report.json", "scan.json", "evidence.json"]:
+        path = run_dir / fname
+        if path.exists():
+            try:
+                with open(path, encoding="utf-8") as f:
+                    scan_results = json.load(f)
+                    break
+            except Exception:
+                pass
+
     # 5. Build final evidence.md content
     report_sections = []
     report_sections.append(f"# Niyam Mission Evidence Package - {mission_id}")
@@ -183,6 +195,13 @@ def run_mission_report(
     )
     report_sections.append(f"- **Status:** `{status.upper()}`")
     report_sections.append(f"- **Orchestrator:** `{orchestrator}`")
+    
+    if scan_results:
+        score = scan_results.get("score") or scan_results.get("readiness_score", 0)
+        decision = scan_results.get("decision", "UNKNOWN")
+        report_sections.append(f"- **Readiness Score:** `{score}/100`")
+        report_sections.append(f"- **Governance Decision:** `{decision}`")
+
     report_sections.append("")
     
     if base_sha:
@@ -343,6 +362,9 @@ def run_mission_report(
         "created": created,
         "completed": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "orchestrator": orchestrator,
+        "readiness_score": scan_results.get("score") if scan_results else None,
+        "decision": scan_results.get("decision") if scan_results else None,
+        "scan_results": scan_results,
         "tasks": plan_data.get("tasks", []),
         "policy_events": policy_events,
         "execution_log": mission_events,

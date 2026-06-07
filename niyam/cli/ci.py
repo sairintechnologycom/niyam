@@ -26,12 +26,24 @@ def ci_verify(
             help="Fail build on integrity warnings or missing evidence.",
         ),
     ] = True,
+    min_score: Annotated[
+        int,
+        typer.Option(
+            "--min-score",
+            help="Minimum readiness score required to pass.",
+        ),
+    ] = 50,
 ) -> None:
     """Verify cryptographic integrity, guardrails, and validation status for CI/CD."""
     from niyam.core.ci import run_ci_verify
 
     try:
-        run_ci_verify(target_branch=target, strict=strict, console=console)
+        run_ci_verify(
+            target_branch=target, 
+            strict=strict, 
+            min_score=min_score,
+            console=console
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)

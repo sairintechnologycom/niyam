@@ -81,3 +81,7 @@ class SaaSClient:
             "payload": payload
         }
         return self._request("POST", path, data=data)
+
+    def ping(self) -> dict:
+        """Verify API connectivity and key validity."""
+        return self._request("GET", "auth/ping")

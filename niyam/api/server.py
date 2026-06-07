@@ -63,6 +63,25 @@ def health_check():
     return {"status": "ok", "service": "niyam-portal"}
 
 
+def _get_run_readiness(run_dir: Path) -> tuple[int | None, str | None]:
+    """Helper to load readiness score and decision from scan reports in run dir."""
+    # Try common report filenames
+    for fname in ["scan-report.json", "scan.json", "evidence.json"]:
+        path = run_dir / fname
+        if path.exists():
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    # Handle both raw scan results and evidence reports
+                    score = data.get("score") or data.get("readiness_score")
+                    decision = data.get("decision")
+                    if score is not None:
+                        return int(score), decision
+            except Exception:
+                pass
+    return None, None
+
+
 @app.get("/missions", response_model=list[MissionSummary])
 def list_missions():
     """List all available mission runs."""
@@ -88,6 +107,9 @@ def list_missions():
             plan = load_plan(run_dir)
             meta = plan.get("mission", {})
             tasks = plan.get("tasks", [])
+            
+            score, decision = _get_run_readiness(run_dir)
+            
             summaries.append(
                 MissionSummary(
                     id=run_dir.name,
@@ -98,6 +120,8 @@ def list_missions():
                     completed_tasks=sum(
                         1 for t in tasks if t.get("status") == "completed"
                     ),
+                    readiness_score=score,
+                    decision=decision,
                 )
             )
         except Exception as e:
@@ -159,6 +183,8 @@ def get_mission(mission_id: str):
         except Exception:
             pass
 
+    score, decision = _get_run_readiness(run_dir)
+
     return MissionDetails(
         id=mission_id,
         status=meta.get("status", "planned"),
@@ -168,6 +194,8 @@ def get_mission(mission_id: str):
         worktree=meta.get("worktree", True),
         tasks=tasks,
         metrics=metrics,
+        readiness_score=score,
+        decision=decision,
     )
 
 
@@ -181,6 +209,48 @@ def get_mission_evidence(mission_id: str):
             status_code=404, detail=f"Evidence for mission {mission_id} not found."
         )
     return {"content": evidence_path.read_text(encoding="utf-8")}
+
+
+@app.get("/missions/{mission_id}/sarif")
+def get_mission_sarif(mission_id: str):
+    """Return the SARIF scan results if available."""
+    _, niyam_dir = get_repo_context()
+    # Try different possible SARIF paths
+    for fname in ["scan-report.sarif.json", "scan.sarif", "results.sarif"]:
+        path = niyam_dir / "runs" / mission_id / fname
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    
+    # Try to generate it on the fly from json if possible
+    json_path = niyam_dir / "runs" / mission_id / "scan-report.json"
+    if json_path.exists():
+        try:
+            from niyam.cli.scan import generate_sarif_report
+            with open(json_path, encoding="utf-8") as f:
+                results = json.load(f)
+                sarif_str = generate_sarif_report(results)
+                return json.loads(sarif_str)
+        except Exception:
+            pass
+
+    raise HTTPException(
+        status_code=404, detail=f"SARIF report for mission {mission_id} not found."
+    )
+
+
+@app.get("/missions/{mission_id}/tasks/{task_id}/logs")
+def get_task_logs(mission_id: str, task_id: str):
+    """Return the execution logs for a specific task."""
+    _, niyam_dir = get_repo_context()
+    log_path = niyam_dir / "runs" / mission_id / "tasks" / task_id / "execution.log"
+    if not log_path.exists():
+        # Try generic execution log
+        log_path = niyam_dir / "runs" / mission_id / "execution-log.json"
+        
+    if not log_path.exists():
+        return {"content": "No logs found for this task."}
+        
+    return {"content": log_path.read_text(encoding="utf-8")}
 
 
 @app.post("/missions/{mission_id}/action", response_model=ActionResponse)

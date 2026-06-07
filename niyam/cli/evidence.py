@@ -14,6 +14,9 @@ def generate_evidence(
     from_scan: Annotated[
         str, typer.Option("--from", help="Path to input scan results JSON file.")
     ] = None,
+    mission: Annotated[
+        str, typer.Option("--mission", help="Mission ID to associate evidence with.")
+    ] = None,
     format: Annotated[
         str,
         typer.Option("--format", help="Report output format: markdown, json, html."),
@@ -42,7 +45,7 @@ def generate_evidence(
         from niyam.governance.evidence.command import execute_generate_evidence
 
         report_str = execute_generate_evidence(
-            from_scan_json=from_scan, fmt=fmt, output=output, include=include
+            from_scan_json=from_scan, fmt=fmt, output=output, include=include, mission_id=mission
         )
 
         # If output file is not specified, write the report to console stdout

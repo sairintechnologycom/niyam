@@ -398,6 +398,49 @@ def _check_external_scanners(repo_root: Path) -> list[DiagnosticResult]:
     return results
 
 
+def _check_saas_connectivity(repo_root: Path) -> list[DiagnosticResult]:
+    """Check connectivity to Niyam Dashboard if enabled."""
+    from niyam.core.saas import SaaSClient
+    from niyam.core.config import load_niyam_config
+
+    results = []
+    try:
+        config = load_niyam_config(repo_root)
+        if not config.saas.enabled:
+            results.append(
+                DiagnosticResult(
+                    "SaaS Connectivity",
+                    True,
+                    "Disabled in config",
+                    severity="info",
+                )
+            )
+            return results
+
+        client = SaaSClient(repo_root)
+        try:
+            client.ping()
+            results.append(
+                DiagnosticResult(
+                    "SaaS Connectivity",
+                    True,
+                    f"Connected to {config.saas.base_url}",
+                )
+            )
+        except Exception as e:
+            results.append(
+                DiagnosticResult(
+                    "SaaS Connectivity",
+                    False,
+                    f"Failed to connect to dashboard: {e}",
+                    severity="warning",
+                )
+            )
+    except Exception:
+        pass
+    return results
+
+
 def _check_git_status(repo_root: Path) -> list[DiagnosticResult]:
     import subprocess
 
@@ -618,6 +661,7 @@ def run_doctor(
         all_results.extend(_check_agents_validity(root))
         all_results.extend(_check_validation_commands_in_path(root))
         all_results.extend(_check_external_scanners(root))
+        all_results.extend(_check_saas_connectivity(root))
         all_results.extend(_check_git_status(root))
         if check:
             all_results.extend(_check_lint_format(root))

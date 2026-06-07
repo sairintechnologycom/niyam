@@ -13,6 +13,8 @@ class MissionSummary(BaseModel):
     created: str
     task_count: int
     completed_tasks: int
+    readiness_score: Optional[int] = None
+    decision: Optional[str] = None
 
 
 class TaskInfo(BaseModel):
@@ -41,6 +43,8 @@ class MissionDetails(BaseModel):
     worktree: bool
     tasks: list[TaskInfo]
     metrics: Optional[TokenMetrics] = None
+    readiness_score: Optional[int] = None
+    decision: Optional[str] = None
 
 
 class ActionResponse(BaseModel):
