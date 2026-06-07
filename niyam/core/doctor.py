@@ -371,6 +371,33 @@ def _check_validation_commands_in_path(repo_root: Path) -> list[DiagnosticResult
     return results
 
 
+def _check_external_scanners(repo_root: Path) -> list[DiagnosticResult]:
+    """Check availability of external security scanners."""
+    from niyam.core.external_scanners import SCANNER_REGISTRY
+
+    results = []
+    for scanner in SCANNER_REGISTRY:
+        if scanner.is_available():
+            results.append(
+                DiagnosticResult(
+                    f"External Scanner: {scanner.name}",
+                    True,
+                    "Found in PATH",
+                    severity="info",
+                )
+            )
+        else:
+            results.append(
+                DiagnosticResult(
+                    f"External Scanner: {scanner.name}",
+                    False,
+                    f"Binary '{scanner.binary}' not found",
+                    severity="warning",
+                )
+            )
+    return results
+
+
 def _check_git_status(repo_root: Path) -> list[DiagnosticResult]:
     import subprocess
 
@@ -590,6 +617,7 @@ def run_doctor(
         all_results.extend(_check_runtimes_in_path(root, config))
         all_results.extend(_check_agents_validity(root))
         all_results.extend(_check_validation_commands_in_path(root))
+        all_results.extend(_check_external_scanners(root))
         all_results.extend(_check_git_status(root))
         if check:
             all_results.extend(_check_lint_format(root))

@@ -826,6 +826,22 @@ def execute_single_task(
     if requirement_file.exists():
         requirement_content = requirement_file.read_text(encoding="utf-8")
 
+    # Generate Task-Specific Context (Context Router)
+    repo_map_str = ""
+    related_list = []
+    try:
+        from niyam.mission.planner import get_repo_map
+        from niyam.core.context import ContextRouter
+        
+        full_map = get_repo_map(repo_root)
+        router = ContextRouter(repo_root)
+        allowed_list = task.get("allowed_files") or task.get("files_allowed") or ["*"]
+        
+        related_list = router.get_related_paths(allowed_list)
+        repo_map_str = router.prune_repo_map(full_map, allowed_list, related_files=related_list)
+    except Exception as e:
+        logger.debug("Failed to generate pruned repo map: %s", e)
+
     allowed_list = task.get("allowed_files") or task.get("files_allowed") or ["*"]
     blocked_list = task.get("blocked_list") or task.get("blocked_files") or []
     tdd_req = task.get("tdd_required") or False
@@ -857,8 +873,12 @@ Assigned Agent: {task["agent"]}
 --- MISSION REQUIREMENT ---
 {requirement_content}
 
+--- REPOSITORY CONTEXT (Pruned) ---
+{repo_map_str}
+
 --- TASK CONTRACT ---
 Allowed files: {allowed_list}
+Related files: {related_list}
 Blocked files: {blocked_list}
 TDD required: {tdd_req}
 Acceptance criteria:

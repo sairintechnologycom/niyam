@@ -254,6 +254,126 @@ def run_context_diff(console: Console, repo_root: Path | None = None) -> None:
         console.print("No structural modifications found.")
 
 
+class ContextRouter:
+    """Intelligent context pruning and routing for AI tasks."""
+
+    def __init__(self, repo_root: Path):
+        self.repo_root = repo_root
+
+    def get_related_paths(self, allowed_files: list[str]) -> list[str]:
+        """Find paths that are likely relevant to the allowed files."""
+        import fnmatch
+
+        related = set()
+        for pat in allowed_files:
+            if "*" in pat:
+                # For glob patterns, we can't easily find siblings without walking
+                continue
+            
+            p = Path(pat)
+            # Add direct parent
+            if p.parent and p.parent != Path("."):
+                related.add(str(p.parent))
+            
+            # Add all siblings in same directory
+            full_parent = self.repo_root / p.parent
+            if full_parent.is_dir():
+                for sibling in full_parent.iterdir():
+                    if sibling.is_file():
+                        related.add(str(sibling.relative_to(self.repo_root)))
+            
+            # Heuristic: if in a 'routes' dir, look for 'models', 'schemas', 'services'
+            if "routes" in str(p.parent).lower() or "api" in str(p.parent).lower():
+                for candidate in ["models", "schemas", "services", "utils"]:
+                    cand_path = p.parent.parent / candidate
+                    if (self.repo_root / cand_path).is_dir():
+                        related.add(str(cand_path))
+
+        return sorted(list(related))
+
+    def prune_repo_map(self, repo_map: str, allowed_files: list[str], related_files: list[str] | None = None) -> str:
+        """Filter a repository map string to show only relevant branches.
+        
+        Shows allowed files, related files, their direct ancestors, and direct siblings
+        to provide enough context without overwhelming the agent.
+        """
+        import fnmatch
+
+        if "*" in allowed_files or "." in allowed_files or not allowed_files:
+            return repo_map
+
+        lines = repo_map.splitlines()
+        if not lines:
+            return ""
+
+        pruned_lines = []
+        header_kept = False
+        
+        # Normalize allowed files for matching
+        norm_allowed = [p.strip() for p in allowed_files if p.strip()]
+        norm_related = [p.strip() for p in (related_files or []) if p.strip()]
+
+        # 1. Identify which paths are allowed or related
+        relevant_paths = []
+        for line in lines:
+            # Try to extract path from tree formatting
+            path_str = line.strip()
+            path_match = re.search(r"[├└]──\s+(.*)", line)
+            if path_match:
+                path_str = path_match.group(1).strip()
+            
+            if not path_str or ("/" not in path_str and "." not in path_str and not path_match):
+                continue
+                
+            # Check if matches any allowed pattern
+            is_relevant = False
+            for pat in norm_allowed:
+                if fnmatch.fnmatch(path_str, pat) or path_str.startswith(pat):
+                    is_relevant = True
+                    break
+            
+            if not is_relevant:
+                for pat in norm_related:
+                    if fnmatch.fnmatch(path_str, pat) or path_str.startswith(pat):
+                        is_relevant = True
+                        break
+
+            if is_relevant:
+                relevant_paths.append(path_str)
+
+        if not relevant_paths:
+            return "\n".join(lines[:30]) + ("\n..." if len(lines) > 30 else "")
+
+        # 2. Re-walk the lines and keep only related ones
+        for line in lines:
+            path_str = line.strip()
+            path_match = re.search(r"[├└]──\s+(.*)", line)
+            if path_match:
+                path_str = path_match.group(1).strip()
+            
+            keep = False
+            if not path_match and ("/" not in path_str and "." not in path_str):
+                keep = True
+            
+            for rp in relevant_paths:
+                if path_str == rp or rp.startswith(path_str + "/") or (os.path.dirname(rp) and path_str.startswith(os.path.dirname(rp))):
+                    keep = True
+                    break
+            
+            if keep:
+                pruned_lines.append(line)
+                header_kept = True
+            elif not header_kept:
+                pruned_lines.append(line)
+                header_kept = True
+
+        # Limit total output even when pruned
+        if len(pruned_lines) > 120:
+            return "\n".join(pruned_lines[:120]) + "\n... (pruned for brevity)"
+            
+        return "\n".join(pruned_lines)
+
+
 def run_context_show(console: Console, repo_root: Path | None = None) -> None:
     """Display the currently detected project context."""
     if not repo_root:
