@@ -496,6 +496,21 @@ prompt/version audit
 enterprise approval workflow
 ```
 
+---
+
+## Phase 9 — Multi-Repo Fleet Management
+
+Manage and govern AI missions across multiple services from a central console.
+
+Features:
+- Centralized fleet registry (`fleet.yaml`)
+- Workspace discovery across directory trees
+- Fleet-wide mission status dashboard
+- Cross-repo policy synchronization
+- Multi-repo mission dispatch
+
+---
+
 This aligns very strongly with your platform engineering and governance background.
 
 ---

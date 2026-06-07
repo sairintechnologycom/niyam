@@ -385,6 +385,14 @@ def mission_retry(
     """Retry failed or skipped tasks of the latest mission."""
     from niyam.mission.executor import run_mission_retry
 
+    try:
+        run_mission_retry(
+            parallel=parallel,
+            worktree=worktree,
+            non_interactive=non_interactive,
+            mission_id=mission_id,
+            console=console,
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
