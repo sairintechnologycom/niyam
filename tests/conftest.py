@@ -13,7 +13,7 @@ def tmp_repo(tmp_path: Path) -> Path:
     """Create a temporary directory simulating a git repo."""
     # Initialize a minimal git repo
     os.system(
-        f"cd {tmp_path} && git init -q && git config user.email 'test@test.com' && git config user.name 'Test'"
+        f"cd {tmp_path} && git init -q && git config user.email 'test@test.com' && git config user.name 'Test' && touch .dummy && git add .dummy && git commit -m 'Initial commit' -q"
     )
     return tmp_path
 

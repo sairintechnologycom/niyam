@@ -44,8 +44,9 @@ def test_verification_lifecycle(niyam_repo: Path) -> None:
     # 3. Verification of untampered files should succeed
     run_verify_report(str(evidence_path), console=console)
 
-    # 4. Tamper with a source file listed in git diff/git status
-    dummy_src.write_text("print('hello tampered')", encoding="utf-8")
+    # 4. Tamper with a file listed in the manifest
+    tampered_file = niyam_repo / "change-T3.txt"
+    tampered_file.write_text("print('hello tampered')", encoding="utf-8")
 
     # Verification should now fail
     with pytest.raises(SystemExit) as excinfo:

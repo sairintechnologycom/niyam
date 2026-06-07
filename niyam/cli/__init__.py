@@ -155,6 +155,13 @@ fleet_app = typer.Typer(
 )
 app.add_typer(fleet_app)
 
+swarm_app = typer.Typer(
+    name="swarm",
+    help="Coordinate multiple AI agents in a shared workspace.",
+    no_args_is_help=True,
+)
+app.add_typer(swarm_app)
+
 
 @app.callback()
 def main_callback(
@@ -205,6 +212,7 @@ from niyam.cli import evidence  # noqa: F401
 from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401
 from niyam.cli import fleet  # noqa: F401
+from niyam.cli import swarm  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:

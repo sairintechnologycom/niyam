@@ -144,6 +144,13 @@ def run(
             help="Use a mission template for planning.",
         ),
     ] = None,
+    auto_heal: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--auto-heal/--no-auto-heal",
+            help="Enable or disable autonomous resilience mid-mission.",
+        ),
+    ] = None,
 ) -> None:
     """Plan, approve, and execute a mission in one step."""
     from niyam.core.context import run_context_refresh

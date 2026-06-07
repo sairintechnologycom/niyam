@@ -48,8 +48,10 @@ def test_non_interactive_auto_approve(niyam_repo: Path) -> None:
     try:
         run_mission_start(console=console, non_interactive=True)
     finally:
-        del os.environ["NIYAM_TEST"]
-        del os.environ["NIYAM_CI_AUTO_APPROVE"]
+        if "NIYAM_TEST" in os.environ:
+            del os.environ["NIYAM_TEST"]
+        if "NIYAM_CI_AUTO_APPROVE" in os.environ:
+            del os.environ["NIYAM_CI_AUTO_APPROVE"]
 
     # Verify it became approved and completed
     run_dir = get_niyam_dir(niyam_repo) / "runs" / mission_id

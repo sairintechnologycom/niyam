@@ -128,9 +128,18 @@ def run_mission_start(
     auto_heal_enabled = auto_heal if auto_heal is not None else plan_auto_heal
 
     # Check Git repository requirement
-    # ... (skipping some lines for brevity in instruction)
     is_git = is_git_repo(repo_root)
-    # ...
+    if use_worktree:
+        if not is_git:
+            console.print(
+                "[yellow]Warning: Not a Git repository. Disabling worktree isolation.[/]"
+            )
+            use_worktree = False
+        elif not git_has_commits(repo_root):
+            console.print(
+                "[yellow]Warning: Git repository has no commits. Disabling worktree isolation.[/]"
+            )
+            use_worktree = False
     # Save resolved settings and update status to running
     plan_data["mission"]["parallel"] = parallel_limit
     plan_data["mission"]["worktree"] = use_worktree
