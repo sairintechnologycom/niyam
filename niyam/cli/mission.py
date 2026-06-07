@@ -811,6 +811,88 @@ def mission_timeline(
     console.print(table)
 
 
+@mission_app.command("metrics")
+def mission_metrics(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to show metrics for."),
+    ] = None,
+) -> None:
+    """Show performance and efficiency metrics for missions and agents."""
+    from niyam.core.analytics import PerformanceMetrics
+    from niyam.core.config import find_niyam_root
+    from rich.table import Table
+    from rich.panel import Panel
+
+    root = find_niyam_root()
+    if not root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace.")
+        raise SystemExit(1)
+
+    analytics = PerformanceMetrics(root)
+
+    if mission_id:
+        m = analytics.get_mission_metrics(mission_id)
+        if not m:
+            console.print(f"[bold red]Error:[/] Mission '{mission_id}' not found.")
+            return
+
+        table = Table(title=f"Mission Metrics: {mission_id}")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="bold")
+        
+        table.add_row("Total Tokens", str(m["total_tokens"]))
+        table.add_row("Total Cost", f"${m['total_cost_usd']:.4f}")
+        table.add_row("Efficiency Savings", f"{m['savings_percent']:.1f}%")
+        table.add_row("Task Count", str(m["task_count"]))
+        table.add_row("Success Rate", f"{m['success_rate']:.1f}%")
+        
+        console.print(table)
+        
+        # Agent breakdown
+        if m["by_agent"]:
+            at = Table(title="Agent Performance")
+            at.add_column("Agent", style="yellow")
+            at.add_column("Tasks", justify="right")
+            at.add_column("Success Rate", justify="right", style="green")
+            
+            for agent, stats in m["by_agent"].items():
+                sr = (stats["completed"] / stats["count"]) * 100 if stats["count"] > 0 else 0
+                at.add_row(agent, str(stats["count"]), f"{sr:.1f}%")
+            console.print(at)
+    else:
+        summary = analytics.get_fleet_summary()
+        if summary["total_missions"] == 0:
+            console.print("[yellow]No mission history found to analyze.[/]")
+            return
+
+        console.print(Panel(
+            f"[bold cyan]Total Missions:[/] {summary['total_missions']}\n"
+            f"[bold cyan]Total Fleet Cost:[/] ${summary['total_cost_usd']:.4f}\n"
+            f"[bold cyan]Avg Success Rate:[/] [green]{summary['avg_success_rate']:.1f}%[/]\n"
+            f"[bold cyan]Avg Token Efficiency:[/] [cyan]{summary['avg_savings_percent']:.1f}%[/]",
+            title="[bold]Fleet Performance Summary[/]",
+            border_style="cyan"
+        ))
+
+        if summary["agent_performance"]:
+            at = Table(title="Global Agent Performance Ranking")
+            at.add_column("Agent", style="yellow")
+            at.add_column("Total Tasks", justify="right")
+            at.add_column("Overall Success Rate", justify="right", style="bold green")
+            
+            # Sort by success rate
+            sorted_agents = sorted(
+                summary["agent_performance"].items(),
+                key=lambda x: x[1]["success_rate"],
+                reverse=True
+            )
+            
+            for agent, stats in sorted_agents:
+                at.add_row(agent, str(stats["tasks"]), f"{stats['success_rate']:.1f}%")
+            console.print(at)
+
+
 @mission_app.command("approve-task")
 def mission_approve_task(
     task_id: Annotated[str, typer.Argument(help="ID of the task to approve.")],

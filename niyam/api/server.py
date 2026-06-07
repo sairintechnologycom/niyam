@@ -82,6 +82,15 @@ def _get_run_readiness(run_dir: Path) -> tuple[int | None, str | None]:
     return None, None
 
 
+@app.get("/analytics")
+def get_fleet_analytics():
+    """Get fleet-wide performance and cost analytics."""
+    from niyam.core.analytics import PerformanceMetrics
+    repo_root, _ = get_repo_context()
+    analytics = PerformanceMetrics(repo_root)
+    return analytics.get_fleet_summary()
+
+
 @app.get("/missions", response_model=list[MissionSummary])
 def list_missions():
     """List all available mission runs."""

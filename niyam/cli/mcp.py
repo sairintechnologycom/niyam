@@ -364,6 +364,41 @@ def mcp_approve(
     console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully approved.")
 
 
+@mcp_app.command("approve-all")
+def mcp_approve_all(
+    force: Annotated[
+        bool, typer.Option("--force", help="Skip confirmation prompt.")
+    ] = False,
+) -> None:
+    """Approve ALL currently registered tools in one step."""
+    from niyam.core.mcp import load_mcp_registry, save_mcp_registry
+    import datetime
+
+    registry = load_mcp_registry()
+    unapproved = [name for name, t in registry.tools.items() if not t.approved]
+    
+    if not unapproved:
+        console.print("[green]All tools are already approved.[/]")
+        return
+
+    if not force:
+        confirm = typer.confirm(
+            f"Are you sure you want to approve {len(unapproved)} unapproved tools?",
+            default=False
+        )
+        if not confirm:
+            console.print("[yellow]Aborted.[/]")
+            return
+
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for name in unapproved:
+        registry.tools[name].approved = True
+        registry.tools[name].updated_at = now
+    
+    save_mcp_registry(registry)
+    console.print(f"[bold green]✓[/] Successfully approved [bold]{len(unapproved)}[/] tools.")
+
+
 @mcp_app.command("risk-report")
 def mcp_risk_report() -> None:
     """Generate a risk and security report for all registered tools."""

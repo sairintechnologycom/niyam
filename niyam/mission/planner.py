@@ -166,9 +166,10 @@ Instructions:
 1. Break down the requirement into a list of tasks.
 2. The tasks must be ordered logically. Any task depending on another task must list it in `depends_on`.
 3. Assign each task to the most appropriate agent from the list of Available Agents. For example, assign development to 'backend-specialist' or 'frontend-specialist', code review to 'security-reviewer', and verification/testing to 'qa-reviewer'.
-4. Optionally, you can assign a custom execution `runtime` (such as `claude`, `gemini`, or `codex`) to a task if a specific runtime is better suited for it (e.g. `gemini` for coding, `codex` for scripting). If omitted, the task will use the default global runtime.
-5. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
-6. Return ONLY a valid YAML or JSON block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the content inside ```yaml or ```json code fences.
+4. Optionally, you can assign a custom execution `runtime` (such as `claude`, `gemini`, or `codex`) to a task if a specific runtime is better suited for it.
+5. Use `approval_required: true` for high-risk implementation tasks or any task where human review is critical before proceeding.
+6. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
+7. Return ONLY a valid YAML or JSON block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the content inside ```yaml or ```json code fences.
 
 Schema (YAML format):
 ```yaml
@@ -193,6 +194,7 @@ tasks:
     runtime: "gemini"
     depends_on: ["T2"]
     files_allowed: ["*"]
+    approval_required: true
   - id: T4
     title: "Review: security check"
     type: "review"

@@ -270,6 +270,34 @@ def run_mission_start(
             # Submit ready tasks up to concurrency capacity
             for t in ready_tasks:
                 if len(running_tasks) < parallel_limit:
+                    t_id = t["id"]
+                    
+                    # ── Phase 10: Manual Approval Gate ─────────────────────────
+                    if t.get("approval_required", False) and t["status"] not in ("approved", "retry_ready"):
+                        # If the task requires approval but hasn't been approved yet
+                        if non_interactive:
+                            with print_lock:
+                                console.print(f"[{t_id}] [yellow]Non-interactive mode: Auto-approving task with 'approval_required'[/]")
+                            t["status"] = "approved"
+                            save_plan(run_dir, current_plan)
+                        else:
+                            transition_task(run_dir, t_id, "awaiting_approval", reason="Task requires manual human approval.")
+                            with print_lock:
+                                console.print(Panel(
+                                    f"Task [cyan]{t_id}[/] requires manual approval before execution.\n"
+                                    f"Run: [bold]niyam mission approve-task {t_id}[/] to proceed.",
+                                    title="[bold yellow]Approval Required[/]",
+                                    border_style="yellow"
+                                ))
+                            
+                            # If no other tasks are running, we must exit and wait
+                            if not running_tasks:
+                                transition_mission(run_dir, "paused", reason=f"Mission paused waiting for approval of task {t_id}.")
+                                return
+                            
+                            # Skip this task for now
+                            continue
+
                     t_writes = t.get("writes_files", True)
                     t_files = t.get("files_allowed") or t.get("allowed_files") or ["*"]
                     has_overlap = False
