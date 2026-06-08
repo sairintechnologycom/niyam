@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from niyam.mission.utils import load_plan, save_plan
+from niyam.mission.utils import update_plan
 
 
 # ── State Definitions ──────────────────────────────────────────────────
@@ -166,34 +166,38 @@ def transition_task(
     actor: str | None = None,
 ) -> None:
     """Transition a task to a new status, log the event, and update the plan."""
-    plan_data = load_plan(run_dir)
-    tasks = plan_data.get("tasks", [])
-    
-    target_task = None
-    for t in tasks:
-        if t["id"] == task_id:
-            target_task = t
-            break
-    
-    if not target_task:
-        raise ValueError(f"Task {task_id} not found in mission plan.")
+    transition_data: dict[str, str | bool] = {"changed": False}
 
-    from_status = target_task.get("status", "planned")
-    if from_status == to_status:
+    def mutate(plan_data: dict) -> dict:
+        tasks = plan_data.get("tasks", [])
+        target_task = None
+        for t in tasks:
+            if t["id"] == task_id:
+                target_task = t
+                break
+
+        if not target_task:
+            raise ValueError(f"Task {task_id} not found in mission plan.")
+
+        from_status = target_task.get("status", "planned")
+        transition_data["from_status"] = from_status
+        if from_status == to_status:
+            return plan_data
+        _validate_transition(
+            "task",
+            task_id,
+            from_status,
+            to_status,
+            VALID_TASK_TRANSITIONS,
+        )
+        target_task["status"] = to_status
+        transition_data["changed"] = True
+        return plan_data
+
+    update_plan(run_dir, mutate)
+    if not transition_data["changed"]:
         return
-    _validate_transition(
-        "task",
-        task_id,
-        from_status,
-        to_status,
-        VALID_TASK_TRANSITIONS,
-    )
-
-    # Update task status
-    target_task["status"] = to_status
-    
-    # Save plan
-    save_plan(run_dir, plan_data)
+    from_status = str(transition_data["from_status"])
     
     # Update task-specific status snapshot
     task_dir = run_dir / "tasks" / task_id
@@ -240,25 +244,29 @@ def transition_mission(
     actor: str | None = None,
 ) -> None:
     """Transition a mission to a new status, log the event, and update the plan."""
-    plan_data = load_plan(run_dir)
-    mission_meta = plan_data.get("mission", {})
-    
-    from_status = mission_meta.get("status", "planned")
-    if from_status == to_status:
-        return
-    _validate_transition(
-        "mission",
-        run_dir.name,
-        from_status,
-        to_status,
-        VALID_MISSION_TRANSITIONS,
-    )
+    transition_data: dict[str, str | bool] = {"changed": False}
 
-    # Update mission status
-    mission_meta["status"] = to_status
-    
-    # Save plan
-    save_plan(run_dir, plan_data)
+    def mutate(plan_data: dict) -> dict:
+        mission_meta = plan_data.get("mission", {})
+        from_status = mission_meta.get("status", "planned")
+        transition_data["from_status"] = from_status
+        if from_status == to_status:
+            return plan_data
+        _validate_transition(
+            "mission",
+            run_dir.name,
+            from_status,
+            to_status,
+            VALID_MISSION_TRANSITIONS,
+        )
+        mission_meta["status"] = to_status
+        transition_data["changed"] = True
+        return plan_data
+
+    update_plan(run_dir, mutate)
+    if not transition_data["changed"]:
+        return
+    from_status = str(transition_data["from_status"])
     
     # Log event
     log_mission_event(

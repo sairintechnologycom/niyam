@@ -738,6 +738,24 @@ def run_mission_plan(
             except Exception:
                 pass
 
+            try:
+                from niyam.core.memory import CodebaseIndexer
+
+                matches = CodebaseIndexer(repo_root).search(requirement_content, k=6)
+                if matches:
+                    rag_sections = ["### RELEVANT CODE SEARCH RESULTS"]
+                    for match in matches:
+                        snippet = str(match["text"])[:1200]
+                        rag_sections.append(f"#### {match['path']}\n{snippet}")
+                    rag_context = "\n\n".join(rag_sections)
+                    project_context = (
+                        f"{project_context}\n\n{rag_context}"
+                        if project_context
+                        else rag_context
+                    )
+            except Exception:
+                pass
+
             current_prompt = build_planner_prompt(
                 requirement_content, repo_map, available_agents,
                 project_context=project_context,

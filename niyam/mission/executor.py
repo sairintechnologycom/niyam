@@ -6,12 +6,9 @@ import json
 import os
 import shlex
 from pathlib import Path
-import shutil
 import subprocess
-import threading
 import time
 from datetime import datetime, timezone
-import yaml
 import concurrent.futures
 from rich.console import Console
 from rich.panel import Panel
@@ -20,6 +17,14 @@ from niyam.core.config import get_niyam_dir, load_niyam_config, load_project_con
 from niyam.mission.planner import resolve_mission_id, run_mission_replan
 
 from niyam.mission.utils import print_lock, load_plan, save_plan
+from niyam.core.swarm import (
+    acquire_lock,
+    append_ledger_message,
+    deregister_agent,
+    heartbeat,
+    load_swarm_state,
+    release_lock,
+)
 from niyam.mission.worktree import (
     is_git_repo,
     git_has_commits,
@@ -33,10 +38,128 @@ from niyam.mission.task_runner import (
     execute_single_task,
     check_overlap,
 )
-from niyam.mission.state_machine import transition_task, transition_mission, log_mission_event
+from niyam.mission.state_machine import transition_task, transition_mission
 
 
 MAX_HEALING_RETRIES = 3
+WORKSPACE_LOCK_RESOURCE = "__workspace__"
+
+
+def _task_agent_id(mission_id: str, task_id: str) -> str:
+    return f"{mission_id}:{task_id}"
+
+
+def _task_lock_resources(task: dict) -> list[str]:
+    """Return coarse-grained swarm lock resources for a task."""
+    if not task.get("writes_files", True):
+        return []
+    resources = task.get("files_allowed") or task.get("allowed_files") or ["*"]
+    cleaned = []
+    for resource in resources:
+        if resource == "*":
+            cleaned.append(WORKSPACE_LOCK_RESOURCE)
+        else:
+            cleaned.append(str(resource))
+    return sorted(set(cleaned))
+
+
+def _holder_for_resource(repo_root: Path, resource: str) -> str | None:
+    state = load_swarm_state(repo_root)
+    lock = state.locks.get(resource)
+    return lock.agent_id if lock else None
+
+
+def _try_acquire_task_locks(
+    task: dict,
+    mission_id: str,
+    repo_root: Path,
+) -> bool:
+    """Acquire swarm locks for the task, releasing partial acquisitions on failure."""
+    task_id = task["id"]
+    agent_id = _task_agent_id(mission_id, task_id)
+    resources = _task_lock_resources(task)
+    acquired: list[str] = []
+
+    heartbeat(
+        agent_id=agent_id,
+        role=task.get("agent", "agent"),
+        status="waiting",
+        task_id=task_id,
+        repo_root=repo_root,
+    )
+    for resource in resources:
+        if acquire_lock(
+            resource,
+            agent_id,
+            reason=f"Mission {mission_id} task {task_id}",
+            repo_root=repo_root,
+        ):
+            acquired.append(resource)
+            continue
+
+        holder = _holder_for_resource(repo_root, resource) or "unknown"
+        append_ledger_message(
+            sender=agent_id,
+            receiver=holder,
+            action="request_lock",
+            resource=resource,
+            payload={"mission_id": mission_id, "task_id": task_id},
+            repo_root=repo_root,
+        )
+        for acquired_resource in acquired:
+            release_lock(acquired_resource, agent_id, repo_root=repo_root)
+        return False
+
+    heartbeat(
+        agent_id=agent_id,
+        role=task.get("agent", "agent"),
+        status="busy",
+        task_id=task_id,
+        repo_root=repo_root,
+    )
+    return True
+
+
+def _release_task_locks(task: dict, mission_id: str, repo_root: Path) -> None:
+    task_id = task["id"]
+    agent_id = _task_agent_id(mission_id, task_id)
+    for resource in _task_lock_resources(task):
+        release_lock(resource, agent_id, repo_root=repo_root)
+    deregister_agent(agent_id, repo_root=repo_root)
+
+
+def _build_task_healing_prompt(run_dir: Path, task_id: str) -> str:
+    """Collect concise failure context for the next retry prompt."""
+    task_dir = run_dir / "tasks" / task_id
+    parts: list[str] = []
+
+    validation_path = task_dir / "validation.json"
+    if validation_path.exists():
+        try:
+            validation = json.loads(validation_path.read_text(encoding="utf-8"))
+            failed = [item for item in validation if not item.get("success", False)]
+            if failed:
+                parts.append("Failed validation checks:")
+                for item in failed[:5]:
+                    parts.append(
+                        f"- {item.get('name', 'validation')}: "
+                        f"{item.get('command', 'unknown command')} "
+                        f"{item.get('error', '')}".strip()
+                    )
+        except Exception:
+            pass
+
+    output_path = task_dir / "output.log"
+    if output_path.exists():
+        try:
+            tail = output_path.read_text(encoding="utf-8", errors="ignore").splitlines()[-40:]
+            if tail:
+                parts.append("Recent task output:")
+                parts.append("\n".join(tail))
+        except Exception:
+            pass
+
+    return "\n".join(parts).strip() or "Previous attempt failed; inspect validation results and fix the smallest likely cause."
 
 
 def execute_with_healing(
@@ -252,6 +375,9 @@ def run_mission_start(
                         failed_tasks,
                         current_plan,
                         run_dir,
+                        repo_root,
+                        mission_id,
+                        auto_heal_enabled,
                         console,
                     )
 
@@ -306,7 +432,6 @@ def run_mission_start(
             # Budget Check
             config = None
             try:
-                from niyam.core.config import load_niyam_config
                 config = load_niyam_config(repo_root)
             except Exception:
                 pass
@@ -429,6 +554,13 @@ def run_mission_start(
                     if has_overlap:
                         continue
 
+                    if not _try_acquire_task_locks(t, mission_id, repo_root):
+                        with print_lock:
+                            console.print(
+                                f"[{t_id}] [yellow]Waiting for swarm resource locks.[/]"
+                            )
+                        continue
+
                     t_id = t["id"]
                     running_tasks.add(t_id)
                     
@@ -473,6 +605,9 @@ def run_mission_start(
                 failed_tasks,
                 current_plan,
                 run_dir,
+                repo_root,
+                mission_id,
+                auto_heal_enabled,
                 console,
             )
 
@@ -578,6 +713,9 @@ def _process_finished_tasks(
     failed_tasks: set,
     plan_data: dict,
     run_dir: Path,
+    repo_root: Path,
+    mission_id: str,
+    auto_heal_enabled: bool,
     console: Console,
 ) -> None:
     """Helper to process results of finished tasks and update plan."""
@@ -593,6 +731,14 @@ def _process_finished_tasks(
             success = future.result()
             if success:
                 completed_tasks.add(t_id)
+                if auto_heal_enabled and is_git_repo(repo_root) and git_has_commits(repo_root):
+                    try:
+                        save_checkpoint(t_id, repo_root, console=console)
+                    except Exception as e:
+                        with print_lock:
+                            console.print(
+                                f"[{t_id}] [dim yellow]Checkpoint skipped: {e}[/]"
+                            )
                 transition_task(
                     run_dir, t_id, "completed", reason=f"Completed task: {t['title']}"
                 )
@@ -613,6 +759,10 @@ def _process_finished_tasks(
                     save_plan(run_dir, current_plan)
                     
                     if retry_count < max_retries:
+                        target_task["healing_prompt"] = _build_task_healing_prompt(
+                            run_dir, t_id
+                        )
+                        save_plan(run_dir, current_plan)
                         transition_task(
                             run_dir, t_id, "retry_ready", reason=f"Task failed (attempt {retry_count}/{max_retries}). Retrying..."
                         )
@@ -641,6 +791,8 @@ def _process_finished_tasks(
             )
             with print_lock:
                 console.print(f"[bold red]❌[/] Task {t_id} failed with exception: {e}\n")
+        finally:
+            _release_task_locks(t, mission_id, repo_root)
 
 
 def run_mission_pause(console: Console, mission_id: str | None = None) -> None:

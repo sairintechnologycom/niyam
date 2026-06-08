@@ -29,7 +29,7 @@ Orchestrate complex migrations or large-scale refactors with ease:
 ```bash
 niyam run "migrate all API endpoints to v2"
 ```
-*Niyam plans the mission, spawns sub-agents in isolated **Git worktrees**, runs parallel validations, and merges only what passes.*
+*Niyam plans the mission, executes dependency-aware task layers, can isolate write tasks in **Git worktrees**, and records validation evidence.*
 
 ---
 
@@ -46,7 +46,8 @@ niyam run "migrate all API endpoints to v2"
 ### 🤖 Multi-Agent Orchestration & Resilience
 *   **Agent Roles:** Define specialized AI personas (e.g., `security-reviewer`, `qa-engineer`) with tailored system prompts and dedicated toolsets.
 *   **Isolated Multi-Worktree Parallelism:** Run tasks in parallel using isolated **Git Worktrees**, preventing agent cross-talk and ensuring clean, atomic PRs.
-*   **Autonomous Environment Healing:** Auto-heal and self-correct environments by triggering AI re-planning and automatic retries upon task/validation failure.
+*   **Swarm Coordination:** Track active agents, heartbeats, file locks, and negotiation requests through local swarm state.
+*   **Autonomous Environment Healing:** Experimental auto-heal retries feed validation failures back into task prompts and can trigger AI re-planning.
 
 ### 🔍 Compliance & Readiness Checking
 *   **Repo Audits:** Scan your repository against strict profiles (`startup`, `team`, `enterprise`, `regulated`) to detect missing documentation, unpinned dependencies, or secret exposures.
@@ -107,6 +108,17 @@ uvx --from niyam niyam --help
    ```
 3. **Start building:**
    Open your agent (e.g. `claude`) and use `/implement`, `/review`, or `/ship`.
+
+## 🧭 Maturity Guide
+
+| Capability | Status |
+| --- | --- |
+| Workspace init, runtime sync, context refresh | Stable |
+| Scan, guard, evidence, cost tracking | Experimental but covered by tests |
+| Mission planning/execution, worktree isolation | Experimental |
+| Swarm coordination, RAG indexing, auto-heal | Preview |
+
+Preview features are local-first and test-covered, but their command shape and defaults may evolve before GA.
 
 ---
 

@@ -258,7 +258,7 @@ class TestMission:
         assert "Global Agent Performance Ranking" in result.stdout
         assert "Tokens" in result.stdout
         assert "Total Cost" in result.stdout
-        
+
         # Test specific mission metrics
         result_specific = runner.invoke(mission_app, ["metrics", "--mission", mission_id])
         assert result_specific.exit_code == 0
@@ -266,6 +266,25 @@ class TestMission:
         assert mission_id in result_specific.stdout
         assert "Tokens" in result_specific.stdout
         assert "Total Cost" in result_specific.stdout
+
+    def test_mission_explain_command(self, niyam_repo: Path) -> None:
+        """Explain should show execution layers and task policy details."""
+        os.chdir(niyam_repo)
+        console = Console(quiet=True)
+
+        req_file = niyam_repo / "requirements.md"
+        req_file.write_text("# Explain Mission\n", encoding="utf-8")
+        mission_id = run_mission_plan(str(req_file), console=console)
+
+        from typer.testing import CliRunner
+        from niyam.cli import app
+
+        runner = CliRunner()
+        result = runner.invoke(app, ["mission", "explain", "--mission", mission_id])
+
+        assert result.exit_code == 0
+        assert "Execution Preview" in result.stdout
+        assert "Swarm locks" in result.stdout
 
     def test_mission_audit_command(self, niyam_repo: Path) -> None:
         """Should output or export mission audit log using the CLI command."""
@@ -525,7 +544,7 @@ class TestMission:
             # Plan and approve
             req_file = niyam_repo / "requirements.md"
             req_file.write_text("# Test Telemetry\n", encoding="utf-8")
-            mission_id = run_mission_plan(str(req_file), console=console)
+            run_mission_plan(str(req_file), console=console)
             run_mission_approve(console=console)
 
             # Mock environment to run mission
@@ -542,5 +561,3 @@ class TestMission:
             called_types = {call.args[0] for call in mock_webhook.call_args_list}
             assert "MISSION_STATE_TRANSITION" in called_types
             assert "TASK_STATE_TRANSITION" in called_types
-
-

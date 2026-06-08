@@ -8,6 +8,7 @@ This document lists all available CLI commands, subcommands, and options support
 
 The following options can be passed to the root `niyam` command:
 - `--verbose` / `-v`: Enable verbose logs and debug output.
+- `--json-logs`: Emit structured JSON logs where supported.
 - `--help`: Show global command listing and exit.
 
 ---
@@ -60,9 +61,10 @@ Scan the codebase for production readiness, configuration errors, and code risk 
   - `[path]`: Directory path to scan. Defaults to `.`.
 - **Options:**
   - `--profile` / `-p`: Selection profile (`startup`, `team`, `enterprise`).
-  - `--output` / `-o`: Output reporting format (`text`, `json`, `markdown`).
+  - `--output` / `-o`: Output reporting format (`text`, `json`, `markdown`, `sarif`).
   - `--report-file` / `-f`: Path to write the generated report to.
   - `--rules`: Path to custom rules YAML file.
+  - `--fail-on`: Exit non-zero when findings reach the selected severity.
 
 ---
 
@@ -97,6 +99,8 @@ Wrap and run a shell command under observation mode.
   - Command args following `--` (e.g., `niyam guard run -- npm test`).
 - **Options:**
   - `--capture-output`: Record stdout/stderr stream outputs in log database.
+  - `--dry-run`: Evaluate policies and print what would happen without executing.
+  - `--mode`: Override guard mode (`observe`, `warn`, `block`, `approve`).
 
 #### `niyam guard status`
 Display active guard status, frozen paths, and observed execution metrics.
@@ -166,6 +170,38 @@ Print a high-level summary of total logged sessions, token count, and spend.
 
 #### `niyam cost report`
 Generate structured tables showing breakdowns of daily spend, repo spend, task spend, top expensive runs, and wasted budget.
+
+---
+
+### `niyam mission`
+Manage mission planning, approval, execution, and explainability.
+
+#### `niyam mission ingest`
+Ingest a PRD markdown file into structured requirement stories.
+- **Arguments:**
+  - `prd_path`: Path to a Markdown PRD.
+- **Options:**
+  - `--ai` / `--no-ai`: Use the configured runtime when available, with deterministic fallback.
+
+#### `niyam mission plan`
+Generate a mission plan from a requirement file.
+- **Options:**
+  - `--strict`: Fail if AI planning is unavailable instead of using fallback planning.
+  - `--template`: Use a mission template.
+  - `--runtime`: Override the planning runtime.
+
+#### `niyam mission explain`
+Preview execution layers, write scopes, approval gates, validation commands, and swarm lock behavior for a mission.
+- **Options:**
+  - `--mission`: Mission ID to explain. Defaults to the latest active mission.
+
+#### `niyam mission start`
+Start or resume an approved mission.
+- **Options:**
+  - `--parallel` / `-p`: Override worker count.
+  - `--worktree` / `--no-worktree`: Enable or disable Git worktree isolation.
+  - `--auto-heal` / `--no-auto-heal`: Enable or disable recovery retries/replanning.
+  - `--non-interactive` / `--ci`: Run in non-interactive mode.
 
 ---
 

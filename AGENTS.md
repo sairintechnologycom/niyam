@@ -127,13 +127,13 @@ Ask for human approval before making changes in these areas:
 <claude-mem-context>
 # Memory Context
 
-# [sutra] recent context, 2026-06-06 1:17pm GMT+5:30
+# [sutra] recent context, 2026-06-08 9:30pm GMT+5:30
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 12 obs (5,857t read) | 583,006t work | 99% savings
+Stats: 25 obs (11,154t read) | 1,828,498t work | 99% savings
 
 ### May 29, 2026
 2554 12:05p 🔵 Sutra Project — Full Architecture and File Inventory
@@ -149,6 +149,20 @@ Stats: 12 obs (5,857t read) | 583,006t work | 99% savings
 2571 12:15p 🔴 Sutra — Claude Runtime Pre-Tool Hook Script Ruff Format Compliance Fixed
 ### Jun 6, 2026
 5974 11:47a ✅ Niyam README Screenshot Guide — 3 Key Screenshots Defined with Save Paths
+### Jun 8, 2026
+7165 7:48p ⚖️ Niyam 7-Enhancement Roadmap Reviewed — Implementation Plan Defined
+7171 7:51p 🟣 Niyam Enhancement 1: CLI TTY Detection, Rich Spinner, and Questionary Fallback Implemented
+7172 " 🟣 Niyam Enhancement 1: Fuzzy Command Suggestion Added to CLI Entry Point
+7173 " 🟣 Niyam Enhancement 2: structlog Integration Added with --json-logs Flag
+7174 " 🔴 Niyam Enhancement 2: `niyam init` Made Idempotent — No Longer Exits 1 on Re-run
+7175 " 🟣 Niyam Enhancement 2: State Machine Now Enforces Strict Transition Validation with IllegalStateTransitionError
+7176 " 🟣 Niyam Enhancement 3: Guard Dry-Run Mode Implemented with Actionable Remediation Table
+7177 " 🟣 Niyam Enhancement 3: Policy Validator Table Now Shows Actionable Remediation Column
+7178 " 🟣 Niyam Enhancement 4: chromadb Dependency Added for RAG/Vector DB Support
+7179 " 🟣 Niyam Enhancement 5: DAGPlanner Class Added with Topological Sort and Cycle Detection
+7180 " 🔵 Niyam Codebase Pre-Enhancement State — Key Gaps vs Enhancement Guide
+7184 7:59p 🔵 Niyam CLI — 7-Enhancement Implementation Roadmap Reviewed
+7185 8:04p 🔵 Niyam CLI — 7-Enhancement Roadmap Reviewed for Implementation
 
-Access 583k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 1828k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

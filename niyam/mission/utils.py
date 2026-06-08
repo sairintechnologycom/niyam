@@ -6,12 +6,12 @@ import os
 import platform
 import sys
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-
-from niyam.core.utils import compute_sha256
+from filelock import FileLock
 
 # Shared locks for thread-safe operations
 print_lock = threading.Lock()
@@ -21,41 +21,52 @@ git_lock = threading.RLock()
 
 
 
+@contextmanager
+def mission_plan_file_lock(run_dir: Path):
+    """Process-safe lock for mission plan reads/writes."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(run_dir / "mission-plan.lock", timeout=30)
+    with lock:
+        yield
+
+
 def save_plan(run_dir: Path, plan_data: dict) -> None:
     """Save mission plan YAML and update task-list.yaml."""
     with plan_lock:
-        import tempfile
-        plan_path = run_dir / "mission-plan.yaml"
-        tasks_path = run_dir / "task-list.yaml"
+        with mission_plan_file_lock(run_dir):
+            import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=run_dir,
-            prefix=".mission-plan.",
-            suffix=".tmp",
-            delete=False,
-        ) as f:
-            yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
-            plan_tmp = Path(f.name)
-        plan_tmp.replace(plan_path)
+            plan_path = run_dir / "mission-plan.yaml"
+            tasks_path = run_dir / "task-list.yaml"
 
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=run_dir,
-            prefix=".task-list.",
-            suffix=".tmp",
-            delete=False,
-        ) as f:
-            yaml.dump(
-                plan_data.get("tasks", []),
-                f,
-                default_flow_style=False,
-                sort_keys=False,
-            )
-            tasks_tmp = Path(f.name)
-        tasks_tmp.replace(tasks_path)
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=run_dir,
+                prefix=".mission-plan.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+                plan_tmp = Path(f.name)
+            plan_tmp.replace(plan_path)
+
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=run_dir,
+                prefix=".task-list.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                yaml.dump(
+                    plan_data.get("tasks", []),
+                    f,
+                    default_flow_style=False,
+                    sort_keys=False,
+                )
+                tasks_tmp = Path(f.name)
+            tasks_tmp.replace(tasks_path)
 
 
 def load_plan(run_dir: Path) -> dict:
@@ -64,12 +75,63 @@ def load_plan(run_dir: Path) -> dict:
     from niyam.core.security import safe_load_yaml
 
     with plan_lock:
-        plan_path = run_dir / "mission-plan.yaml"
-        if not plan_path.exists():
-            return {}
-        data = safe_load_yaml(plan_path)
-        validated = MissionPlan(**data)
-        return validated.model_dump()
+        with mission_plan_file_lock(run_dir):
+            plan_path = run_dir / "mission-plan.yaml"
+            if not plan_path.exists():
+                return {}
+            data = safe_load_yaml(plan_path)
+            validated = MissionPlan(**data)
+            return validated.model_dump()
+
+
+def update_plan(run_dir: Path, mutator) -> dict:
+    """Atomically load, mutate, validate, and save a mission plan."""
+    with plan_lock:
+        with mission_plan_file_lock(run_dir):
+            plan_path = run_dir / "mission-plan.yaml"
+            if not plan_path.exists():
+                plan_data = {}
+            else:
+                from niyam.core.config import MissionPlan
+                from niyam.core.security import safe_load_yaml
+
+                plan_data = MissionPlan(**safe_load_yaml(plan_path)).model_dump()
+            result = mutator(plan_data)
+            if result is not None:
+                plan_data = result
+
+            import tempfile
+
+            tasks_path = run_dir / "task-list.yaml"
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=run_dir,
+                prefix=".mission-plan.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+                plan_tmp = Path(f.name)
+            plan_tmp.replace(plan_path)
+
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=run_dir,
+                prefix=".task-list.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                yaml.dump(
+                    plan_data.get("tasks", []),
+                    f,
+                    default_flow_style=False,
+                    sort_keys=False,
+                )
+                tasks_tmp = Path(f.name)
+            tasks_tmp.replace(tasks_path)
+            return plan_data
 
 
 def get_failure_diagnostics(run_dir: Path, failed_task_id: str | None = None) -> str:

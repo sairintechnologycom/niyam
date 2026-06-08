@@ -8,6 +8,7 @@ from pathlib import Path
 from rich.console import Console
 
 from niyam.core.memory import (
+    CodebaseIndexer,
     run_memory_show,
     run_memory_add,
     run_memory_clear,
@@ -93,3 +94,24 @@ class TestMemory:
         assert agents_md.exists()
         agents_content = agents_md.read_text(encoding="utf-8")
         assert "Sync test lesson note" in agents_content
+
+    def test_codebase_indexer_search_jsonl_fallback(self, niyam_repo: Path) -> None:
+        """Codebase search should return relevant snippets without Chroma."""
+        os.chdir(niyam_repo)
+        target = niyam_repo / "src" / "billing.py"
+        target.parent.mkdir()
+        target.write_text(
+            "def calculate_invoice_total():\n    return 'invoice total'\n",
+            encoding="utf-8",
+        )
+        os.environ["NIYAM_DISABLE_CHROMA"] = "1"
+
+        try:
+            indexer = CodebaseIndexer(niyam_repo)
+            count = indexer.build_index()
+            matches = indexer.search("invoice total", k=3)
+        finally:
+            os.environ.pop("NIYAM_DISABLE_CHROMA", None)
+
+        assert count > 0
+        assert any(match["path"] == "src/billing.py" for match in matches)

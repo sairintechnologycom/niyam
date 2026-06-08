@@ -193,7 +193,7 @@ class CodebaseIndexer:
     def _iter_files(self) -> list[Path]:
         if (self.repo_root / ".git").exists():
             res = subprocess.run(
-                ["git", "ls-files"],
+                ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
                 cwd=self.repo_root,
                 capture_output=True,
                 text=True,
@@ -240,6 +240,8 @@ class CodebaseIndexer:
         files = self._iter_files()
 
         try:
+            if os.environ.get("NIYAM_DISABLE_CHROMA") == "1":
+                raise RuntimeError("Chroma disabled by environment")
             import chromadb
 
             client = chromadb.PersistentClient(path=str(self.db_dir))
@@ -271,3 +273,65 @@ class CodebaseIndexer:
                         )
                         count += 1
             return count
+
+    def search(self, query: str, k: int = 8) -> list[dict[str, str | float]]:
+        """Search indexed code context without creating indexes as a side effect."""
+        if not query.strip():
+            return []
+
+        if not self.db_dir.exists():
+            return []
+
+        try:
+            if os.environ.get("NIYAM_DISABLE_CHROMA") == "1":
+                raise RuntimeError("Chroma disabled by environment")
+            import chromadb
+
+            client = chromadb.PersistentClient(path=str(self.db_dir))
+            collection = client.get_or_create_collection(self.collection_name)
+            result = collection.query(query_texts=[query], n_results=k)
+            docs = result.get("documents", [[]])[0]
+            metas = result.get("metadatas", [[]])[0]
+            distances = result.get("distances", [[]])[0]
+            matches = []
+            for doc, meta, distance in zip(docs, metas, distances):
+                matches.append(
+                    {
+                        "path": str(meta.get("path", "")) if meta else "",
+                        "text": doc,
+                        "score": float(distance),
+                    }
+                )
+            return matches
+        except Exception:
+            pass
+
+        index_path = self.db_dir / "codebase-index.jsonl"
+        if not index_path.exists():
+            return []
+        terms = {term.lower() for term in query.split() if len(term) >= 3}
+        scored: list[tuple[int, dict[str, str | float]]] = []
+        try:
+            with open(index_path, encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    text = str(item.get("text", ""))
+                    haystack = f"{item.get('path', '')}\n{text}".lower()
+                    score = sum(haystack.count(term) for term in terms)
+                    if score:
+                        scored.append(
+                            (
+                                score,
+                                {
+                                    "path": str(item.get("path", "")),
+                                    "text": text,
+                                    "score": float(score),
+                                },
+                            )
+                        )
+        except Exception:
+            return []
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [item for _, item in scored[:k]]

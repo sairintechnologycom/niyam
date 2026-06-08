@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Annotated, Optional
 
 import typer
@@ -12,7 +15,6 @@ from rich.table import Table
 
 from niyam.cli import console, mission_app
 from niyam.cli.main_cmds import Runtime
-from niyam.mission.state_machine import transition_task, transition_mission
 
 
 @mission_app.command("ingest")
@@ -21,6 +23,10 @@ def mission_ingest(
         str,
         typer.Argument(help="Path to a Product Requirements Document markdown file."),
     ],
+    ai: Annotated[
+        bool,
+        typer.Option("--ai/--no-ai", help="Use configured AI runtime when available."),
+    ] = True,
 ) -> None:
     """Ingest a PRD into structured requirement markdown."""
     from niyam.core.config import find_niyam_root
@@ -40,12 +46,71 @@ def mission_ingest(
     requirements_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = requirements_dir / f"{source_path.stem}-structured.md"
-    structured = _structure_prd_markdown(source_path.name, prd_text)
+    structured = None
+    if ai:
+        structured = _structure_prd_with_runtime(repo_root, source_path.name, prd_text)
+    if not structured:
+        structured = _structure_prd_markdown(source_path.name, prd_text)
     output_path.write_text(structured, encoding="utf-8")
 
     console.print(
         f"[bold green]✓[/] Ingested PRD into [cyan]{output_path.relative_to(repo_root)}[/]."
     )
+
+
+def _structure_prd_with_runtime(repo_root: Path, source_name: str, prd_text: str) -> str | None:
+    """Use the configured runtime to structure a PRD, returning None on failure."""
+    try:
+        from niyam.core.config import load_niyam_config
+
+        config = load_niyam_config(repo_root)
+        runtime = config.runtimes[0] if config.runtimes else None
+        if not runtime or not shutil.which(runtime):
+            return None
+    except Exception:
+        return None
+
+    prompt = f"""Convert this Product Requirements Document into structured Markdown.
+
+Return only Markdown using this shape:
+# Structured Requirements: <title>
+Source: `{source_name}`
+
+## Epics
+- EPIC-001: <name>
+
+## Stories
+### STORY-001
+- Epic: EPIC-001
+- Requirement: <specific requirement>
+- Acceptance Criteria:
+  - <testable criterion>
+- Risks:
+  - <risk or dependency>
+
+PRD:
+{prd_text}
+"""
+    cmd = [runtime, "-p", prompt]
+    if runtime == "gemini":
+        cmd.append("--skip-trust")
+    try:
+        res = subprocess.run(
+            cmd,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+    except Exception:
+        return None
+    if res.returncode != 0:
+        return None
+    output = (res.stdout or "").strip()
+    if not output or "## Stories" not in output:
+        return None
+    return output
 
 
 def _structure_prd_markdown(source_name: str, prd_text: str) -> str:
@@ -207,6 +272,74 @@ def mission_show(
         )
 
     console.print(Panel(table, border_style="magenta"))
+
+
+@mission_app.command("explain")
+def mission_explain(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to explain."),
+    ] = None,
+) -> None:
+    """Explain execution order, scopes, approvals, and validation for a mission."""
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.core.errors import NiyamConfigError
+    from niyam.mission.planner import DAGPlanner, resolve_mission_id
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    run_dir = niyam_dir / "runs" / mission_id
+    plan_path = run_dir / "mission-plan.yaml"
+    if not plan_path.exists():
+        console.print(f"[bold red]Error:[/] Mission plan for '{mission_id}' not found.")
+        raise typer.Exit(1)
+    plan_data = yaml.safe_load(plan_path.read_text(encoding="utf-8")) or {}
+    tasks = plan_data.get("tasks", [])
+    mission_meta = plan_data.get("mission", {})
+
+    table = Table(title=f"Execution Preview: {mission_id}", expand=True)
+    table.add_column("Layer", justify="right", style="cyan")
+    table.add_column("Task")
+    table.add_column("Agent", style="magenta")
+    table.add_column("Writes")
+    table.add_column("Approval")
+    table.add_column("Validation")
+
+    try:
+        layers = DAGPlanner().executable_layers(tasks)
+    except Exception as e:
+        console.print(f"[bold red]Invalid task DAG:[/] {e}")
+        raise typer.Exit(1)
+
+    for layer_index, layer in enumerate(layers, 1):
+        for task in layer:
+            validation = task.get("validation") or {}
+            commands = validation.get("commands", []) if isinstance(validation, dict) else []
+            files = task.get("files_allowed") or task.get("allowed_files") or ["*"]
+            table.add_row(
+                str(layer_index),
+                f"[bold]{task['id']}[/] {task['title']}",
+                task.get("agent", "-"),
+                ", ".join(files) if task.get("writes_files", True) else "no",
+                "yes" if task.get("approval_required") else "no",
+                ", ".join(commands) if commands else "-",
+            )
+
+    summary = (
+        f"Parallel workers: [bold]{mission_meta.get('parallel', 1)}[/]\n"
+        f"Worktree isolation: [bold]{mission_meta.get('worktree', True)}[/]\n"
+        f"Auto-heal: [bold]{mission_meta.get('auto_heal', False)}[/]\n"
+        "Swarm locks: [bold]write tasks acquire resources before execution[/]"
+    )
+    console.print(Panel(summary, title="[bold cyan]Mission Policy[/]", border_style="cyan"))
+    console.print(table)
 
 
 @mission_app.command("dashboard")

@@ -20,11 +20,12 @@ from rich.console import Console
 from rich.panel import Panel
 
 from niyam.core.config import load_niyam_config, find_niyam_root
+from niyam.core.saas import SaaSClient
+from niyam.core.utils import compute_sha256
 from niyam.mission.utils import (
     print_lock,
     validation_lock,
     plan_lock,
-    compute_sha256,
     load_plan,
     save_plan,
 )
@@ -391,7 +392,7 @@ def update_token_ledger(
         )
 
         repo_root_for_global = run_dir.parent.parent.parent
-        cost_event = CostEvent(
+        CostEvent(
             timestamp=event["timestamp"],
             session_id=run_dir.name,
             task_id=task_id,
@@ -763,9 +764,6 @@ def run_hooks(stage: str, context: dict, niyam_dir: Path, console: Console) -> N
                 console.print(f"[yellow]Warning: hook execution failed: {e}[/]")
 
 
-from niyam.core.saas import SaaSClient
-
-
 def _notify_saas_event(run_dir: Path, event_type: str, payload: dict) -> None:
     """Helper to fire an asynchronous-ish (non-blocking) webhook notification."""
     try:
@@ -971,6 +969,14 @@ def execute_single_task(
     val_cmds_str = (
         "\n".join(f"  - {c}" for c in val_cmds) if val_cmds else "  - None configured"
     )
+    healing_prompt = task.get("healing_prompt")
+    healing_section = ""
+    if healing_prompt:
+        healing_section = f"""
+--- AUTO-HEAL CONTEXT ---
+The previous attempt failed. Use this failure context to make a targeted fix:
+{healing_prompt}
+"""
 
     prompt_text = f"""TASK {task_id}: {task["title"]}
 Type: {task.get("type", "generic")}
@@ -995,6 +1001,7 @@ Acceptance criteria:
 
 Validation commands that will run after your changes:
 {val_cmds_str}
+{healing_section}
 
 --- INSTRUCTIONS ---
 Execute the changes required for this task.
