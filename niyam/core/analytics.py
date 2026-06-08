@@ -26,6 +26,7 @@ class PerformanceMetrics:
             "mission_id": mission_id,
             "total_tokens": 0,
             "total_cost_usd": 0.0,
+            "total_wasted_cost_usd": 0.0,
             "total_duration_s": 0.0,
             "task_count": 0,
             "success_rate": 0.0,
@@ -42,7 +43,19 @@ class PerformanceMetrics:
                     summary = ledger.get("summary", {})
                     metrics["total_tokens"] = summary.get("total_tokens", 0)
                     metrics["total_cost_usd"] = summary.get("total_cost_usd", 0.0)
+                    metrics["total_wasted_cost_usd"] = summary.get("total_wasted_cost_usd", 0.0)
                     metrics["savings_percent"] = summary.get("savings_percent", 0.0)
+                    
+                    # Aggregate agent costs from ledger events
+                    for event in ledger.get("events", []):
+                        agent = event.get("agent", "unknown")
+                        if agent not in metrics["by_agent"]:
+                            metrics["by_agent"][agent] = {"count": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
+                        
+                        metrics["by_agent"][agent]["cost"] += event.get("cost_usd", 0.0)
+                        metrics["by_agent"][agent]["tokens"] += event.get("total_tokens", 0)
+                        if event.get("is_waste"):
+                            metrics["by_agent"][agent]["wasted"] += event.get("cost_usd", 0.0)
             except Exception:
                 pass
 
@@ -54,12 +67,6 @@ class PerformanceMetrics:
                 if not task_dir.is_dir():
                     continue
                 metrics["task_count"] += 1
-                
-                # Check status from plan if possible (but here we just check for completion)
-                log_path = task_dir / "execution.log"
-                if log_path.exists():
-                    # Simplified: if log exists, we count it for now or check final line
-                    pass
 
         # 3. Load mission plan for accurate status
         from niyam.mission.utils import load_plan
@@ -71,11 +78,11 @@ class PerformanceMetrics:
             if metrics["task_count"] > 0:
                 metrics["success_rate"] = (completed / metrics["task_count"]) * 100
 
-            # Aggregate by agent
+            # Aggregate task counts by agent
             for t in tasks:
                 agent = t.get("agent", "unknown")
                 if agent not in metrics["by_agent"]:
-                    metrics["by_agent"][agent] = {"count": 0, "completed": 0}
+                    metrics["by_agent"][agent] = {"count": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
                 metrics["by_agent"][agent]["count"] += 1
                 if t.get("status") == "completed":
                     metrics["by_agent"][agent]["completed"] += 1
@@ -120,9 +127,12 @@ class PerformanceMetrics:
             # Aggregate agent stats
             for agent, stats in m["by_agent"].items():
                 if agent not in summary["agent_performance"]:
-                    summary["agent_performance"][agent] = {"tasks": 0, "completed": 0}
-                summary["agent_performance"][agent]["tasks"] += stats["count"]
-                summary["agent_performance"][agent]["completed"] += stats["completed"]
+                    summary["agent_performance"][agent] = {"tasks": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
+                summary["agent_performance"][agent]["tasks"] += stats.get("count", 0)
+                summary["agent_performance"][agent]["completed"] += stats.get("completed", 0)
+                summary["agent_performance"][agent]["cost"] += stats.get("cost", 0.0)
+                summary["agent_performance"][agent]["wasted"] += stats.get("wasted", 0.0)
+                summary["agent_performance"][agent]["tokens"] += stats.get("tokens", 0)
 
         summary["avg_success_rate"] = total_success / len(mission_metrics)
         summary["avg_savings_percent"] = total_savings / len(mission_metrics)

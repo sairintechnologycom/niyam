@@ -63,6 +63,7 @@ class GuardConfig(BaseModel):
     blocked_commands: list[str] = Field(default_factory=list)
     protected_files: list[str] = Field(default_factory=list)
     approval_required: list[str] = Field(default_factory=list)
+    mission_approval_roles: list[str] = Field(default_factory=lambda: ["default"])
 
 
 class SaaSConfig(BaseModel):
@@ -76,11 +77,22 @@ class SaaSConfig(BaseModel):
     pricing_url: Optional[str] = None
 
 
+class BudgetConfig(BaseModel):
+    """Configuration for token and cost budget enforcement."""
+
+    max_mission_cost_usd: Optional[float] = None
+    max_task_cost_usd: Optional[float] = None
+    max_mission_tokens: Optional[int] = None
+    max_task_tokens: Optional[int] = None
+
+
+
 class GovernanceConfig(BaseModel):
     """Governance and production-readiness configuration."""
 
     scan: ScanConfig = Field(default_factory=ScanConfig)
     guard: GuardConfig = Field(default_factory=GuardConfig)
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
 
 
 class NiyamConfig(BaseModel):

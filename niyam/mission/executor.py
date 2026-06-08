@@ -255,6 +255,59 @@ def run_mission_start(
             # Avoid busy-waiting and lock contention
             time.sleep(0.1)
 
+            # Budget Check
+            config = None
+            try:
+                from niyam.core.config import load_niyam_config
+                config = load_niyam_config(repo_root)
+            except Exception:
+                pass
+                
+            if config and config.governance and config.governance.budget:
+                budget = config.governance.budget
+                try:
+                    from niyam.core.analytics import PerformanceMetrics
+                    metrics = PerformanceMetrics(repo_root).get_mission_metrics(mission_id)
+                    if metrics:
+                        # 1. Cost check
+                        if budget.max_mission_cost_usd is not None:
+                            current_cost = metrics.get("total_cost_usd", 0.0)
+                            if current_cost > budget.max_mission_cost_usd:
+                                transition_mission(run_dir, "failed", reason=f"Mission budget breached: ${current_cost:.4f} > ${budget.max_mission_cost_usd:.4f}")
+                                with print_lock:
+                                    console.print(Panel(
+                                        f"[bold red]🛑 Mission Cost Budget Breached![/]\n"
+                                        f"Cost: ${current_cost:.4f} / Limit: ${budget.max_mission_cost_usd:.4f}\n"
+                                        f"Mission has been automatically failed.",
+                                        title="[bold red]Budget Enforcer[/]",
+                                        border_style="red"
+                                    ))
+                                break
+                            elif current_cost >= 0.8 * budget.max_mission_cost_usd:
+                                with print_lock:
+                                    console.print(f"[bold yellow]⚠️ Budget Alert:[/] Mission cost has reached 80% of the limit (${current_cost:.4f} / ${budget.max_mission_cost_usd:.4f})")
+
+                        # 2. Token check
+                        if budget.max_mission_tokens is not None:
+                            current_tokens = metrics.get("total_tokens", 0)
+                            if current_tokens > budget.max_mission_tokens:
+                                transition_mission(run_dir, "failed", reason=f"Mission token budget breached: {current_tokens} > {budget.max_mission_tokens}")
+                                with print_lock:
+                                    console.print(Panel(
+                                        f"[bold red]🛑 Mission Token Budget Breached![/]\n"
+                                        f"Tokens: {current_tokens} / Limit: {budget.max_mission_tokens}\n"
+                                        f"Mission has been automatically failed.",
+                                        title="[bold red]Budget Enforcer[/]",
+                                        border_style="red"
+                                    ))
+                                break
+                            elif current_tokens >= 0.8 * budget.max_mission_tokens:
+                                with print_lock:
+                                    console.print(f"[bold yellow]⚠️ Budget Alert:[/] Mission tokens have reached 80% of the limit ({current_tokens} / {budget.max_mission_tokens})")
+                except Exception:
+                    pass
+
+
             # Find ready tasks
             ready_tasks = []
             tasks = current_plan.get("tasks", [])
@@ -412,8 +465,11 @@ def run_mission_start(
                 # If not auto-heal, or heal failed, exit the loop
                 break
 
+
+
     # Determine final mission status
     final_plan = load_plan(run_dir)
+    mission_status = final_plan.get("mission", {}).get("status")
     tasks_list = final_plan.get("tasks", [])
     any_failed = any(t["status"] == "failed" for t in tasks_list)
     any_skipped_due_to_failure = any(t["status"] == "skipped" for t in tasks_list)
@@ -421,8 +477,9 @@ def run_mission_start(
     # If we are here and not failed, it means we finished all tasks successfully
     # UNLESS we exited because of a pause check (but that returns early)
     
-    if any_failed or any_skipped_due_to_failure:
-        transition_mission(run_dir, "failed", reason="Mission execution failed due to task failures.")
+    if mission_status == "failed" or any_failed or any_skipped_due_to_failure:
+        if mission_status != "failed":
+            transition_mission(run_dir, "failed", reason="Mission execution failed due to task failures.")
         run_hooks(
             "post_mission",
             {"mission_id": mission_id, "mission_status": "failed"},

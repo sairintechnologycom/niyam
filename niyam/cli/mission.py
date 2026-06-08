@@ -210,13 +210,17 @@ def mission_approve(
         Optional[str],
         typer.Option("--mission", help="Mission ID to approve."),
     ] = None,
+    role: Annotated[
+        str,
+        typer.Option("--role", help="Specific role to approve as (e.g., 'security', 'tech_lead')."),
+    ] = "default",
 ) -> None:
     """Approve the latest planned mission."""
     from niyam.mission.planner import run_mission_approve
 
     try:
         run_mission_approve(
-            console=console, interactive=interactive, mission_id=mission_id
+            console=console, interactive=interactive, mission_id=mission_id, role=role
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -879,10 +883,20 @@ def mission_metrics(
             at.add_column("Agent", style="yellow")
             at.add_column("Tasks", justify="right")
             at.add_column("Success Rate", justify="right", style="green")
+            at.add_column("Tokens", justify="right", style="cyan")
+            at.add_column("Total Cost", justify="right")
+            at.add_column("Wasted", justify="right", style="red")
             
             for agent, stats in m["by_agent"].items():
-                sr = (stats["completed"] / stats["count"]) * 100 if stats["count"] > 0 else 0
-                at.add_row(agent, str(stats["count"]), f"{sr:.1f}%")
+                sr = (stats.get("completed", 0) / stats.get("count", 1)) * 100 if stats.get("count", 0) > 0 else 0
+                at.add_row(
+                    agent, 
+                    str(stats.get("count", 0)), 
+                    f"{sr:.1f}%",
+                    f"{stats.get('tokens', 0):,}",
+                    f"${stats.get('cost', 0.0):.4f}",
+                    f"${stats.get('wasted', 0.0):.4f}"
+                )
             console.print(at)
     else:
         summary = analytics.get_fleet_summary()
@@ -903,7 +917,10 @@ def mission_metrics(
             at = Table(title="Global Agent Performance Ranking")
             at.add_column("Agent", style="yellow")
             at.add_column("Total Tasks", justify="right")
-            at.add_column("Overall Success Rate", justify="right", style="bold green")
+            at.add_column("Success Rate", justify="right", style="bold green")
+            at.add_column("Tokens", justify="right", style="cyan")
+            at.add_column("Total Cost", justify="right")
+            at.add_column("Wasted", justify="right", style="red")
             
             # Sort by success rate
             sorted_agents = sorted(
@@ -913,8 +930,103 @@ def mission_metrics(
             )
             
             for agent, stats in sorted_agents:
-                at.add_row(agent, str(stats["tasks"]), f"{stats['success_rate']:.1f}%")
+                at.add_row(
+                    agent, 
+                    str(stats["tasks"]), 
+                    f"{stats['success_rate']:.1f}%",
+                    f"{stats.get('tokens', 0):,}",
+                    f"${stats.get('cost', 0.0):.4f}",
+                    f"${stats.get('wasted', 0.0):.4f}"
+                )
             console.print(at)
+
+
+@mission_app.command("audit")
+def mission_audit(
+    mission_id: Annotated[
+        Optional[str],
+        typer.Option("--mission", help="Mission ID to audit."),
+    ] = None,
+    output: Annotated[
+        Optional[str],
+        typer.Option("--output", "-o", help="File to write the audit log to (Markdown)."),
+    ] = None,
+) -> None:
+    """Show or export a full traceability audit of exact prompts and system instructions used."""
+    import yaml
+    from rich.markdown import Markdown
+    from niyam.core.config import find_niyam_root, get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace.")
+        raise typer.Exit(1)
+    niyam_dir = get_niyam_dir(repo_root)
+
+    mission_id = resolve_mission_id(niyam_dir, mission_id)
+    if not mission_id:
+        console.print("[bold red]Error:[/] No missions found.")
+        raise typer.Exit(1)
+
+    run_dir = niyam_dir / "runs" / mission_id
+    if not run_dir.exists():
+        console.print(f"[bold red]Error:[/] Run directory for {mission_id} not found.")
+        raise typer.Exit(1)
+
+    audit_md = f"# Prompt Traceability Audit: Mission {mission_id}\n\n"
+    
+    plan_path = run_dir / "mission-plan.yaml"
+    if plan_path.exists():
+        try:
+            with open(plan_path, encoding="utf-8") as f:
+                plan_data = yaml.safe_load(f) or {}
+                tasks = plan_data.get("tasks", [])
+        except Exception:
+            tasks = []
+    else:
+        tasks = []
+
+    if not tasks:
+        console.print("[yellow]No tasks found in mission plan.[/]")
+        raise typer.Exit(0)
+
+    for task in tasks:
+        t_id = task.get("id", "Unknown")
+        t_title = task.get("title", "Unknown")
+        audit_md += f"## Task {t_id}: {t_title}\n\n"
+        
+        task_dir = run_dir / "tasks" / t_id
+        prompt_path = task_dir / "prompt.md"
+        
+        if prompt_path.exists():
+            prompt_content = prompt_path.read_text(encoding="utf-8")
+            audit_md += "### Executed Prompt\n\n```markdown\n"
+            audit_md += prompt_content + "\n```\n\n"
+        else:
+            audit_md += "### Executed Prompt\n\n*No prompt file found for this task.*\n\n"
+            
+        log_path = task_dir / "output.log"
+        if log_path.exists():
+            log_content = log_path.read_text(encoding="utf-8")
+            audit_md += "### Agent Output Log (Excerpt)\n\n```text\n"
+            audit_md += "\n".join(log_content.splitlines()[:50])
+            if len(log_content.splitlines()) > 50:
+                audit_md += "\n... [truncated for brevity]\n"
+            audit_md += "\n```\n\n"
+
+    if output:
+        try:
+            from pathlib import Path
+            out_path = Path(output).resolve()
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(audit_md, encoding="utf-8")
+            console.print(f"[bold green]✓[/] Audit log exported to [cyan]{out_path}[/]")
+        except Exception as e:
+            console.print(f"[bold red]Error exporting audit log:[/] {e}")
+            raise typer.Exit(1)
+    else:
+        console.print(Panel(Markdown(audit_md), title=f"[bold cyan]Mission Audit: {mission_id}[/]", border_style="cyan"))
 
 
 @mission_app.command("approve-task")

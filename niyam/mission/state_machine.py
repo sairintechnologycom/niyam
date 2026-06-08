@@ -71,6 +71,21 @@ def log_mission_event(
         f.write(json.dumps(event) + "\n")
 
 
+def _notify_saas_event(run_dir: Path, event_type: str, payload: dict) -> None:
+    """Helper to fire an asynchronous webhook notification to SaaS Dashboard."""
+    try:
+        from niyam.core.config import find_niyam_root, load_niyam_config
+        from niyam.core.saas import SaaSClient
+
+        repo_root = find_niyam_root(run_dir)
+        config = load_niyam_config(repo_root)
+        if config.saas.enabled:
+            client = SaaSClient(repo_root)
+            client.trigger_webhook(event_type, payload)
+    except Exception:
+        pass
+
+
 def transition_task(
     run_dir: Path,
     task_id: str,
@@ -124,6 +139,20 @@ def transition_task(
         actor=actor,
     )
 
+    # Notify SaaS
+    _notify_saas_event(
+        run_dir,
+        "TASK_STATE_TRANSITION",
+        {
+            "mission_id": run_dir.name,
+            "task_id": task_id,
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+            "actor": actor,
+        }
+    )
+
 
 def transition_mission(
     run_dir: Path,
@@ -154,3 +183,17 @@ def transition_mission(
         reason=reason,
         actor=actor,
     )
+
+    # Notify SaaS
+    _notify_saas_event(
+        run_dir,
+        "MISSION_STATE_TRANSITION",
+        {
+            "mission_id": run_dir.name,
+            "from_status": from_status,
+            "to_status": to_status,
+            "reason": reason,
+            "actor": actor,
+        }
+    )
+

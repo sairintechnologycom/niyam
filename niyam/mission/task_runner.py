@@ -381,9 +381,11 @@ def update_token_ledger(
             status="success",
             notes=f"Logged automatically during execution by agent {agent}.",
         )
-        log_cost_event(cost_event, repo_root_for_global)
     except Exception:
         pass
+
+    return cost
+
 
 
 def run_validation_command(
@@ -1382,7 +1384,7 @@ Do not perform destructive operations.
         mission_meta = plan_data.get("mission", {})
         orchestrator = task.get("runtime") or mission_meta.get("orchestrator", "claude")
 
-        update_token_ledger(
+        actual_cost = update_token_ledger(
             run_dir=run_dir,
             task_id=task_id,
             agent=task["agent"],
@@ -1399,14 +1401,70 @@ Do not perform destructive operations.
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": input_tokens + output_tokens,
-            "cost_usd": cost_usd,
+            "cost_usd": actual_cost,
             "estimated": estimated,
             "runtime": orchestrator,
         }
         (task_dir / "token-usage.json").write_text(json.dumps(token_usage, indent=2), encoding="utf-8")
 
+        # Task-Level Budget Check
+        try:
+            config = load_niyam_config(repo_root)
+            if config and config.governance and config.governance.budget:
+                budget = config.governance.budget
+                total_task_tokens = input_tokens + output_tokens
+                
+                # 1. Cost check
+                if budget.max_task_cost_usd is not None:
+                    if actual_cost > budget.max_task_cost_usd:
+                        success = False
+                        with print_lock:
+                            console.print(Panel(
+                                f"[bold red]🛑 Task Cost Budget Breached![/]\n"
+                                f"Task: {task_id} / Cost: ${actual_cost:.4f} / Limit: ${budget.max_task_cost_usd:.4f}\n"
+                                f"Task has been automatically failed.",
+                                title="[bold red]Task Budget Enforcer[/]",
+                                border_style="red"
+                            ))
+                        log_mission_event(
+                            run_dir,
+                            "BUDGET_VIOLATION",
+                            task_id=task_id,
+                            details=f"Task cost breached limit: ${actual_cost:.4f} > ${budget.max_task_cost_usd:.4f}",
+                            type="TASK_COST_BREACH",
+                        )
+                    elif actual_cost >= 0.8 * budget.max_task_cost_usd:
+                        with print_lock:
+                            console.print(f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} cost reached 80% of limit (${actual_cost:.4f} / ${budget.max_task_cost_usd:.4f})")
+
+                # 2. Token check
+                if budget.max_task_tokens is not None:
+                    if total_task_tokens > budget.max_task_tokens:
+                        success = False
+                        with print_lock:
+                            console.print(Panel(
+                                f"[bold red]🛑 Task Token Budget Breached![/]\n"
+                                f"Task: {task_id} / Tokens: {total_task_tokens} / Limit: {budget.max_task_tokens}\n"
+                                f"Task has been automatically failed.",
+                                title="[bold red]Task Budget Enforcer[/]",
+                                border_style="red"
+                            ))
+                        log_mission_event(
+                            run_dir,
+                            "BUDGET_VIOLATION",
+                            task_id=task_id,
+                            details=f"Task tokens breached limit: {total_task_tokens} > {budget.max_task_tokens}",
+                            type="TASK_TOKEN_BREACH",
+                        )
+                    elif total_task_tokens >= 0.8 * budget.max_task_tokens:
+                        with print_lock:
+                            console.print(f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} tokens reached 80% of limit ({total_task_tokens} / {budget.max_task_tokens})")
+        except Exception:
+            pass
+
     except Exception:
         pass
+
 
     if success and use_worktree and worktree_path:
         transition_task(run_dir, task_id, "merging", reason="Committing and merging changes from worktree.")

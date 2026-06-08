@@ -1568,11 +1568,12 @@ def run_mission_replan(
 
 
 def run_mission_approve(
-    console: Console, interactive: bool = False, mission_id: str | None = None
+    console: Console, interactive: bool = False, mission_id: str | None = None, role: str = "default"
 ) -> None:
     """Approve the latest planned mission."""
-    from niyam.core.config import find_niyam_root
+    from niyam.core.config import find_niyam_root, load_niyam_config
     from niyam.core.errors import NiyamConfigError
+    from datetime import datetime, timezone
 
     repo_root = find_niyam_root()
     if not repo_root:
@@ -1613,9 +1614,22 @@ def run_mission_approve(
     mission_meta = plan_data.get("mission", {})
     status = mission_meta.get("status", "planned")
 
-    if status not in ("planned", "validated"):
+    if status not in ("planned", "validated", "approved"):
         console.print(f"[yellow]Mission '{mission_id}' is already {status}.[/]")
         return
+        
+    # Check what roles are required for approval
+    try:
+        config = load_niyam_config(repo_root)
+        if config.governance and config.governance.guard:
+            required_approvals = config.governance.guard.mission_approval_roles
+        else:
+            required_approvals = ["default"]
+    except Exception:
+        required_approvals = ["default"]
+        
+    if not required_approvals:
+        required_approvals = ["default"]
 
     if interactive:
         while True:
@@ -1626,7 +1640,7 @@ def run_mission_approve(
             _print_preview_table(console, mission_id, plan_data)
 
             try:
-                answer = input("Approve all tasks? [Y/n/edit/refine]: ").strip().lower()
+                answer = input(f"Approve all tasks as role '{role}'? [Y/n/edit/refine]: ").strip().lower()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[red]Mission approval cancelled.[/]")
                 raise SystemExit(1)
@@ -1670,25 +1684,55 @@ def run_mission_approve(
                     "[yellow]Invalid option. Please choose y, n, edit, or refine.[/]"
                 )
 
+    # Load existing approval status
+    approval_path = run_dir / "approval.json"
+    import json
+    
+    if approval_path.exists():
+        try:
+            with open(approval_path, encoding="utf-8") as f:
+                approval_data = json.load(f)
+        except Exception:
+            approval_data = {"approved": False, "approvals": {}}
+    else:
+        approval_data = {"approved": False, "approvals": {}}
+        
+    if "approvals" not in approval_data:
+        approval_data["approvals"] = {}
+
+    if role not in required_approvals and role != "default" and "default" not in required_approvals:
+        console.print(f"[yellow]Warning:[/] Role '{role}' is not in the required approvals list: {required_approvals}")
+
+    # Record the approval for this role
+    approval_data["approvals"][role] = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "approver": "human-cli",
+    }
+
+    # Check if all required approvals are met
+    all_approved = True
+    for req_role in required_approvals:
+        if req_role not in approval_data["approvals"]:
+            all_approved = False
+            break
+            
+    approval_data["approved"] = all_approved
+    approval_path.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+
     # Re-load plan data final time to make sure we write approved status
     with open(plan_path, encoding="utf-8") as f:
         plan_data = yaml.safe_load(f) or {}
 
-    # Update status to approved
-    plan_data["mission"]["status"] = "approved"
-    with open(plan_path, "w", encoding="utf-8") as f:
-        yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
-
-    # Write approval.json
-    approval_path = run_dir / "approval.json"
-    approval_data = {
-        "approved": True,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    import json
-
-    approval_path.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
-
-    console.print(
-        f"[bold green]✓[/] Mission '[cyan]{mission_id}[/]' has been approved and is ready to start."
-    )
+    if all_approved:
+        # Update status to approved
+        plan_data["mission"]["status"] = "approved"
+        with open(plan_path, "w", encoding="utf-8") as f:
+            yaml.dump(plan_data, f, default_flow_style=False, sort_keys=False)
+        console.print(
+            f"[bold green]✓[/] Mission '[cyan]{mission_id}[/]' has been fully approved and is ready to start."
+        )
+    else:
+        pending = [r for r in required_approvals if r not in approval_data["approvals"]]
+        console.print(
+            f"[bold green]✓[/] Role '{role}' approved. Still waiting for: {', '.join(pending)}"
+        )
