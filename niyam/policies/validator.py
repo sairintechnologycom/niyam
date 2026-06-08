@@ -33,6 +33,13 @@ KNOWN_POLICY_FILES = {
 }
 
 
+LLM_POLICY_VALIDATION_PROMPT_SUFFIX = """
+When a policy check fails, return JSON that includes an
+`actionable_remediation` string with exact steps the developer can take to fix
+the violation.
+"""
+
+
 def run_policy_validate(console: Console) -> None:
     """Validate all policy YAML files."""
     root = find_niyam_root()
@@ -51,6 +58,7 @@ def run_policy_validate(console: Console) -> None:
     table.add_column("Policy File", style="bold")
     table.add_column("Status", justify="center")
     table.add_column("Details")
+    table.add_column("Actionable Remediation")
 
     errors = 0
 
@@ -75,13 +83,17 @@ def run_policy_validate(console: Console) -> None:
                     f"[Remote] {filename}",
                     "[bold red]✗[/]",
                     f"Failed to fetch from {remote_url}",
+                    "Check guard.remote_policy_url and network access.",
                 )
                 errors += 1
                 continue
 
             if not isinstance(remote_data, dict):
                 table.add_row(
-                    f"[Remote] {filename}", "[bold red]✗[/]", "Expected a YAML mapping"
+                    f"[Remote] {filename}",
+                    "[bold red]✗[/]",
+                    "Expected a YAML mapping",
+                    "Change the remote policy root to a YAML object.",
                 )
                 errors += 1
                 continue
@@ -93,16 +105,27 @@ def run_policy_validate(console: Console) -> None:
                     f"[Remote] {filename}",
                     "[bold yellow]⚠[/]",
                     f"Unknown keys: {', '.join(unknown)}",
+                    "Remove unknown keys or add schema support before using them.",
                 )
             else:
-                table.add_row(f"[Remote] {filename}", "[bold green]✓[/]", "Valid")
+                table.add_row(
+                    f"[Remote] {filename}",
+                    "[bold green]✓[/]",
+                    "Valid",
+                    "-",
+                )
 
     # Check known policy files
     for filename, schema in KNOWN_POLICY_FILES.items():
         fpath = policies_dir / filename
 
         if not fpath.exists():
-            table.add_row(filename, "[bold yellow]⚠[/]", "Not found (optional)")
+            table.add_row(
+                filename,
+                "[bold yellow]⚠[/]",
+                "Not found (optional)",
+                "Create the file only if this policy type is needed.",
+            )
             continue
 
         try:
@@ -111,7 +134,12 @@ def run_policy_validate(console: Console) -> None:
             data = safe_load_yaml(fpath)
 
             if not isinstance(data, dict):
-                table.add_row(filename, "[bold red]✗[/]", "Expected a YAML mapping")
+                table.add_row(
+                    filename,
+                    "[bold red]✗[/]",
+                    "Expected a YAML mapping",
+                    "Rewrite the file as top-level YAML key/value pairs.",
+                )
                 errors += 1
                 continue
 
@@ -123,12 +151,18 @@ def run_policy_validate(console: Console) -> None:
                     filename,
                     "[bold yellow]⚠[/]",
                     f"Unknown keys: {', '.join(unknown)}",
+                    "Remove unknown keys or update the validator schema.",
                 )
             else:
-                table.add_row(filename, "[bold green]✓[/]", "Valid")
+                table.add_row(filename, "[bold green]✓[/]", "Valid", "-")
 
         except Exception as e:
-            table.add_row(filename, "[bold red]✗[/]", f"Load error: {e}")
+            table.add_row(
+                filename,
+                "[bold red]✗[/]",
+                f"Load error: {e}",
+                "Fix YAML syntax and rerun `niyam policy validate`.",
+            )
             errors += 1
 
     # Check for extra policy files
@@ -139,10 +173,18 @@ def run_policy_validate(console: Console) -> None:
 
                 safe_load_yaml(fpath)
                 table.add_row(
-                    fpath.name, "[bold cyan]ℹ[/]", "Custom policy (valid YAML)"
+                    fpath.name,
+                    "[bold cyan]ℹ[/]",
+                    "Custom policy (valid YAML)",
+                    "-",
                 )
             except Exception as e:
-                table.add_row(fpath.name, "[bold red]✗[/]", f"Load error: {e}")
+                table.add_row(
+                    fpath.name,
+                    "[bold red]✗[/]",
+                    f"Load error: {e}",
+                    "Fix YAML syntax or remove the invalid custom policy.",
+                )
                 errors += 1
 
     console.print(table)

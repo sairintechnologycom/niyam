@@ -8,6 +8,8 @@ import typer
 
 
 import logging
+import sys
+from difflib import get_close_matches
 from rich.console import Console
 
 
@@ -15,11 +17,44 @@ class NiyamTyper(typer.Typer):
     def __call__(self, *args, **kwargs):
         from niyam.core.errors import NiyamError
 
+        _print_command_suggestion(self)
         try:
             super().__call__(*args, **kwargs)
         except NiyamError as e:
             console.print(f"[bold red]Error:[/] {e}")
             raise SystemExit(e.code)
+
+
+def _print_command_suggestion(cli: typer.Typer) -> None:
+    """Print a best-effort suggestion for mistyped top-level commands."""
+    if len(sys.argv) < 2:
+        return
+    command = sys.argv[1]
+    if command.startswith("-"):
+        return
+
+    known = [
+        cmd.name
+        if isinstance(cmd.name, str)
+        else cmd.callback.__name__.replace("_", "-")
+        for cmd in cli.registered_commands
+        if cmd.callback is not None
+    ]
+    known.extend(
+        group.name
+        if isinstance(group.name, str)
+        else group.typer_instance.info.name
+        for group in cli.registered_groups
+        if isinstance(group.name, str)
+        or isinstance(group.typer_instance.info.name, str)
+    )
+    known = [name for name in known if isinstance(name, str)]
+    if command in known:
+        return
+
+    matches = get_close_matches(command, known, n=1, cutoff=0.68)
+    if matches:
+        console.print(f"[yellow]Unknown command '{command}'. Did you mean '{matches[0]}'?[/]")
 
 
 app = NiyamTyper(
@@ -171,15 +206,19 @@ def main_callback(
         "-v",
         help="Enable verbose output",
     ),
+    json_logs: bool = typer.Option(
+        False,
+        "--json-logs",
+        help="Emit structured JSON logs.",
+    ),
 ) -> None:
     """Niyam global callback to handle logging configurations."""
-    if verbose:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s %(name)s %(levelname)s %(message)s",
-        )
-    else:
-        logging.basicConfig(level=logging.WARNING)
+    from niyam.core.utils import configure_logging
+
+    configure_logging(
+        json_logs=json_logs,
+        level=logging.DEBUG if verbose else logging.WARNING,
+    )
 
 
 def main() -> None:

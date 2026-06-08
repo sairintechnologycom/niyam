@@ -77,6 +77,10 @@ def guard_run(
             "--capture-output", help="Capture command stdout/stderr output in logs."
         ),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Evaluate guard policy without executing."),
+    ] = False,
     mode: Annotated[
         Optional[str],
         typer.Option("--mode", help="Guard mode: observe, block, warn, approve."),
@@ -88,6 +92,7 @@ def guard_run(
     run_guard_run(
         cmd_args=ctx.args,
         capture_output=capture_output,
+        dry_run=dry_run,
         console=console,
         mode_override=mode,
     )

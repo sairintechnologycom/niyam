@@ -131,13 +131,13 @@ def run_init(
     if niyam_dir.exists() and not force:
         console.print(
             Panel(
-                f"[yellow]⚠ .niyam/ already exists in {repo_root}[/]\n\n"
-                "Use [bold]--force[/] to overwrite.",
-                title="[bold yellow]Already initialized[/]",
-                border_style="yellow",
+                f"[blue]Info:[/] .niyam/ already exists in {repo_root}\n\n"
+                "No files were changed. Use [bold]--force[/] to overwrite.",
+                title="[bold blue]Already initialized[/]",
+                border_style="blue",
             )
         )
-        raise SystemExit(1)
+        return
 
     # Validate profile
     try:

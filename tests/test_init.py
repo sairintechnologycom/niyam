@@ -159,21 +159,24 @@ class TestInit:
         policy_files = list(policies_dir.glob("*.yaml"))
         assert len(policy_files) >= 4
 
-    def test_init_fails_if_already_exists(self, niyam_repo: Path) -> None:
-        """niyam init should fail if .niyam/ already exists."""
+    def test_init_is_idempotent_if_already_exists(self, niyam_repo: Path) -> None:
+        """niyam init should no-op if .niyam/ already exists."""
         from niyam.core.init import run_init
 
         console = Console(quiet=True)
         os.chdir(niyam_repo)
+        marker = niyam_repo / ".niyam" / "marker.txt"
+        marker.write_text("keep me", encoding="utf-8")
 
-        with pytest.raises(SystemExit):
-            run_init(
-                profile="fullstack",
-                runtime=None,
-                dry_run=False,
-                force=False,
-                console=console,
-            )
+        run_init(
+            profile="fullstack",
+            runtime=None,
+            dry_run=False,
+            force=False,
+            console=console,
+        )
+
+        assert marker.read_text(encoding="utf-8") == "keep me"
 
     def test_init_force_overwrites(self, niyam_repo: Path) -> None:
         """niyam init --force should overwrite existing .niyam/."""

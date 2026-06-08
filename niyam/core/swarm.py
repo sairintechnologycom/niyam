@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import asyncio
+import inspect
 import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -21,6 +23,16 @@ STALE_HEARTBEAT_TIMEOUT = 60  # seconds
 
 AgentStatus = Literal["idle", "busy", "waiting", "offline"]
 LedgerAction = Literal["request_lock", "yield_lock", "deny_lock", "handoff", "info"]
+
+
+async def execute_layer_concurrently(tasks: list, agent_executor) -> list:
+    """Execute independent DAG layer tasks concurrently with a barrier."""
+    async def _run_task(task):
+        if inspect.iscoroutinefunction(agent_executor):
+            return await agent_executor(task)
+        return await asyncio.to_thread(agent_executor, task)
+
+    return await asyncio.gather(*(_run_task(task) for task in tasks))
 
 
 # ── Models ───────────────────────────────────────────────────────────

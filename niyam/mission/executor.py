@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 from pathlib import Path
 import shutil
 import subprocess
@@ -24,6 +25,7 @@ from niyam.mission.worktree import (
     git_has_commits,
     merge_final_changes,
     delete_mission_branches,
+    save_checkpoint,
 )
 from niyam.mission.task_runner import (
     log_execution_event,
@@ -32,6 +34,52 @@ from niyam.mission.task_runner import (
     check_overlap,
 )
 from niyam.mission.state_machine import transition_task, transition_mission, log_mission_event
+
+
+MAX_HEALING_RETRIES = 3
+
+
+def execute_with_healing(
+    task: dict,
+    validation_command: str,
+    agent_executor,
+    repo_root: Path,
+    console: Console,
+    max_retries: int = MAX_HEALING_RETRIES,
+) -> bool:
+    """Execute a task, feed validation failures back to the agent, and checkpoint success."""
+    correction_prompt = None
+    for attempt in range(1, max_retries + 1):
+        result = agent_executor(task, correction_prompt=correction_prompt)
+        if result is False:
+            correction_prompt = "The previous execution reported failure. Please provide a fix."
+            continue
+
+        validation = subprocess.run(
+            shlex.split(validation_command),
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if validation.returncode == 0:
+            save_checkpoint(task["id"], repo_root, console=console)
+            return True
+
+        error_text = (validation.stderr or validation.stdout or "").strip()
+        correction_prompt = (
+            "The previous code failed validation.\n\n"
+            f"Command: {validation_command}\n"
+            f"Exit code: {validation.returncode}\n"
+            f"Error output:\n{error_text}\n\n"
+            "Please provide a targeted fix and rerun validation."
+        )
+        console.print(
+            f"[bold yellow]Validation failed for {task['id']}[/] "
+            f"(attempt {attempt}/{max_retries}). Retrying with correction prompt."
+        )
+
+    return False
 
 
 def run_mission_start(

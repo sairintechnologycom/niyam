@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
@@ -12,6 +13,85 @@ from rich.table import Table
 from niyam.cli import console, mission_app
 from niyam.cli.main_cmds import Runtime
 from niyam.mission.state_machine import transition_task, transition_mission
+
+
+@mission_app.command("ingest")
+def mission_ingest(
+    prd_path: Annotated[
+        str,
+        typer.Argument(help="Path to a Product Requirements Document markdown file."),
+    ],
+) -> None:
+    """Ingest a PRD into structured requirement markdown."""
+    from niyam.core.config import find_niyam_root
+    from niyam.core.errors import NiyamConfigError
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
+
+    source_path = Path(prd_path)
+    if not source_path.exists():
+        console.print(f"[bold red]Error:[/] PRD file not found: {prd_path}")
+        raise typer.Exit(1)
+
+    prd_text = source_path.read_text(encoding="utf-8")
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = requirements_dir / f"{source_path.stem}-structured.md"
+    structured = _structure_prd_markdown(source_path.name, prd_text)
+    output_path.write_text(structured, encoding="utf-8")
+
+    console.print(
+        f"[bold green]✓[/] Ingested PRD into [cyan]{output_path.relative_to(repo_root)}[/]."
+    )
+
+
+def _structure_prd_markdown(source_name: str, prd_text: str) -> str:
+    """Create a deterministic epic/story scaffold from a markdown PRD."""
+    title = source_name.rsplit(".", 1)[0].replace("-", " ").replace("_", " ").title()
+    lines = [line.strip() for line in prd_text.splitlines() if line.strip()]
+    headings = [line.lstrip("# ").strip() for line in lines if line.startswith("#")]
+    bullets = [
+        line.lstrip("-* ").strip()
+        for line in lines
+        if line.startswith(("- ", "* ")) and len(line.strip()) > 2
+    ]
+
+    epics = headings[1:] if len(headings) > 1 else headings[:1] or [title]
+    stories = bullets[:10] or [
+        "Convert the PRD into implementation-ready tasks.",
+        "Validate the implementation against acceptance criteria.",
+    ]
+
+    output = [
+        f"# Structured Requirements: {title}",
+        "",
+        f"Source: `{source_name}`",
+        "",
+        "## Epics",
+        "",
+    ]
+    for index, epic in enumerate(epics, 1):
+        output.append(f"- EPIC-{index:03d}: {epic}")
+
+    output.extend(["", "## Stories", ""])
+    for index, story in enumerate(stories, 1):
+        epic_id = min(index, len(epics))
+        output.extend(
+            [
+                f"### STORY-{index:03d}",
+                f"- Epic: EPIC-{epic_id:03d}",
+                f"- Requirement: {story}",
+                "- Acceptance Criteria:",
+                "  - The requirement is implemented and verified.",
+                "  - Relevant validation commands pass.",
+                "",
+            ]
+        )
+
+    return "\n".join(output)
 
 
 @mission_app.command("plan")

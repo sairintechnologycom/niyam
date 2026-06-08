@@ -46,6 +46,46 @@ def git_has_commits(repo_root: Path) -> bool:
     return res.returncode == 0
 
 
+def save_checkpoint(task_id: str, repo_root: Path, console: Console | None = None) -> str:
+    """Commit current changes, then update a local checkpoint branch."""
+    if not is_git_repo(repo_root) or not git_has_commits(repo_root):
+        raise RuntimeError("Cannot save checkpoint outside a Git repo with commits.")
+
+    safe_task_id = "".join(c if c.isalnum() or c in ("-", "_") else "-" for c in task_id)
+    branch_name = f"niyam/checkpoint-{safe_task_id}"
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--", ":!.niyam"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if status.stdout.strip():
+        subprocess.run(
+            ["git", "add", "-A", "--", ":!.niyam"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"Niyam checkpoint {task_id}"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+        )
+
+    subprocess.run(
+        ["git", "branch", "-f", branch_name, "HEAD"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+    )
+    if console:
+        console.print(f"[dim]Saved checkpoint branch {branch_name}[/]")
+    return branch_name
+
+
 def branch_exists(repo_root: Path, branch_name: str) -> bool:
     """Check if a local Git branch exists."""
     res = subprocess.run(

@@ -44,6 +44,78 @@ MissionStatus = Literal[
 ]
 
 
+class IllegalStateTransitionError(ValueError):
+    """Raised when a mission or task attempts an invalid state transition."""
+
+
+VALID_TASK_TRANSITIONS: dict[str, set[str]] = {
+    "planned": {
+        "approved",
+        "queued",
+        "preparing",
+        "awaiting_approval",
+        "running",
+        "retry_ready",
+        "completed",
+        "failed",
+        "skipped",
+        "cancelled",
+    },
+    "approved": {"queued", "preparing", "running", "failed", "skipped", "cancelled"},
+    "queued": {
+        "preparing",
+        "running",
+        "retry_ready",
+        "completed",
+        "failed",
+        "skipped",
+        "cancelled",
+    },
+    "preparing": {"running", "completed", "failed", "cancelled"},
+    "awaiting_approval": {"approved", "failed", "skipped", "cancelled"},
+    "running": {"validating", "reviewing", "blocked", "needs_human", "completed", "failed", "cancelled"},
+    "validating": {"reviewing", "merging", "completed", "failed", "retry_ready", "cancelled"},
+    "reviewing": {"merging", "completed", "failed", "retry_ready", "cancelled"},
+    "merging": {"completed", "failed", "rolled_back"},
+    "blocked": {"retry_ready", "needs_human", "failed", "skipped", "cancelled"},
+    "needs_human": {"approved", "retry_ready", "failed", "skipped", "cancelled"},
+    "retry_ready": {"planned", "approved", "queued", "preparing", "running", "failed", "skipped", "cancelled"},
+    "failed": {"retry_ready", "planned", "skipped", "rolled_back"},
+    "skipped": {"retry_ready", "planned"},
+    "completed": {"rolled_back"},
+    "cancelled": {"retry_ready", "rolled_back"},
+    "rolled_back": {"retry_ready", "planned"},
+}
+
+
+VALID_MISSION_TRANSITIONS: dict[str, set[str]] = {
+    "planned": {"approved", "running", "failed", "cancelled"},
+    "approved": {"running", "paused", "failed", "cancelled", "rolled_back"},
+    "running": {"paused", "completed", "failed", "cancelled", "rolled_back"},
+    "paused": {"approved", "running", "failed", "cancelled", "rolled_back"},
+    "completed": {"rolled_back"},
+    "failed": {"approved", "running", "rolled_back"},
+    "cancelled": {"approved", "rolled_back"},
+    "rolled_back": {"approved", "running"},
+}
+
+
+def _validate_transition(
+    entity_type: str,
+    entity_id: str,
+    from_status: str,
+    to_status: str,
+    valid_transitions: dict[str, set[str]],
+) -> None:
+    allowed = valid_transitions.get(from_status, set())
+    if to_status not in allowed:
+        allowed_text = ", ".join(sorted(allowed)) or "none"
+        raise IllegalStateTransitionError(
+            f"Illegal {entity_type} state transition for {entity_id}: "
+            f"'{from_status}' -> '{to_status}'. Allowed next states: {allowed_text}."
+        )
+
+
 def log_mission_event(
     run_dir: Path,
     event_type: str,
@@ -109,6 +181,13 @@ def transition_task(
     from_status = target_task.get("status", "planned")
     if from_status == to_status:
         return
+    _validate_transition(
+        "task",
+        task_id,
+        from_status,
+        to_status,
+        VALID_TASK_TRANSITIONS,
+    )
 
     # Update task status
     target_task["status"] = to_status
@@ -167,6 +246,13 @@ def transition_mission(
     from_status = mission_meta.get("status", "planned")
     if from_status == to_status:
         return
+    _validate_transition(
+        "mission",
+        run_dir.name,
+        from_status,
+        to_status,
+        VALID_MISSION_TRANSITIONS,
+    )
 
     # Update mission status
     mission_meta["status"] = to_status
@@ -196,4 +282,3 @@ def transition_mission(
             "actor": actor,
         }
     )
-

@@ -289,6 +289,68 @@ def inject_validation_commands(tasks: list[dict], repo_root: Path) -> None:
                 task["validation"]["commands"] = []
 
 
+class CircularDependencyError(ValueError):
+    """Raised when a mission task graph contains a cycle."""
+
+
+class DAGPlanner:
+    """Build executable task layers from `depends_on` relationships."""
+
+    @staticmethod
+    def _task_id(task) -> str:
+        return task["id"] if isinstance(task, dict) else task.id
+
+    @staticmethod
+    def _depends_on(task) -> list[str]:
+        deps = task.get("depends_on", []) if isinstance(task, dict) else task.depends_on
+        return list(deps or [])
+
+    def executable_layers(self, tasks: list) -> list[list]:
+        """Return topologically sorted batches of unblocked tasks."""
+        task_by_id = {self._task_id(task): task for task in tasks}
+        indegree = {task_id: 0 for task_id in task_by_id}
+        dependents = {task_id: [] for task_id in task_by_id}
+
+        for task in tasks:
+            task_id = self._task_id(task)
+            for dep_id in self._depends_on(task):
+                if dep_id not in task_by_id:
+                    raise ValueError(
+                        f"Task '{task_id}' depends on unknown task '{dep_id}'."
+                    )
+                indegree[task_id] += 1
+                dependents[dep_id].append(task_id)
+
+        layers: list[list] = []
+        ready = [task_id for task_id, degree in indegree.items() if degree == 0]
+        processed: set[str] = set()
+
+        while ready:
+            current_ids = sorted(ready)
+            ready = []
+            layers.append([task_by_id[task_id] for task_id in current_ids])
+
+            for task_id in current_ids:
+                processed.add(task_id)
+                for dependent_id in dependents[task_id]:
+                    indegree[dependent_id] -= 1
+                    if indegree[dependent_id] == 0:
+                        ready.append(dependent_id)
+
+        if len(processed) != len(tasks):
+            cycle_ids = sorted(set(task_by_id) - processed)
+            raise CircularDependencyError(
+                "Circular task dependency detected involving: "
+                + ", ".join(cycle_ids)
+            )
+
+        return layers
+
+    def topological_sort(self, tasks: list) -> list:
+        """Return a flattened topological ordering of tasks."""
+        return [task for layer in self.executable_layers(tasks) for task in layer]
+
+
 DEFAULT_TEMPLATES = {
     "api-endpoint": {
         "name": "api-endpoint",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -11,6 +12,44 @@ from rich.panel import Panel
 from rich.table import Table
 
 from niyam.cli import app, console
+from niyam.cli.context import is_interactive, prompt_text
+
+
+_SCAN_OPTIONS_WITH_VALUES = {
+    "--profile",
+    "-p",
+    "--output",
+    "-o",
+    "--report-file",
+    "-f",
+    "--rules",
+    "--fail-on",
+    "--baseline",
+    "--create-baseline",
+}
+
+
+def _scan_path_was_omitted() -> bool:
+    """Best-effort detection for prompting without changing the public CLI shape."""
+    try:
+        scan_index = sys.argv.index("scan")
+    except ValueError:
+        return False
+
+    skip_next = False
+    for arg in sys.argv[scan_index + 1 :]:
+        if arg == "--":
+            return False
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in _SCAN_OPTIONS_WITH_VALUES:
+            skip_next = True
+            continue
+        if arg.startswith("-"):
+            continue
+        return False
+    return True
 
 
 def generate_sarif_report(results: dict) -> str:
@@ -229,6 +268,9 @@ def scan_command(
     ] = None,
 ) -> None:
     """[Experimental] Scan the repository for production-readiness and code risk factors."""
+    if output == "text" and path == "." and _scan_path_was_omitted():
+        path = prompt_text("Directory to scan", ".")
+
     scan_path = Path(path).resolve()
     if not scan_path.exists():
         console.print(f"[bold red]Error:[/] Directory '{path}' does not exist.")
@@ -246,13 +288,23 @@ def scan_command(
     from niyam.governance.scan.command import execute_scan
 
     try:
-        results = execute_scan(
-            str(scan_path),
-            profile=profile,
-            custom_rules_path=custom_rules,
-            baseline_path=baseline_path,
-            create_baseline_path=create_baseline_path,
-        )
+        if output == "text" and is_interactive():
+            with console.status("[cyan]Analyzing repository...[/]", spinner="dots"):
+                results = execute_scan(
+                    str(scan_path),
+                    profile=profile,
+                    custom_rules_path=custom_rules,
+                    baseline_path=baseline_path,
+                    create_baseline_path=create_baseline_path,
+                )
+        else:
+            results = execute_scan(
+                str(scan_path),
+                profile=profile,
+                custom_rules_path=custom_rules,
+                baseline_path=baseline_path,
+                create_baseline_path=create_baseline_path,
+            )
     except (ValueError, FileNotFoundError) as e:
         console.print(f"[bold red]Configuration Error:[/] {e}")
         raise typer.Exit(3)
@@ -265,6 +317,15 @@ def scan_command(
     except Exception as e:
         console.print(f"[bold red]Unexpected Error:[/] {e}")
         raise typer.Exit(1)
+
+    try:
+        from niyam.core.config import find_niyam_root
+        from niyam.core.memory import CodebaseIndexer
+
+        repo_root = find_niyam_root(scan_path) or scan_path
+        CodebaseIndexer(repo_root).build_index()
+    except Exception:
+        pass
 
     # Redact all results before writing or printing
     from niyam.governance.common.redaction import redact_secrets, redact_text

@@ -570,6 +570,7 @@ def run_guard_run(
     cmd_args: list[str],
     capture_output: bool,
     console: Console,
+    dry_run: bool = False,
     mode_override: str | None = None,
 ) -> None:
     if not cmd_args:
@@ -776,6 +777,45 @@ def run_guard_run(
                 f.write(json.dumps(log_entry) + "\n")
         except Exception as e:
             console.print(f"[dim yellow]Warning: Failed to write guard log: {e}[/]")
+
+    if dry_run:
+        table = Table(
+            title="Niyam Guard Dry Run",
+            header_style="bold yellow",
+            show_lines=False,
+        )
+        table.add_column("Command", style="cyan")
+        table.add_column("Mode")
+        table.add_column("Policy Decision")
+        table.add_column("Matched Policy")
+        table.add_column("Actionable Remediation")
+
+        remediation = "No remediation needed."
+        dry_run_decision = "allowed"
+        if policy_decision in ("block", "approval_required"):
+            dry_run_decision = "would_fail"
+            remediation = (
+                "Change the command, update the relevant policy, or request human "
+                "approval before running without --dry-run."
+            )
+        elif policy_decision == "warn":
+            dry_run_decision = "would_warn"
+            remediation = "Review the command risk before running without --dry-run."
+
+        table.add_row(
+            redacted_command,
+            mode,
+            policy_decision,
+            matched_rule or "-",
+            remediation,
+        )
+        if dry_run_decision == "allowed":
+            console.print("[bold green]✓[/] Guard dry run passed. Command would be allowed.")
+        else:
+            console.print(table)
+
+        write_log(0, 0, dry_run_decision, policy_decision)
+        raise SystemExit(0)
 
     # Enforcement
     if policy_decision == "block" and mode == "block":

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 from rich.console import Console
@@ -150,3 +152,122 @@ def run_memory_clear(file: str, console: Console) -> None:
     )
     filepath.write_text(initial_content, encoding="utf-8")
     console.print(f"[bold green]✓[/] Cleared memory '[cyan]{filepath.name}[/]'.")
+
+
+class CodebaseIndexer:
+    """Lightweight local code index stored under `.niyam/db/`."""
+
+    DEFAULT_SKIP_DIRS = {
+        ".git",
+        ".niyam",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+        "dist",
+        "build",
+        ".pytest_cache",
+    }
+
+    TEXT_EXTENSIONS = {
+        ".py",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".md",
+        ".toml",
+        ".yaml",
+        ".yml",
+        ".json",
+        ".txt",
+        ".sh",
+        ".css",
+        ".html",
+    }
+
+    def __init__(self, repo_root: Path, collection_name: str = "codebase") -> None:
+        self.repo_root = repo_root.resolve()
+        self.db_dir = get_niyam_dir(self.repo_root) / "db"
+        self.collection_name = collection_name
+
+    def _iter_files(self) -> list[Path]:
+        if (self.repo_root / ".git").exists():
+            res = subprocess.run(
+                ["git", "ls-files"],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                return [
+                    self.repo_root / line
+                    for line in res.stdout.splitlines()
+                    if self._should_index(self.repo_root / line)
+                ]
+
+        files: list[Path] = []
+        for root, dirs, filenames in os.walk(self.repo_root):
+            dirs[:] = [d for d in dirs if d not in self.DEFAULT_SKIP_DIRS]
+            for filename in filenames:
+                path = Path(root) / filename
+                if self._should_index(path):
+                    files.append(path)
+        return files
+
+    def _should_index(self, path: Path) -> bool:
+        if any(part in self.DEFAULT_SKIP_DIRS for part in path.parts):
+            return False
+        if path.suffix.lower() not in self.TEXT_EXTENSIONS:
+            return False
+        try:
+            return path.stat().st_size <= 512_000
+        except OSError:
+            return False
+
+    def chunk_file(self, path: Path, max_chars: int = 4000) -> list[str]:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        chunks = []
+        for start in range(0, len(text), max_chars):
+            chunk = text[start : start + max_chars].strip()
+            if chunk:
+                chunks.append(chunk)
+        return chunks
+
+    def build_index(self) -> int:
+        """Index files into Chroma when available, else JSONL fallback."""
+        self.db_dir.mkdir(parents=True, exist_ok=True)
+        files = self._iter_files()
+
+        try:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=str(self.db_dir))
+            collection = client.get_or_create_collection(self.collection_name)
+            ids: list[str] = []
+            docs: list[str] = []
+            metas: list[dict[str, str | int]] = []
+            for path in files:
+                rel = str(path.relative_to(self.repo_root))
+                for index, chunk in enumerate(self.chunk_file(path)):
+                    ids.append(f"{rel}:{index}")
+                    docs.append(chunk)
+                    metas.append({"path": rel, "chunk": index})
+            if ids:
+                collection.upsert(ids=ids, documents=docs, metadatas=metas)
+            return len(ids)
+        except Exception:
+            index_path = self.db_dir / "codebase-index.jsonl"
+            count = 0
+            with open(index_path, "w", encoding="utf-8") as f:
+                for path in files:
+                    rel = str(path.relative_to(self.repo_root))
+                    for index, chunk in enumerate(self.chunk_file(path)):
+                        f.write(
+                            json.dumps(
+                                {"id": f"{rel}:{index}", "path": rel, "text": chunk}
+                            )
+                            + "\n"
+                        )
+                        count += 1
+            return count

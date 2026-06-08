@@ -2,11 +2,38 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Console
 
 from niyam.cli import console, context_app
+
+
+def is_interactive() -> bool:
+    """Return True when the CLI can safely prompt or show live terminal UI."""
+    return sys.stdout.isatty() and sys.stdin.isatty() and not os.getenv("CI")
+
+
+def rich_console() -> Console:
+    """Return a console configured for the current environment."""
+    return Console(no_color=not is_interactive())
+
+
+def prompt_text(message: str, default: str) -> str:
+    """Prompt for text when interactive, with a no-dependency fallback."""
+    if not is_interactive():
+        return default
+
+    try:
+        import questionary
+
+        answer = questionary.text(message, default=default).ask()
+        return answer or default
+    except Exception:
+        return typer.prompt(message, default=default)
 
 
 @context_app.command("refresh")
