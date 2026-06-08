@@ -204,7 +204,7 @@ class TaskContract(BaseModel):
 
     id: str
     title: str
-    type: Literal["discovery", "implementation", "review", "validation"]
+    type: Literal["discovery", "implementation", "review", "validation", "recovery"]
     status: Literal[
         "planned",
         "approved",

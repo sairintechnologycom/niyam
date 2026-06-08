@@ -267,24 +267,29 @@ def run_mission_start(
                             continue
                         ready_tasks.append(t)
 
+            # Sort ready tasks to prioritize 'recovery' tasks
+            ready_tasks.sort(key=lambda x: x.get("type") != "recovery")
+
             # Submit ready tasks up to concurrency capacity
             for t in ready_tasks:
                 if len(running_tasks) < parallel_limit:
                     t_id = t["id"]
                     
                     # ── Phase 10: Manual Approval Gate ─────────────────────────
-                    if t.get("approval_required", False) and t["status"] not in ("approved", "retry_ready"):
+                    is_recovery = t.get("type") == "recovery"
+                    if (is_recovery or t.get("approval_required", False)) and t["status"] not in ("approved", "retry_ready"):
                         # If the task requires approval but hasn't been approved yet
                         if non_interactive:
                             with print_lock:
-                                console.print(f"[{t_id}] [yellow]Non-interactive mode: Auto-approving task with 'approval_required'[/]")
+                                console.print(f"[{t_id}] [yellow]Non-interactive mode: Auto-approving task with 'approval_required' or 'recovery' type[/]")
                             t["status"] = "approved"
                             save_plan(run_dir, current_plan)
                         else:
-                            transition_task(run_dir, t_id, "awaiting_approval", reason="Task requires manual human approval.")
+                            label = "recovery" if is_recovery else "approval_required"
+                            transition_task(run_dir, t_id, "awaiting_approval", reason=f"Task of type '{label}' requires manual human approval.")
                             with print_lock:
                                 console.print(Panel(
-                                    f"Task [cyan]{t_id}[/] requires manual approval before execution.\n"
+                                    f"Task [cyan]{t_id}[/] ({label}) requires manual approval before execution.\n"
                                     f"Run: [bold]niyam mission approve-task {t_id}[/] to proceed.",
                                     title="[bold yellow]Approval Required[/]",
                                     border_style="yellow"

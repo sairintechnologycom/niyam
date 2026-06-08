@@ -1419,16 +1419,21 @@ def _run_refiner_loop(
 
 
 def build_replanner_prompt(
-    requirement: str, 
-    plan_data: dict, 
+    requirement: str,
+    plan_data: dict,
     failure_context: str,
-    available_agents: list[str]
+    available_agents: list[str],
+    diagnostics: str | None = None,
 ) -> str:
     agents_str = ", ".join(available_agents)
     # Filter for completed tasks to show progress
     completed = [t for t in plan_data.get("tasks", []) if t.get("status") == "completed"]
     pending = [t for t in plan_data.get("tasks", []) if t.get("status") != "completed"]
-    
+
+    diag_section = ""
+    if diagnostics:
+        diag_section = f"\nEnvironment Diagnostics:\n{diagnostics}\n"
+
     return f"""You are the Niyam adaptive orchestrator.
 The current AI-assisted development mission has encountered a roadblock.
 Your goal is to generate a 'Delta Plan' for the REMAINING tasks to successfully complete the original requirement.
@@ -1447,24 +1452,27 @@ Pending/Failed Tasks (Current Plan):
 
 Failure Context / Obstacle:
 {failure_context}
-
+{diag_section}
 Instructions:
-1. Analyze the Failure Context. Why did the current plan fail?
+1. Analyze the Failure Context and Environment Diagnostics. Why did the current plan fail? Look for missing dependencies (e.g. ModuleNotFoundError), incompatible versions, or environment configuration issues.
 2. Propose a revised list of tasks for the REMAINING work.
 3. You may:
-   - Add new intermediate tasks (e.g., 'Refactor X to support Y').
+   - Add new 'recovery' tasks (e.g., 'Install missing package X', 'Configure environment variable Y').
+   - Add new intermediate implementation tasks.
    - Modify existing pending tasks.
    - Remove tasks that are no longer necessary.
 4. Ensure the first new task addresses the roadblock.
-5. Return ONLY a valid YAML block containing the 'tasks' key. No prose, no explanation.
+5. If the fix involves installing software or changing system state, use type: "recovery" and approval_required: true.
+6. Return ONLY a valid YAML block containing the 'tasks' key. No prose, no explanation.
 
 Schema:
 ```yaml
 tasks:
-  - id: T_NEW_1
-    title: "Correction: [Describe fix]"
-    type: "implementation"
-    agent: "..."
+  - id: T_RECOVERY_1
+    title: "Recovery: Install [package]"
+    type: "recovery"
+    agent: "backend-specialist"
+    approval_required: true
     ...
 ```
 """
@@ -1479,7 +1487,7 @@ def run_mission_replan(
     """Invokes AI to revise the remaining tasks in a mission plan."""
     from niyam.core.config import find_niyam_root
     from niyam.core.errors import NiyamConfigError
-    from niyam.mission.utils import load_plan, save_plan
+    from niyam.mission.utils import load_plan, save_plan, get_failure_diagnostics
 
     repo_root = find_niyam_root()
     if not repo_root:
@@ -1497,22 +1505,26 @@ def run_mission_replan(
 
     # Determine failure context
     failure_context = reason or "Manual intervention requested by developer."
+    failed_task_id = None
     if not reason:
         # Try to read the tail of the latest failed task log
         failed_tasks = [t for t in plan_data.get("tasks", []) if t.get("status") == "failed"]
         if failed_tasks:
-            f_id = failed_tasks[-1]["id"]
-            log_path = run_dir / f"task-{f_id}-output.log"
+            failed_task_id = failed_tasks[-1]["id"]
+            log_path = run_dir / f"task-{failed_task_id}-output.log"
             if log_path.exists():
                 log_tail = log_path.read_text(encoding="utf-8").splitlines()[-20:]
-                failure_context = f"Task {f_id} ('{failed_tasks[-1]['title']}') failed with logs:\n" + "\n".join(log_tail)
+                failure_context = f"Task {failed_task_id} ('{failed_tasks[-1]['title']}') failed with logs:\n" + "\n".join(log_tail)
+
+    # Gather environment diagnostics
+    diagnostics = get_failure_diagnostics(run_dir, failed_task_id)
 
     # Available agents
     agents_dir = niyam_dir / "agents"
     available_agents = [f.stem for f in agents_dir.glob("*.md")] if agents_dir.is_dir() else ["default-agent"]
 
     orchestrator = runtime_override or plan_data["mission"]["orchestrator"]
-    prompt = build_replanner_prompt(requirement, plan_data, failure_context, available_agents)
+    prompt = build_replanner_prompt(requirement, plan_data, failure_context, available_agents, diagnostics=diagnostics)
     
     console.print(f"[cyan]Re-planning mission '{mission_id}' using '{orchestrator}'...[/]")
     

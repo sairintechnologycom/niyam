@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import platform
+import sys
 import threading
-import yaml
+from datetime import datetime, timezone
 from pathlib import Path
+
+import yaml
+
 from niyam.core.utils import compute_sha256
 
 # Shared locks for thread-safe operations
@@ -78,3 +84,46 @@ def load_plan(run_dir: Path) -> dict:
                 return validated.model_dump()
             finally:
                 fcntl.flock(lock_f, fcntl.LOCK_UN)
+
+
+def get_failure_diagnostics(run_dir: Path, failed_task_id: str | None = None) -> str:
+    """Gather diagnostic information after a task/mission failure."""
+    from niyam.governance.common.redaction import redact_text
+
+    diagnostics = []
+    diagnostics.append("=== Niyam Failure Diagnostics ===")
+    diagnostics.append(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    diagnostics.append(
+        f"OS: {platform.system()} {platform.release()} ({platform.machine()})"
+    )
+    diagnostics.append(f"Python: {sys.version.split()[0]} ({sys.executable})")
+
+    # 1. Failed Task Log
+    if failed_task_id:
+        log_path = run_dir / f"task-{failed_task_id}-output.log"
+        if log_path.exists():
+            diagnostics.append(f"\n--- Log Tail: Task {failed_task_id} ---")
+            try:
+                content = log_path.read_text(encoding="utf-8").splitlines()
+                tail = content[-50:]
+                diagnostics.append("\n".join(tail))
+            except Exception as e:
+                diagnostics.append(f"(Error reading log: {e})")
+
+    # 2. Environment Variables (Redacted)
+    diagnostics.append("\n--- Environment Variables (Redacted) ---")
+    env_lines = []
+    # Filter for interesting env vars
+    interesting_prefixes = ("PYTHON", "NODE", "PIP", "UV", "NIYAM", "SHELL")
+    for k, v in sorted(os.environ.items()):
+        is_interesting = any(k.startswith(p) for p in interesting_prefixes) or "PATH" in k
+        if is_interesting:
+            redacted_v = redact_text(v)
+            env_lines.append(f"{k}={redacted_v}")
+
+    if env_lines:
+        diagnostics.append("\n".join(env_lines))
+    else:
+        diagnostics.append("(No relevant environment variables found)")
+
+    return "\n".join(diagnostics)
