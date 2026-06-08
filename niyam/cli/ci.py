@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -33,6 +33,13 @@ def ci_verify(
             help="Minimum readiness score required to pass.",
         ),
     ] = 50,
+    public_key: Annotated[
+        Optional[str],
+        typer.Option(
+            "--public-key",
+            help="Public key PEM string for evidence verification.",
+        ),
+    ] = None,
 ) -> None:
     """Verify cryptographic integrity, guardrails, and validation status for CI/CD."""
     from niyam.core.ci import run_ci_verify
@@ -42,7 +49,8 @@ def ci_verify(
             target_branch=target, 
             strict=strict, 
             min_score=min_score,
-            console=console
+            console=console,
+            public_key_pem=public_key
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")

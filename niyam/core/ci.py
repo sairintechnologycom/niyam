@@ -24,11 +24,16 @@ def run_ci_verify(
     target_branch: str = "main", 
     strict: bool = True, 
     min_score: int = 50,
-    console: Console = None
+    console: Console = None,
+    public_key_pem: str | None = None
 ) -> None:
     """Verify cryptographic integrity, guardrails, and validation status for CI/CD."""
     if console is None:
         console = Console()
+
+    # Public key from env fallback
+    if not public_key_pem:
+        public_key_pem = os.environ.get("NIYAM_PUBLIC_KEY")
 
     root = find_niyam_root()
     if root is None:
@@ -107,7 +112,7 @@ def run_ci_verify(
         console.print("[cyan]Verifying evidence report integrity...[/]")
         try:
             # We call run_verify_report which handles printing and exits on failure
-            run_verify_report(str(evidence_path), console)
+            run_verify_report(str(evidence_path), console, public_key_pem=public_key_pem)
             integrity_status = "passed"
         except SystemExit as e:
             if e.code != 0:

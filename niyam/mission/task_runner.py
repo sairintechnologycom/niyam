@@ -533,22 +533,60 @@ def get_mock_change_path(allowed_files: list[str], task_id: str) -> str:
 
 
 def check_overlap(files1: list[str], files2: list[str]) -> bool:
-    """Check if two sets of allowed files/globs overlap."""
+    """Check if two sets of allowed files/globs overlap.
+    
+    Robustly handles nested globs like 'src/**' and 'src/components/*'.
+    """
     if not files1 or not files2:
         return False
 
-    f1 = [f.strip() for f in files1]
-    f2 = [f.strip() for f in files2]
+    def normalize(p: str) -> str:
+        p = p.strip()
+        if p.startswith("./"):
+            p = p[2:]
+        return p
 
-    if "*" in f1 or "all" in f1 or "*" in f2 or "all" in f2:
+    f1 = [normalize(f) for f in files1]
+    f2 = [normalize(f) for f in files2]
+
+    # Quick exit for universal access
+    universal = {"*", "all", "**", "./*", "Any"}
+    if any(p in universal for p in f1) or any(p in universal for p in f2):
         return True
 
     for p1 in f1:
         for p2 in f2:
+            # 1. Exact match
             if p1 == p2:
                 return True
-            if fnmatch.fnmatch(p1, p2) or fnmatch.fnmatch(p2, p1):
+            
+            # 2. Directory prefix check (e.g. 'src/**' vs 'src/app.py')
+            # Strip glob characters to get base path
+            b1 = p1.split("*")[0].rstrip("/")
+            b2 = p2.split("*")[0].rstrip("/")
+            
+            if not b1 or not b2: # Root overlap
+                 return True
+                 
+            # If one base path is a parent of another, they MIGHT overlap
+            # We check if b1 is a prefix of b2 or vice-versa
+            if b1 == b2:
                 return True
+            
+            if b1.startswith(b2 + "/") or b2.startswith(b1 + "/"):
+                 # They are in the same directory branch.
+                 # If the parent one is a glob, they definitely overlap.
+                 # E.g. 'src/**' (b1='src') vs 'src/components/x.py' (b2='src/components/x.py')
+                 if "*" in p1 or "*" in p2:
+                     return True
+
+            # 3. Fnmatch fallback for simple cases (e.g. *.py)
+            try:
+                if fnmatch.fnmatch(p1, p2) or fnmatch.fnmatch(p2, p1):
+                    return True
+            except Exception:
+                pass
+                
     return False
 
 

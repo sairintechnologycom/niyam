@@ -31,18 +31,18 @@ def compute_sha256(file_path: Path) -> str:
         return f"ERROR: {e}"
 
 
-from niyam.core.identity import ensure_identity, sign_data, verify_signature
+from niyam.core.identity import ensure_identity, sign_data, verify_signature, get_public_key_bytes
 
 
-def _get_signing_key(repo_root: Path | None = None) -> str:
+def _get_signing_key(repo_root: Path | None = None):
     """Get or create the local identity key."""
     return ensure_identity(repo_root)
 
 
-def compute_manifest_signature(manifest_files: dict[str, str], signing_key: str) -> str:
-    """Compute HMAC-SHA256 over canonical manifest content."""
+def compute_manifest_signature(manifest_files: dict[str, str], private_key) -> str:
+    """Compute Ed25519 signature over canonical manifest content."""
     canonical = "\n".join(f"{k}:{v}" for k, v in sorted(manifest_files.items()))
-    return sign_data(canonical, signing_key)
+    return sign_data(canonical, private_key)
 
 
 def get_changed_files(repo_root: Path) -> list[str]:
@@ -338,10 +338,11 @@ def run_mission_report(
     }
 
     # Add signature using the local identity key
-    signing_key = _get_signing_key(repo_root)
-    manifest["signature"] = compute_manifest_signature(manifest_files, signing_key)
+    private_key = _get_signing_key(repo_root)
+    manifest["signature"] = compute_manifest_signature(manifest_files, private_key)
+    manifest["public_key"] = get_public_key_bytes(repo_root).decode("utf-8")
     manifest["signed"] = True
-    manifest["identity_path"] = str(get_niyam_dir(repo_root) / "identity.key")
+    manifest["identity_path"] = str(get_niyam_dir(repo_root) / "identity.pem")
 
     report_sections.append("## Cryptographic Integrity Manifest")
     report_sections.append("")
@@ -393,7 +394,7 @@ def run_mission_report(
     )
 
 
-def run_verify_report(evidence_path: str, console: Console) -> None:
+def run_verify_report(evidence_path: str, console: Console, public_key_pem: str | None = None) -> None:
     """Verify cryptographic integrity of an evidence report."""
     path = Path(evidence_path)
     if not path.exists():
@@ -458,15 +459,21 @@ def run_verify_report(evidence_path: str, console: Console) -> None:
     # Verify signature
     status_msg = "not signed"
     if manifest.get("signed"):
-        signing_key = _get_signing_key(repo_root)
-        actual_signature = compute_manifest_signature(manifest.get("files", {}), signing_key)
-        expected_signature = manifest.get("signature") or manifest.get("hmac_sha256")
+        # Use provided key or manifest key
+        verify_key = public_key_pem or manifest.get("public_key")
+        
+        if not verify_key:
+             # Fallback: try to get local key if not in manifest (for transition)
+             verify_key = get_public_key_bytes(repo_root).decode("utf-8")
+        
+        canonical_content = "\n".join(f"{k}:{v}" for k, v in sorted(manifest.get("files", {}).items()))
+        expected_signature = manifest.get("signature")
         
         if not expected_signature:
              console.print("[bold red]❌ Signature verification FAILED.[/] No signature found in manifest.")
              raise SystemExit(1)
 
-        if not hmac.compare_digest(actual_signature, expected_signature):
+        if not verify_signature(canonical_content, expected_signature, verify_key.encode("utf-8") if isinstance(verify_key, str) else verify_key):
             console.print(
                 "[bold red]❌ Cryptographic signature verification FAILED.[/] The manifest may have been tampered with or signed by a different identity."
             )

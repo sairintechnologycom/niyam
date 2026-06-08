@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import typer
 from rich.panel import Panel
 from rich.table import Table
@@ -22,9 +23,10 @@ def identity_show() -> None:
     if key_path.exists():
         table.add_row("Status", "[bold green]Active[/]")
         table.add_row("Key Path", str(key_path))
-        # Don't show the full key for safety
-        key = key_path.read_text(encoding="utf-8").strip()
-        table.add_row("Key Fingerprint", f"sha256:{key[:8]}...")
+        # Use hashlib for fingerprint
+        content = key_path.read_bytes()
+        fp = hashlib.sha256(content).hexdigest()
+        table.add_row("Key Fingerprint", f"sha256:{fp[:12]}...")
     else:
         table.add_row("Status", "[bold yellow]Not Initialized[/]")
         table.add_row("Action", "Run `niyam identity init` to create a new key.")
@@ -52,3 +54,18 @@ def identity_init(
     console.print(f"[bold green]✓[/] Identity key generated successfully.")
     console.print(f"  - [dim]Location:[/] {key_path}")
     console.print("This key will be used to sign all future evidence reports.")
+
+
+@identity_app.command("public-key")
+def identity_public_key() -> None:
+    """Export the local identity public key in PEM format."""
+    from niyam.core.identity import get_public_key_bytes
+    
+    try:
+        pub_key = get_public_key_bytes()
+        console.print("[bold cyan]Niyam Public Key (PEM):[/]\n")
+        console.print(pub_key.decode("utf-8"))
+        console.print("\n[dim]Configure this key in your CI/CD pipeline (NIYAM_PUBLIC_KEY) to verify evidence reports.[/]")
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
