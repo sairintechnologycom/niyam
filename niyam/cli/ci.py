@@ -55,3 +55,30 @@ def ci_verify(
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         raise typer.Exit(1)
+
+
+@ci_app.command("generate")
+def ci_generate(
+    provider: Annotated[
+        str,
+        typer.Argument(
+            help="CI/CD provider to generate templates for (github, azure, gitlab).",
+        ),
+    ],
+) -> None:
+    """Generate CI/CD pipeline configuration files for Niyam governance."""
+    from niyam.core.config import find_niyam_root
+    from niyam.core.ci_generators import generate_ci_integration
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first.")
+        raise typer.Exit(1)
+
+    try:
+        success = generate_ci_integration(provider, repo_root, console)
+        if not success:
+            raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
