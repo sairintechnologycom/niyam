@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import threading
+import time
 from datetime import datetime, timezone
 import yaml
 import concurrent.futures
@@ -249,6 +250,9 @@ def run_mission_start(
                     console,
                 )
                 return
+
+            # Avoid busy-waiting and lock contention
+            time.sleep(0.1)
 
             # Find ready tasks
             ready_tasks = []
