@@ -1306,6 +1306,43 @@ Do not perform destructive operations.
                 if not cmd_success:
                     success = False
 
+        # Evaluate minimum test coverage if configured
+        try:
+            from niyam.core.config import load_niyam_config
+            niyam_config = load_niyam_config(repo_root)
+            if niyam_config and niyam_config.governance and niyam_config.governance.scan:
+                min_coverage = niyam_config.governance.scan.min_test_coverage
+                if min_coverage is not None:
+                    from niyam.core.coverage import find_and_parse_coverage
+                    cov_result = find_and_parse_coverage(repo_root)
+                    if cov_result:
+                        actual_coverage = cov_result["percentage"]
+                        if actual_coverage < min_coverage:
+                            success = False
+                            validation_results.append({
+                                "name": "coverage", 
+                                "command": "internal_coverage_check", 
+                                "success": False, 
+                                "error": f"Coverage {actual_coverage}% < {min_coverage}%"
+                            })
+                        else:
+                            validation_results.append({
+                                "name": "coverage", 
+                                "command": "internal_coverage_check", 
+                                "success": True, 
+                                "details": f"Coverage: {actual_coverage}%"
+                            })
+                    else:
+                        success = False
+                        validation_results.append({
+                            "name": "coverage", 
+                            "command": "internal_coverage_check", 
+                            "success": False, 
+                            "error": "Coverage report not found"
+                        })
+        except Exception:
+            pass
+
     if validation_results:
         (task_dir / "validation.json").write_text(json.dumps(validation_results, indent=2), encoding="utf-8")
 

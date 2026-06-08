@@ -49,6 +49,7 @@ class ScanConfig(BaseModel):
     profile: str = "startup"
     fail_on: list[str] = Field(default_factory=list)
     include: list[str] = Field(default_factory=list)
+    min_test_coverage: Optional[float] = None
 
 
 class GuardConfig(BaseModel):

@@ -448,16 +448,20 @@ def run_scanner_checks(
 ) -> dict[str, Any]:
     """Run readiness checks using the rule engine and return a report."""
     from datetime import datetime, timezone
+    import hashlib
 
     root = Path(root).resolve()
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # 1. Determine profile and load rules
     config = None
+    min_coverage = None
     try:
         from niyam.core.config import load_niyam_config
 
         config = load_niyam_config(root)
+        if config and config.governance and config.governance.scan:
+            min_coverage = config.governance.scan.min_test_coverage
     except Exception:
         pass
 
@@ -480,6 +484,52 @@ def run_scanner_checks(
     findings = []
     for rule in rules:
         findings.extend(evaluate_rule(rule, root, files))
+
+    # Test coverage check
+    if min_coverage is not None:
+        try:
+            from niyam.core.coverage import find_and_parse_coverage
+            cov_result = find_and_parse_coverage(root)
+            if cov_result:
+                actual_coverage = cov_result["percentage"]
+                if actual_coverage < min_coverage:
+                    fp_src = f"TEST-COV-01::{actual_coverage}"
+                    fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                    findings.append({
+                        "schema_version": "1.0.0",
+                        "id": "TEST-COV-01",
+                        "title": "Insufficient Test Coverage",
+                        "category": "tests",
+                        "severity": "high",
+                        "confidence": "high",
+                        "file_path": cov_result["file"],
+                        "line_number": None,
+                        "description": f"Test coverage ({actual_coverage}%) is below the configured minimum threshold ({min_coverage}%).",
+                        "recommendation": "Write more tests to increase coverage above the required threshold.",
+                        "remediation_effort": "high",
+                        "tags": ["testing", "coverage"],
+                        "fingerprint": fingerprint,
+                    })
+            else:
+                fp_src = "TEST-COV-02::"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                findings.append({
+                    "schema_version": "1.0.0",
+                    "id": "TEST-COV-02",
+                    "title": "Missing Test Coverage Report",
+                    "category": "tests",
+                    "severity": "medium",
+                    "confidence": "high",
+                    "file_path": "",
+                    "line_number": None,
+                    "description": f"Minimum test coverage is set to {min_coverage}%, but no recognizable coverage report (e.g. coverage.xml) was found.",
+                    "recommendation": "Configure your test runner to generate a coverage report (e.g. coverage.xml or lcov.info).",
+                    "remediation_effort": "low",
+                    "tags": ["testing", "coverage"],
+                    "fingerprint": fingerprint,
+                })
+        except Exception:
+            pass
 
     # Run external security scanners (gitleaks, semgrep, trivy, checkov)
     try:

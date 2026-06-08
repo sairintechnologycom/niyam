@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from rich.console import Console
 
-from niyam.core.config import find_niyam_root, get_niyam_dir, load_project_config
+from niyam.core.config import find_niyam_root, get_niyam_dir, load_project_config, load_niyam_config
 from niyam.mission.planner import resolve_mission_id
 from niyam.mission.utils import load_plan
 
@@ -43,8 +43,13 @@ def run_task_validation(task_id: str, mission_id: str | None, console: Console) 
 
     # Load project level validation
     project_config = None
+    niyam_config = None
+    min_coverage = None
     try:
         project_config = load_project_config(repo_root)
+        niyam_config = load_niyam_config(repo_root)
+        if niyam_config and niyam_config.governance and niyam_config.governance.scan:
+            min_coverage = niyam_config.governance.scan.min_test_coverage
     except Exception:
         pass
 
@@ -100,6 +105,43 @@ def run_task_validation(task_id: str, mission_id: str | None, console: Console) 
                 else:
                     console.print(f"[bold green]PASS:[/] {cmd}")
     
+    # Enforce test coverage if configured
+    if min_coverage is not None:
+        console.print(f"Checking test coverage against minimum threshold: {min_coverage}%")
+        try:
+            from niyam.core.coverage import find_and_parse_coverage
+            cov_result = find_and_parse_coverage(repo_root)
+            if cov_result:
+                actual_coverage = cov_result["percentage"]
+                if actual_coverage < min_coverage:
+                    success = False
+                    console.print(f"[bold red]FAILED:[/] Test coverage ({actual_coverage}%) is below the configured minimum threshold ({min_coverage}%).")
+                    validation_results.append({
+                        "name": "coverage", 
+                        "command": "internal_coverage_check", 
+                        "success": False, 
+                        "error": f"Coverage {actual_coverage}% < {min_coverage}%"
+                    })
+                else:
+                    console.print(f"[bold green]PASS:[/] Test coverage ({actual_coverage}%) meets the minimum threshold ({min_coverage}%).")
+                    validation_results.append({
+                        "name": "coverage", 
+                        "command": "internal_coverage_check", 
+                        "success": True, 
+                        "details": f"Coverage: {actual_coverage}%"
+                    })
+            else:
+                success = False
+                console.print(f"[bold red]FAILED:[/] Minimum test coverage is configured ({min_coverage}%), but no coverage report could be found.")
+                validation_results.append({
+                    "name": "coverage", 
+                    "command": "internal_coverage_check", 
+                    "success": False, 
+                    "error": "Coverage report not found"
+                })
+        except Exception as e:
+            console.print(f"[yellow]Warning: Error checking test coverage:[/] {e}")
+
     if validation_results:
         task_dir = run_dir / "tasks" / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
