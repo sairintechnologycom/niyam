@@ -93,6 +93,14 @@ def guard_run(
     )
 
 
+@guard_app.command("verify-commit")
+def guard_verify_commit() -> None:
+    """[Internal] Verify staged changes against frozen paths (used by Git hooks)."""
+    from niyam.policies.guard import run_guard_verify_commit
+
+    run_guard_verify_commit(console=console)
+
+
 @guard_app.command("status")
 def guard_status() -> None:
     """Display the current Niyam guard configuration and observation metrics."""

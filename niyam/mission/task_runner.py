@@ -238,6 +238,7 @@ def update_token_ledger(
     estimated: bool = True,
     estimation_method: str | None = None,
     cost_override: float | None = None,
+    is_waste: bool = False,
 ) -> None:
     """Update token & cost ledger with task metrics."""
     ledger_path = run_dir / "token-ledger.json"
@@ -258,6 +259,7 @@ def update_token_ledger(
 
     show_marketing = False
     baseline_multiplier = 5.0
+
     try:
         repo_root = find_niyam_root(run_dir)
         if repo_root:
@@ -265,7 +267,7 @@ def update_token_ledger(
             # Use direct attribute access for Pydantic model
             show_marketing = config.show_marketing_metrics
             baseline_multiplier = config.baseline_multiplier
-            
+
             runtimes_yaml_path = repo_root / ".niyam" / "runtimes.yaml"
             if runtimes_yaml_path.exists():
                 with open(runtimes_yaml_path) as f:
@@ -293,6 +295,7 @@ def update_token_ledger(
         "total_tokens": input_tokens + output_tokens,
         "cost_usd": cost,
         "estimated": estimated,
+        "is_waste": is_waste,
     }
 
     if estimation_method and estimated:
@@ -326,13 +329,16 @@ def update_token_ledger(
     total_output = sum(e.get("output_tokens", 0) for e in events)
     total_tokens = total_input + total_output
     total_cost = sum(e.get("cost_usd", 0.0) for e in events)
+    total_wasted = sum(e.get("cost_usd", 0.0) for e in events if e.get("is_waste"))
 
     ledger["summary"] = {
         "total_input_tokens": total_input,
         "total_output_tokens": total_output,
         "total_tokens": total_tokens,
         "total_cost_usd": total_cost,
+        "total_wasted_cost_usd": total_wasted,
     }
+
 
     if show_marketing:
         total_baseline_tokens = sum(e.get("baseline_tokens", 0) for e in events)

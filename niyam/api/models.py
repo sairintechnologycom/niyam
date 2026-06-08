@@ -29,6 +29,7 @@ class TaskInfo(BaseModel):
 class TokenMetrics(BaseModel):
     actual_tokens: int
     actual_cost_usd: float
+    wasted_cost_usd: float = 0.0
     savings_tokens: int
     savings_cost_usd: float
     savings_percent: float

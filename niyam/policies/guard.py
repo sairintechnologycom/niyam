@@ -1,18 +1,29 @@
 """Niyam guard — safety guardrails for AI-assisted development."""
 
-from __future__ import annotations
-
+import json
+import os
+import re
+import selectors
+import ssl
+import subprocess
+import time
+import uuid
+import urllib.request
+import urllib.error
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from niyam.core.config import (
     find_niyam_root,
     load_niyam_config,
     save_niyam_config,
 )
+from niyam.governance.common.redaction import redact_text
 
 
 def _ensure_root(console: Console) -> Path:
@@ -50,6 +61,43 @@ def _resync_hooks(root: Path, console: Console) -> None:
             console.print("[dim]  ↳ Codex hooks regenerated[/]")
 
 
+def _install_git_hooks(root: Path, console: Console) -> None:
+    """Install Niyam git hooks into .git/hooks/."""
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        return
+
+    hooks_dir = git_dir / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    pre_commit_path = hooks_dir / "pre_commit"
+    hook_content = "#!/bin/sh\nniyam guard verify-commit\n"
+
+    try:
+        pre_commit_path.write_text(hook_content, encoding="utf-8")
+        pre_commit_path.chmod(0o755)
+        console.print("[dim]  ↳ Git pre-commit hook installed[/]")
+    except Exception as e:
+        console.print(f"[dim yellow]Warning: Failed to install git hook: {e}[/]")
+
+
+def _uninstall_git_hooks(root: Path, console: Console) -> None:
+    """Remove Niyam git hooks from .git/hooks/."""
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        return
+
+    pre_commit_path = git_dir / "hooks" / "pre_commit"
+    if pre_commit_path.exists():
+        try:
+            # Only remove if it's our hook
+            if "niyam guard verify-commit" in pre_commit_path.read_text():
+                pre_commit_path.unlink()
+                console.print("[dim]  ↳ Git pre-commit hook removed[/]")
+        except Exception:
+            pass
+
+
 def run_guard_enable(console: Console, dry_run: bool = False) -> None:
     """Enable all configured guardrails."""
     root = _ensure_root(console)
@@ -66,12 +114,14 @@ def run_guard_enable(console: Console, dry_run: bool = False) -> None:
     save_niyam_config(config, root)
 
     _resync_hooks(root, console)
+    _install_git_hooks(root, console)
 
     console.print(
         Panel(
             "[bold green]✓[/] Guard mode [bold]enabled[/]\n"
             "  [dim]•[/] Denied commands will be blocked\n"
             "  [dim]•[/] Careful mode active (destructive command warnings)\n"
+            "  [dim]•[/] Git pre-commit hooks installed\n"
             + (
                 f"  [dim]•[/] Frozen paths: {', '.join(config.guard.frozen_paths)}\n"
                 if config.guard.frozen_paths
@@ -100,10 +150,55 @@ def run_guard_disable(console: Console, dry_run: bool = False) -> None:
     save_niyam_config(config, root)
 
     _resync_hooks(root, console)
+    _uninstall_git_hooks(root, console)
 
     console.print(
         "[yellow]⚠ Guard mode [bold]disabled[/]. AI agents can execute freely.[/]"
     )
+
+
+def run_guard_verify_commit(console: Console) -> None:
+    """Check staged files against frozen paths before commit."""
+    root = find_niyam_root()
+    if root is None:
+        return
+
+    config = load_niyam_config(root)
+    if not config.guard.enabled or not config.guard.frozen_paths:
+        return
+
+    # Get staged files
+    try:
+        res = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        staged_files = res.stdout.splitlines()
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] Failed to get staged files: {e}")
+        raise SystemExit(1)
+
+    blocked_files = []
+    for f in staged_files:
+        for frozen in config.guard.frozen_paths:
+            if f.startswith(frozen):
+                blocked_files.append(f)
+                break
+
+    if blocked_files:
+        console.print("[bold red]🛑 Commit Blocked by Niyam Guard[/]")
+        console.print(
+            f"The following staged files are inside [bold]frozen paths[/]:"
+        )
+        for f in blocked_files:
+            console.print(f"  [red]• {f}[/]")
+        console.print(
+            "\n[dim]To commit these changes, run [bold]niyam guard disable[/] or remove them from frozen_paths.[/]"
+        )
+        raise SystemExit(1)
 
 
 def run_guard_careful(console: Console, dry_run: bool = False) -> None:
@@ -200,19 +295,7 @@ def run_guard_freeze(path: str, console: Console, dry_run: bool = False) -> None
 
 
 def _fetch_remote_policy_raw(url: str, filename: str) -> dict:
-    """Fetch policy YAML from a remote URL.
-
-    Security hardening:
-    - Enforces HTTPS-only URLs
-    - Uses strict SSL certificate verification
-    - Validates fetched content against known policy schemas
-    - Rejects responses larger than 256 KB
-    """
-    import ssl
-    import urllib.request
-    import urllib.error
-    import yaml
-
+    """Fetch policy YAML from a remote URL."""
     MAX_RESPONSE_SIZE = 256 * 1024  # 256 KB
 
     if url.endswith(".yaml") or url.endswith(".yml"):
@@ -267,10 +350,6 @@ def _fetch_remote_policy_raw(url: str, filename: str) -> dict:
 
 def _fetch_remote_policy(url: str, filename: str) -> dict | None:
     """Fetch policy YAML from a remote URL, with local caching (TTL = 300s)."""
-    import time
-    import json
-    from niyam.core.config import find_niyam_root
-
     root = find_niyam_root()
     if not root:
         # No niyam workspace, fall back to raw fetch
@@ -396,15 +475,7 @@ def load_commands_policy(root: Path) -> dict:
 
 
 def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
-    """Matches a command pattern against executed command arguments.
-
-    Uses token-aware matching for executable names and sequences,
-    and fallback word-boundary regex matching for SQL/query patterns,
-    excluding safe commands (like echo, cat, git commit, etc.).
-    """
-    import os
-    import re
-
+    """Matches a command pattern against executed command arguments."""
     if not cmd_args:
         return False
 
@@ -413,7 +484,6 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
         return False
 
     # 1. Main executable matching (token-aware)
-    # Get the basename of the executed command (e.g. '/bin/rm' -> 'rm')
     exe = cmd_args[0]
     exe_basename = os.path.basename(exe)
     first_token = pattern_tokens[0]
@@ -433,7 +503,6 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
         return True
 
     # 2. SQL / Query substring matching (excluding safe commands)
-    # List of safe commands where we shouldn't match sub-patterns (e.g. echo "rm -rf")
     safe_executables = {"echo", "printf", "cat", "less", "more", "grep", "git"}
     if exe_basename in safe_executables:
         return False
@@ -448,8 +517,6 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
 
 def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) -> bool:
     """Determines if any file path operand in the command points to a protected file."""
-    from pathlib import Path
-
     if not cmd_args or not protected_files:
         return False
 
@@ -464,7 +531,7 @@ def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) ->
             # Exact match
             if arg == f:
                 return True
-            # Subpath match: check if the parts of protected path are a suffix of the arg path
+            # Subpath match
             if len(f_path.parts) <= len(arg_path.parts):
                 if arg_path.parts[-len(f_path.parts) :] == f_path.parts:
                     return True
@@ -472,12 +539,10 @@ def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) ->
 
 
 def _prompt_confirm(console: Console, prompt: str) -> bool:
-    """Prompt user for confirmation, handling CI/non-interactive environments safely."""
-    import sys
-    import os
+    """Prompt user for confirmation."""
     import typer
 
-    # Check if we are running in tests (which mock stdin)
+    # Check if we are running in tests
     if os.environ.get("NIYAM_TEST_NON_INTERACTIVE") == "1":
         is_interactive = False
     elif (
@@ -486,6 +551,7 @@ def _prompt_confirm(console: Console, prompt: str) -> bool:
     ):
         is_interactive = True
     else:
+        import sys
         is_interactive = sys.stdin.isatty() and not os.environ.get("CI")
 
     if not is_interactive:
@@ -506,15 +572,6 @@ def run_guard_run(
     console: Console,
     mode_override: str | None = None,
 ) -> None:
-    import sys
-    import os
-    import time
-    import json
-    import uuid
-    from datetime import datetime, timezone
-    import subprocess
-    from niyam.governance.common.redaction import redact_text
-
     if not cmd_args:
         console.print(
             "[bold red]Error:[/] No command specified. Usage: niyam guard run -- <command>"
@@ -552,6 +609,7 @@ def run_guard_run(
 
     actor_type = os.environ.get("NIYAM_ACTOR_TYPE")
     if not actor_type:
+        import sys
         if sys.stdin.isatty():
             actor_type = "human"
         elif (
@@ -566,26 +624,49 @@ def run_guard_run(
         if actor_type not in ("human", "agent", "unknown"):
             actor_type = "unknown"
 
-    # Load config to get policy mode and lists
+    # Load config
     mode = "observe"
     blocked_commands = []
+    warn_commands = []
     protected_files = []
     approval_required = []
 
     try:
         config = load_niyam_config(root)
+        if config and config.guard and config.guard.enabled:
+            mode = "block"
+
         if config and config.governance and config.governance.guard:
             mode = config.governance.guard.mode
             blocked_commands = config.governance.guard.blocked_commands
             protected_files = config.governance.guard.protected_files
             approval_required = config.governance.guard.approval_required
+        else:
+            # Fallback to local files
+            from niyam.core.security import safe_load_yaml
+            
+            cmd_policy_path = root / ".niyam" / "policies" / "commands.yaml"
+            if cmd_policy_path.exists():
+                cmd_data = safe_load_yaml(cmd_policy_path) or {}
+                blocked_commands = cmd_data.get("deny", [])
+                warn_commands = cmd_data.get("warn", [])
+            
+            app_policy_path = root / ".niyam" / "policies" / "approvals.yaml"
+            if app_policy_path.exists():
+                app_data = safe_load_yaml(app_policy_path) or {}
+                approval_required = app_data.get("approval_required_for", [])
+            
+            sec_policy_path = root / ".niyam" / "policies" / "security.yaml"
+            if sec_policy_path.exists():
+                sec_data = safe_load_yaml(sec_policy_path) or {}
+                protected_files = sec_data.get("deny_write_patterns", [])
     except Exception:
         pass
 
     if mode_override:
         mode = mode_override
 
-    # Validate mode is valid
+    # Validate mode
     valid_modes = {"observe", "block", "warn", "approve", "approval"}
     if mode not in valid_modes:
         console.print(
@@ -624,14 +705,24 @@ def run_guard_run(
                 policy_decision = "approval_required"
                 break
 
-    # 4. MCP/Tool Registry Check
+    # MCP/Tool Registry Check
     if not matched_rule:
         try:
             from niyam.core.mcp import load_mcp_registry
             registry = load_mcp_registry(root)
+            
+            exe = cmd_args[0]
+            exe_basename = os.path.basename(exe)
+            
             for tool_name, tool in registry.tools.items():
-                # Check if command string contains the tool command or name
-                if tool.command_or_url and (tool.command_or_url in command_str or tool_name in command_str):
+                matches = False
+                if tool_name == exe_basename or tool_name == exe:
+                    matches = True
+                elif tool.command_or_url:
+                    if command_str.startswith(tool.command_or_url):
+                        matches = True
+                
+                if matches:
                     if not tool.approved:
                         if tool.risk_level in ("high", "critical"):
                             matched_rule = f"mcp_unapproved:{tool_name}"
@@ -645,6 +736,14 @@ def run_guard_run(
                             break
         except Exception:
             pass
+
+    if not matched_rule:
+        for pattern in warn_commands:
+            if _match_command_pattern(cmd_args, pattern):
+                matched_rule = f"warn_command:{pattern}"
+                reason = f"Command matches warn command pattern: '{pattern}'"
+                policy_decision = "warn"
+                break
 
     def write_log(
         exit_code: int,
@@ -678,7 +777,7 @@ def run_guard_run(
         except Exception as e:
             console.print(f"[dim yellow]Warning: Failed to write guard log: {e}[/]")
 
-    # Action enforcement based on policy_decision and mode
+    # Enforcement
     if policy_decision == "block" and mode == "block":
         console.print("[bold red]Blocked:[/] Command violates governance policy.")
         write_log(1, 0, "blocked", "block")
@@ -698,8 +797,10 @@ def run_guard_run(
         decision_label = "approved"
         policy_decision_label = "approval_required"
 
-    elif policy_decision in ("block", "approval_required") and mode == "warn":
-        console.print("[bold yellow]Warning:[/] Command is flagged as dangerous.")
+    elif (policy_decision in ("block", "approval_required") and mode == "warn") or (
+        policy_decision == "warn"
+    ):
+        console.print(f"[bold yellow]Warning:[/] Command is flagged as dangerous. {reason}")
         decision_label = "warned"
         policy_decision_label = "warn"
 
@@ -710,22 +811,52 @@ def run_guard_run(
     # Run the command
     start_time = time.perf_counter()
     exit_code = 0
-    output_data = None
+    captured_stdout = []
+    captured_stderr = []
 
     try:
+        import sys
+        # Use Popen for streaming
+        process = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+        sel = selectors.DefaultSelector()
+        sel.register(process.stdout, selectors.EVENT_READ)
+        sel.register(process.stderr, selectors.EVENT_READ)
+
+        while process.poll() is None or sel.get_map():
+            events = sel.select(timeout=0.1)
+            for key, _ in events:
+                line = key.fileobj.readline()
+                if not line:
+                    sel.unregister(key.fileobj)
+                    continue
+
+                redacted_line = redact_text(line)
+                if key.fileobj is process.stdout:
+                    sys.stdout.write(redacted_line)
+                    sys.stdout.flush()
+                    if capture_output:
+                        captured_stdout.append(redacted_line)
+                else:
+                    sys.stderr.write(redacted_line)
+                    sys.stderr.flush()
+                    if capture_output:
+                        captured_stderr.append(redacted_line)
+
+            if process.poll() is not None and not events:
+                break
+
+        exit_code = process.returncode
+        output_data = None
         if capture_output:
-            res = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
-            exit_code = res.returncode
-            if res.stdout:
-                sys.stdout.write(res.stdout)
-                sys.stdout.flush()
-            if res.stderr:
-                sys.stderr.write(res.stderr)
-                sys.stderr.flush()
-            output_data = f"STDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
-        else:
-            res = subprocess.run(cmd_args, check=False)
-            exit_code = res.returncode
+            output_data = f"STDOUT:\n{''.join(captured_stdout)}\nSTDERR:\n{''.join(captured_stderr)}"
+
     except FileNotFoundError:
         console.print(
             f"[bold red]Error:[/] Command executable '{cmd_args[0]}' not found."
@@ -745,9 +876,6 @@ def run_guard_run(
 
 
 def run_guard_status_metrics(console: Console) -> None:
-    from niyam.core.config import find_niyam_root, load_niyam_config
-    import json
-
     root = find_niyam_root()
     if root is None:
         root = Path.cwd()
@@ -784,8 +912,6 @@ def run_guard_status_metrics(console: Console) -> None:
         except Exception:
             pass
 
-    from rich.panel import Panel
-
     status_content = (
         f"Guard Mode: {'[bold green]Enabled[/]' if enabled else '[yellow]Disabled[/]'}\n"
         f"Careful Mode: {'[bold green]Enabled[/]' if careful else '[yellow]Disabled[/]'}\n"
@@ -805,10 +931,6 @@ def run_guard_status_metrics(console: Console) -> None:
 
 
 def run_guard_show_logs(limit: int, console: Console) -> None:
-    from niyam.core.config import find_niyam_root
-    from rich.table import Table
-    import json
-
     root = find_niyam_root()
     if root is None:
         root = Path.cwd()
@@ -831,7 +953,6 @@ def run_guard_show_logs(limit: int, console: Console) -> None:
         console.print(f"[bold red]Error reading logs:[/] {e}")
         return
 
-    # Take the last limit elements
     show_entries = entries[-limit:]
 
     table = Table(title=f"Recent Observed Actions (Showing last {len(show_entries)})")

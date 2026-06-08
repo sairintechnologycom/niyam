@@ -118,15 +118,24 @@ def load_pricing(root: Path | None = None) -> dict:
 def calculate_cost(
     model: str, input_tokens: int, output_tokens: int, pricing: dict
 ) -> float:
-    """Calculate estimated cost (USD) using the model pricing table rates."""
+    """Calculate estimated cost (USD) using the model pricing table rates.
+    
+    Prioritizes exact case-insensitive match, falls back to substring match,
+    and finally to 'unknown' entry.
+    """
     model_key = model.lower().strip()
+    
+    # 1. Exact match
     rates = pricing.get(model_key)
+    
+    # 2. Loose match search (e.g. 'gpt-4o-2024-05-13' matches 'gpt-4o')
     if not rates:
-        # Loose match search
         for k, v in pricing.items():
-            if k in model_key or model_key in k:
+            if k != "unknown" and (k in model_key or model_key in k):
                 rates = v
                 break
+                
+    # 3. Final fallback
     if not rates:
         rates = pricing.get(
             "unknown", {"input_cost_per_million": 0.0, "output_cost_per_million": 0.0}
@@ -266,8 +275,10 @@ def generate_cost_metrics(events: list[CostEvent]) -> dict:
         "by_repo": {},
         "by_task": {},
         "by_session": {},
+        "by_tool": {},
         "failed_repeated_cost": 0.0,
         "failed_repeated_count": 0,
+        "wastage_by_tool": {},
         "success_cost": 0.0,
         "success_count": 0,
     }
@@ -302,11 +313,21 @@ def generate_cost_metrics(events: list[CostEvent]) -> dict:
             metrics["by_session"][session] = 0.0
         metrics["by_session"][session] += cost
 
+        # Tool grouping
+        tool = event.tool_name
+        if tool not in metrics["by_tool"]:
+            metrics["by_tool"][tool] = 0.0
+        metrics["by_tool"][tool] += cost
+
         # Status checks (failed/repeated)
         status = event.status.lower()
         if "fail" in status or "repeat" in status:
             metrics["failed_repeated_cost"] += cost
             metrics["failed_repeated_count"] += 1
+            
+            if tool not in metrics["wastage_by_tool"]:
+                metrics["wastage_by_tool"][tool] = 0.0
+            metrics["wastage_by_tool"][tool] += cost
         else:
             metrics["success_cost"] += cost
             metrics["success_count"] += 1

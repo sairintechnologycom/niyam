@@ -79,10 +79,59 @@ def _classify_risk_ai(
     data_access: str | None = None,
     notes: str | None = None,
 ) -> Optional[Literal["low", "medium", "high", "critical"]]:
-    """Stub for AI-powered semantic risk classification."""
-    # In a real implementation, this would use a local or remote LLM
-    # to analyze the tool details and return a risk verdict.
-    # For now, it returns None to fall back to heuristics.
+    """AI-powered semantic risk classification using available runtimes."""
+    import subprocess
+    import shutil
+
+    # Prepare data for the prompt
+    tool_info = {
+        "name": name,
+        "type": type,
+        "command_or_url": command_or_url,
+        "capabilities": capabilities,
+        "data_access": data_access,
+        "notes": notes,
+    }
+
+    prompt = (
+        "Classify the security risk of the following AI tool/MCP server. "
+        "Return EXACTLY one of the following words: low, medium, high, critical.\n\n"
+        f"Tool Information: {json.dumps(tool_info, indent=2)}\n\n"
+        "Consider potential for data exfiltration, system damage, and credential theft."
+    )
+
+    # Try runtimes in order of preference
+    # Note: we use headless/API mode flags if available
+    for engine in ["gemini", "claude", "codex"]:
+        if not shutil.which(engine):
+            continue
+        
+        cmd = [engine, "-p", prompt]
+        if engine == "gemini":
+            cmd.append("--skip-trust")
+        elif engine == "codex":
+            cmd = ["codex", "exec", prompt]
+            
+        try:
+            res = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if res.returncode != 0:
+                continue
+
+            output = res.stdout.strip().lower()
+            # Strict word matching for risk levels
+            for risk in ["critical", "high", "medium", "low"]:
+                if re.search(r"\b" + risk + r"\b", output):
+                    return risk  # type: ignore
+        except Exception as e:
+            logger.debug("AI risk classification failed for %s: %s", engine, e)
+            continue
+
     return None
 
 
@@ -124,6 +173,8 @@ def classify_risk(
         "run_command": 4,
         "execute": 4,
         "exec": 4,
+        "network": 4,
+        "internet": 3,
         "file_write": 3,
         "read_file": 3,
         "write_file": 3,
@@ -163,10 +214,24 @@ def classify_risk(
         "secret",
         "deploy",
         "publish",
+        "admin",
+        "root",
+        "sudo",
     ]
-    text_high = ["file", "filesystem", "write", "create", "delete", "modify"]
-    text_medium = ["docs", "doc", "wiki", "read-only", "repo", "repository"]
-    text_low = ["search", "google", "query", "web"]
+    text_high = [
+        "file",
+        "filesystem",
+        "write",
+        "create",
+        "delete",
+        "modify",
+        "update",
+        "upload",
+        "network",
+        "socket",
+    ]
+    text_medium = ["docs", "doc", "wiki", "read-only", "repo", "repository", "view"]
+    text_low = ["search", "google", "query", "web", "lookup", "info"]
 
     if max_risk_val < 4 and has_word(text_critical, text):
         max_risk_val = 4
@@ -179,4 +244,5 @@ def classify_risk(
 
     if max_risk_val == 0:
         return "medium"
-    return inv_risk_levels[max_risk_val]
+    return inv_risk_levels[max_risk_val]  # type: ignore
+

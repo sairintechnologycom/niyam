@@ -876,7 +876,9 @@ def portal(
     ] = "127.0.0.1",
     open_browser: Annotated[
         bool,
-        typer.Option("--open", help="Automatically open the portal in the browser."),
+        typer.Option(
+            "--open/--no-open", help="Automatically open the portal in the browser."
+        ),
     ] = True,
 ) -> None:
     """Start the Niyam Portal API server to browse mission evidence and metrics."""

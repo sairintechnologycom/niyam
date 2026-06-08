@@ -177,6 +177,7 @@ def get_mission(mission_id: str):
                 metrics = TokenMetrics(
                     actual_tokens=summary.get("total_tokens", 0),
                     actual_cost_usd=summary.get("total_cost_usd", 0.0),
+                    wasted_cost_usd=summary.get("total_wasted_cost_usd", 0.0),
                     savings_tokens=max(
                         0,
                         summary.get("total_baseline_tokens", 0)

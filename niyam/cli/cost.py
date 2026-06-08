@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -88,6 +89,7 @@ def cost_summary() -> None:
     """Display a high-level summary of AI cost and token usage."""
     from niyam.core.cost import generate_cost_metrics, load_cost_events
     from rich.panel import Panel
+    from rich.table import Table
 
     root = find_niyam_root() or Path.cwd()
     events = load_cost_events(root)
@@ -108,10 +110,30 @@ def cost_summary() -> None:
     console.print(
         Panel(
             summary_text,
-            title="[bold]Niyam AI Cost MVP Summary[/]",
+            title="[bold]Niyam AI Cost Summary[/]",
             border_style="green",
         )
     )
+
+    # Grouped mini-tables
+    table = Table(box=None, padding=(0, 2))
+    table.add_column("By Category", style="dim")
+    table.add_column("Top Entry", style="cyan")
+    table.add_column("Cost", justify="right", style="green")
+
+    if metrics["by_day"]:
+        top_day = max(metrics["by_day"].items(), key=lambda x: x[1])
+        table.add_row("Day", top_day[0], f"${top_day[1]:.2f}")
+    
+    if metrics["by_repo"]:
+        top_repo = max(metrics["by_repo"].items(), key=lambda x: x[1])
+        table.add_row("Repo", top_repo[0], f"${top_repo[1]:.2f}")
+
+    if metrics["by_task"]:
+        top_task = max(metrics["by_task"].items(), key=lambda x: x[1])
+        table.add_row("Task", top_task[0], f"${top_task[1]:.2f}")
+
+    console.print(table)
 
 
 @cost_app.command("report")
@@ -154,6 +176,16 @@ def cost_report() -> None:
     for task, cost in sorted(metrics["by_task"].items()):
         task_table.add_row(task, f"${cost:.4f}")
 
+    # 4. Total estimated cost by tool (Wastage Focus)
+    tool_table = Table(title="Wastage Analysis by Tool")
+    tool_table.add_column("Tool", style="cyan")
+    tool_table.add_column("Total Cost", justify="right", style="dim")
+    tool_table.add_column("Wasted (Fail/Repeat)", justify="right", style="red")
+
+    for tool, cost in sorted(metrics["by_tool"].items()):
+        wasted = metrics["wastage_by_tool"].get(tool, 0.0)
+        tool_table.add_row(tool, f"${cost:.4f}", f"${wasted:.4f}")
+
     # 4. Top expensive sessions
     session_table = Table(title="Top Expensive Sessions")
     session_table.add_column("Session ID", style="cyan")
@@ -188,6 +220,43 @@ def cost_report() -> None:
     console.print()
     console.print(task_table)
     console.print()
+    console.print(tool_table)
+    console.print()
     console.print(session_table)
     console.print()
     console.print(status_panel)
+
+
+@cost_app.command("pricing")
+def cost_pricing(
+    update: Annotated[bool, typer.Option("--update", help="Update local pricing from remote URL.")] = False,
+    show: Annotated[bool, typer.Option("--show", help="Show current pricing table.")] = True,
+) -> None:
+    """View or update AI model pricing configuration."""
+    from niyam.core.cost import load_pricing, get_pricing_path
+    from rich.table import Table
+
+    root = find_niyam_root() or Path.cwd()
+    
+    if update:
+        # load_pricing with force update if URL is set
+        pricing = load_pricing(root)
+        console.print("[green]Pricing table updated (if remote URL was configured).[/]")
+    else:
+        pricing = load_pricing(root)
+
+    if show:
+        table = Table(title="Model Pricing Table (USD per Million Tokens)")
+        table.add_column("Model", style="cyan")
+        table.add_column("Input Rate", justify="right", style="green")
+        table.add_column("Output Rate", justify="right", style="green")
+
+        for model, rates in sorted(pricing.items()):
+            table.add_row(
+                model, 
+                f"${rates.get('input_cost_per_million', 0.0):.2f}",
+                f"${rates.get('output_cost_per_million', 0.0):.2f}"
+            )
+        
+        console.print(table)
+        console.print(f"[dim]Pricing source: {get_pricing_path(root)}[/]")

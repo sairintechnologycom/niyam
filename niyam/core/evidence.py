@@ -81,7 +81,7 @@ def _get_git_metadata(repo_root: Path) -> dict[str, str]:
             check=False,
         )
         if res_author.returncode == 0:
-            metadata["commit_author"] = res_author.stdout.strip()
+            metadata["commit_author"] = res_author.strip() if hasattr(res_author, "strip") else res_author.stdout.strip()
     except Exception:
         pass
 
@@ -280,6 +280,118 @@ def _get_cost_data(repo_root: Path) -> dict[str, Any]:
     return metrics
 
 
+class UnifiedEvidenceCompiler:
+    """Class responsible for assembling all metrics and logs into a single package."""
+
+    def __init__(self, repo_root: Path | None = None, mission_id: str | None = None):
+        self.root = repo_root or find_niyam_root() or Path.cwd()
+        self.mission_id = mission_id
+        self.run_dir = None
+        if self.mission_id:
+             from niyam.mission.planner import resolve_mission_id
+             try:
+                 m_id = resolve_mission_id(self.root, self.mission_id)
+                 self.run_dir = self.root / ".niyam" / "runs" / m_id
+             except Exception:
+                 pass
+
+    def compile(self, include_list: list[str] | None = None) -> dict[str, Any]:
+        """Compile all available evidence into a single dictionary."""
+        if include_list is None:
+            include_list = ["scan", "guard", "mcp", "cost"]
+        
+        # 1. Base Metadata
+        git_meta = _get_git_metadata(self.root)
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # 2. Mission Plan
+        plan_data = {}
+        if self.run_dir and (self.run_dir / "mission-plan.yaml").exists():
+            import yaml
+            try:
+                with open(self.run_dir / "mission-plan.yaml", encoding="utf-8") as f:
+                    plan_data = yaml.safe_load(f)
+            except Exception:
+                pass
+
+        # 3. Scan Results
+        scan_results = {
+            "score": 100,
+            "findings": [],
+            "decision": "GO"
+        }
+        scan_path = None
+        if self.run_dir:
+            for fname in ["scan-report.json", "scan.json"]:
+                if (self.run_dir / fname).exists():
+                    scan_path = self.run_dir / fname
+                    break
+        
+        if not scan_path:
+            # Look for project-level scan report
+            for candidate in [self.root / ".niyam" / "reports" / "scan.json", self.root / ".niyam" / "scan-report.json"]:
+                if candidate.exists():
+                    scan_path = candidate
+                    break
+        
+        if scan_path:
+            try:
+                with open(scan_path, encoding="utf-8") as f:
+                    scan_results = json.load(f)
+            except Exception:
+                pass
+
+        # 4. Token Ledger / Cost
+        token_ledger = {}
+        if self.run_dir and (self.run_dir / "token-ledger.json").exists():
+            try:
+                with open(self.run_dir / "token-ledger.json", encoding="utf-8") as f:
+                    token_ledger = json.load(f)
+            except Exception:
+                pass
+
+        # 5. Compile sections
+        mcp_data = _get_mcp_data(self.root) if "mcp" in include_list else {}
+        cost_data = _get_cost_data(self.root) if "cost" in include_list else {}
+        guard_logs = _get_guard_logs(self.root) if "guard" in include_list else []
+        
+        # 6. Task Logs
+        task_logs = {}
+        if self.run_dir and (self.run_dir / "tasks").is_dir():
+            for task_dir in (self.run_dir / "tasks").iterdir():
+                if task_dir.is_dir() and (task_dir / "execution.log").exists():
+                    try:
+                        task_logs[task_dir.name] = (task_dir / "execution.log").read_text(encoding="utf-8")
+                    except Exception:
+                        pass
+
+        evidence_package = {
+            "schema_version": "1.0.0",
+            "mission_id": self.mission_id,
+            "timestamp": timestamp,
+            "git": git_meta,
+            "plan": plan_data,
+            "scan": scan_results,
+            "token_ledger": token_ledger,
+            "mcp": mcp_data,
+            "cost": cost_data,
+            "guard_logs": guard_logs[:100], # Cap logs in unified package
+            "task_logs": task_logs,
+        }
+
+        # Redact secrets
+        from niyam.governance.common.redaction import redact_secrets
+        return redact_secrets(evidence_package)
+
+    def save(self, path: Path | str) -> None:
+        """Save the compiled package as a JSON file."""
+        data = self.compile()
+        save_path = Path(path).resolve()
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+
 def run_generate_evidence(
     from_scan_json: str | None = None,
     fmt: str = "markdown",
@@ -293,6 +405,19 @@ def run_generate_evidence(
         root = Path.cwd()
 
     include_list = [s.strip() for s in include.split(",")]
+
+    # Use the compiler to gather core data if possible
+    compiler = UnifiedEvidenceCompiler(repo_root=root, mission_id=mission_id)
+    # Note: run_generate_evidence currently has its own slightly different assembly logic
+    # optimized for Jinja2 rendering. We'll keep the existing logic for now but
+    # use the compiler for the JSON format if requested.
+    
+    if fmt == "json" and not from_scan_json:
+        package = compiler.compile(include_list=include_list)
+        report_str = json.dumps(package, indent=2)
+        if output:
+             compiler.save(output)
+        return report_str
 
     # 0. Find the best scan report input
     scan_json_path = None

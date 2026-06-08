@@ -20,7 +20,7 @@
 <body class="min-h-screen p-8">
     <div class="max-w-6xl mx-auto">
         <header class="flex justify-between items-center mb-8">
-            <div>
+            <div class="cursor-pointer" onclick="showMissions()">
                 <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">NIYAM PORTAL</h1>
                 <p class="text-slate-400 mt-2">AI Governance & Orchestration Control Plane</p>
             </div>
@@ -49,7 +49,7 @@
             </div>
 
             <div id="analytics-view" class="hidden">
-                <h2 class="text-2xl font-bold mb-8">Fleet Analytics</h2>
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Fleet Analytics</h2>
                 <div id="analytics-content">
                     <div class="py-20 text-center">
                         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
@@ -99,13 +99,12 @@
             
             const total = missions.length;
             const completed = missions.filter(m => m.status === 'completed').length;
-            const successRate = ((completed / total) * 100).toFixed(0);
+            const successRate = total > 0 ? ((completed / total) * 100).toFixed(0) : 0;
             
-            // For now, these are placeholder logic for aggregate metrics
-            const avgReadiness = missions
-                .filter(m => m.readiness_score !== null)
-                .reduce((acc, m, _, arr) => acc + m.readiness_score / arr.length, 0)
-                .toFixed(0);
+            const readinessMissions = missions.filter(m => m.readiness_score !== null);
+            const avgReadiness = readinessMissions.length > 0
+                ? (readinessMissions.reduce((acc, m) => acc + m.readiness_score, 0) / readinessMissions.length).toFixed(0)
+                : 0;
 
             statsContainer.innerHTML = `
                 <div class="card bg-slate-800/30 p-4">
@@ -122,7 +121,7 @@
                 </div>
                 <div class="card bg-slate-800/30 p-4">
                     <p class="text-[10px] text-slate-500 uppercase font-bold mb-1">Gov Mode</p>
-                    <p class="text-2xl font-bold text-blue-400 tracking-tight">ACTIVE</p>
+                    <p class="text-2xl font-bold text-blue-400 tracking-tight uppercase">Active</p>
                 </div>
             `;
         }
@@ -146,49 +145,51 @@
                 const a = await response.json();
                 
                 let agentsHtml = '';
-                const sortedAgents = Object.entries(a.agent_performance).sort((x, y) => y[1].success_rate - x[1].success_rate);
-                
-                agentsHtml = `
-                    <div class="card overflow-hidden">
-                        <h3 class="text-lg font-bold mb-4">Agent Performance Ranking</h3>
-                        <table class="w-full text-left">
-                            <thead>
-                                <tr class="text-xs text-slate-500 uppercase border-b border-slate-700">
-                                    <th class="pb-3">Agent</th>
-                                    <th class="pb-3 text-right">Tasks</th>
-                                    <th class="pb-3 text-right">Success Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-800">
-                                ${sortedAgents.map(([name, s]) => `
-                                    <tr>
-                                        <td class="py-4 font-bold text-slate-300">${name}</td>
-                                        <td class="py-4 text-right text-slate-400">${s.tasks}</td>
-                                        <td class="py-4 text-right">
-                                            <span class="font-mono font-bold ${s.success_rate >= 90 ? 'text-green-400' : (s.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400')}">
-                                                ${s.success_rate.toFixed(1)}%
-                                            </span>
-                                        </td>
+                if (a.agent_performance) {
+                    const sortedAgents = Object.entries(a.agent_performance).sort((x, y) => y[1].success_rate - x[1].success_rate);
+                    
+                    agentsHtml = `
+                        <div class="card overflow-hidden">
+                            <h3 class="text-lg font-bold mb-4">Agent Performance Ranking</h3>
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr class="text-xs text-slate-500 uppercase border-b border-slate-700">
+                                        <th class="pb-3">Agent</th>
+                                        <th class="pb-3 text-right">Tasks</th>
+                                        <th class="pb-3 text-right">Success Rate</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
+                                </thead>
+                                <tbody class="divide-y divide-slate-800">
+                                    ${sortedAgents.map(([name, s]) => `
+                                        <tr>
+                                            <td class="py-4 font-bold text-slate-300">${name}</td>
+                                            <td class="py-4 text-right text-slate-400">${s.tasks}</td>
+                                            <td class="py-4 text-right">
+                                                <span class="font-mono font-bold ${s.success_rate >= 90 ? 'text-green-400' : (s.success_rate >= 70 ? 'text-yellow-400' : 'text-red-400')}">
+                                                    ${s.success_rate.toFixed(1)}%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
 
                 content.innerHTML = `
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
                         <div class="card border-l-4 border-cyan-500">
                             <p class="text-xs text-slate-500 uppercase font-bold mb-1">Fleet Total Cost</p>
-                            <p class="text-3xl font-bold">$${a.total_cost_usd.toFixed(4)}</p>
+                            <p class="text-3xl font-bold">$${(a.total_cost_usd || 0).toFixed(4)}</p>
                         </div>
                         <div class="card border-l-4 border-green-500">
                             <p class="text-xs text-slate-500 uppercase font-bold mb-1">Avg Success Rate</p>
-                            <p class="text-3xl font-bold text-green-400">${a.avg_success_rate.toFixed(1)}%</p>
+                            <p class="text-3xl font-bold text-green-400">${(a.avg_success_rate || 0).toFixed(1)}%</p>
                         </div>
                         <div class="card border-l-4 border-blue-500">
                             <p class="text-xs text-slate-500 uppercase font-bold mb-1">Avg Token Efficiency</p>
-                            <p class="text-3xl font-bold text-cyan-400">${a.avg_savings_percent.toFixed(1)}%</p>
+                            <p class="text-3xl font-bold text-cyan-400">${(a.avg_savings_percent || 0).toFixed(1)}%</p>
                         </div>
                     </div>
                     
@@ -218,7 +219,7 @@
                 let metricsHtml = '';
                 if (m.metrics) {
                     metricsHtml = `
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                             <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                                 <p class="text-xs text-slate-500 uppercase font-bold mb-1">Tokens Used</p>
                                 <p class="text-xl font-mono">${m.metrics.actual_tokens.toLocaleString()}</p>
@@ -226,6 +227,10 @@
                             <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                                 <p class="text-xs text-slate-500 uppercase font-bold mb-1">Actual Cost</p>
                                 <p class="text-xl font-mono">$${m.metrics.actual_cost_usd.toFixed(4)}</p>
+                            </div>
+                            <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                <p class="text-xs text-slate-500 uppercase font-bold mb-1 text-red-400">Wasted</p>
+                                <p class="text-xl font-mono text-red-400">$${m.metrics.wasted_cost_usd.toFixed(4)}</p>
                             </div>
                             <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                                 <p class="text-xs text-slate-500 uppercase font-bold mb-1">Savings</p>
@@ -326,7 +331,7 @@
             modal.innerHTML = `
                 <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl max-h-full overflow-hidden flex flex-col shadow-2xl">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-                        <h3 class="font-bold">${title}</h3>
+                        <h3 class="font-bold uppercase tracking-widest text-cyan-400">${title}</h3>
                         <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-700">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </button>
@@ -362,44 +367,48 @@
             }
 
             grid.innerHTML = missions.map(m => `
-                <div class="card">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="text-sm font-semibold text-cyan-400">${m.id}</span>
-                        <span class="status-badge status-${m.status.toLowerCase()}">${m.status}</span>
-                    </div>
-                    <h3 class="text-lg font-bold mb-2">Orchestrator: ${m.orchestrator}</h3>
-                    <div class="text-sm text-slate-400 space-y-1 mb-4">
-                        <p>Tasks: ${m.completed_tasks} / ${m.task_count}</p>
-                        <p>Created: ${m.created}</p>
-                        ${m.readiness_score !== null ? `
-                        <div class="mt-4 pt-4 border-t border-slate-700">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Readiness Score</span>
-                                <span class="font-bold ${m.readiness_score >= 90 ? 'text-green-400' : (m.readiness_score >= 75 ? 'text-yellow-400' : 'text-red-400')}">${m.readiness_score}/100</span>
-                            </div>
-                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div class="h-full ${m.readiness_score >= 90 ? 'bg-green-500' : (m.readiness_score >= 75 ? 'bg-yellow-500' : 'bg-red-500')}" style="width: ${m.readiness_score}%"></div>
-                            </div>
-                            ${m.decision ? `
-                            <div class="mt-2 text-center">
-                                <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-800 ${m.decision === 'GO' ? 'text-green-400 border border-green-900' : (m.decision === 'CONDITIONAL_GO' ? 'text-yellow-400 border border-yellow-900' : 'text-red-400 border border-red-900')}">
-                                    ${m.decision.replace('_', ' ')}
-                                </span>
+                <div class="card flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-sm font-semibold text-cyan-400">${m.id}</span>
+                            <span class="status-badge status-${m.status.toLowerCase()}">${m.status}</span>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">Orchestrator: ${m.orchestrator}</h3>
+                        <div class="text-sm text-slate-400 space-y-1 mb-4">
+                            <p>Tasks: ${m.completed_tasks} / ${m.task_count}</p>
+                            <p>Created: ${m.created}</p>
+                            ${m.readiness_score !== null ? `
+                            <div class="mt-4 pt-4 border-t border-slate-700">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Readiness Score</span>
+                                    <span class="font-bold ${m.readiness_score >= 90 ? 'text-green-400' : (m.readiness_score >= 75 ? 'text-yellow-400' : 'text-red-400')}">${m.readiness_score}/100</span>
+                                </div>
+                                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                    <div class="h-full ${m.readiness_score >= 90 ? 'bg-green-500' : (m.readiness_score >= 75 ? 'bg-yellow-500' : 'bg-red-500')}" style="width: ${m.readiness_score}%"></div>
+                                </div>
+                                ${m.decision ? `
+                                <div class="mt-2 text-center">
+                                    <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-800 ${m.decision === 'GO' ? 'text-green-400 border border-green-900' : (m.decision === 'CONDITIONAL_GO' ? 'text-yellow-400 border border-yellow-900' : 'text-red-400 border border-red-900')}">
+                                        ${m.decision.replace('_', ' ')}
+                                    </span>
+                                </div>
+                                ` : ''}
                             </div>
                             ` : ''}
                         </div>
-                        ` : ''}
                     </div>
-                    <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mb-6">
-                        <div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${(m.completed_tasks / m.task_count) * 100}%"></div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="performAction('${m.id}', 'replan')" class="text-xs font-semibold py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors">
-                            RE-PLAN
-                        </button>
-                        <button onclick="viewMission('${m.id}')" class="text-xs font-semibold py-2 px-3 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition-colors">
-                            DETAILS
-                        </button>
+                    <div>
+                        <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mb-6">
+                            <div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${(m.completed_tasks / m.task_count) * 100}%"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="performAction('${m.id}', 'replan')" class="text-xs font-semibold py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors">
+                                RE-PLAN
+                            </button>
+                            <button onclick="viewMission('${m.id}')" class="text-xs font-semibold py-2 px-3 rounded bg-cyan-600 hover:bg-cyan-500 text-white transition-colors">
+                                DETAILS
+                            </button>
+                        </div>
                     </div>
                 </div>
             `).join('');
@@ -422,11 +431,6 @@
             } catch (error) {
                 alert('Error performing action: ' + error);
             }
-        }
-
-        function viewMission(id) {
-            // Placeholder for detailed view
-            window.location.href = '/docs'; // For now, redirects to Swagger
         }
 
         // Auto-refresh every 5 seconds
