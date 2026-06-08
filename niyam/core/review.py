@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import json
 from rich.console import Console
 from rich.panel import Panel
 
@@ -102,11 +103,63 @@ def get_git_diff(repo_root: Path | None = None) -> str:
         return ""
 
 
+def get_task_review_content(repo_root: Path, task_id: str, console: Console) -> str | None:
+    """Fetch task diff, validation results, and execution details for review."""
+    from niyam.core.config import get_niyam_dir
+    from niyam.mission.planner import resolve_mission_id
+    from niyam.mission.utils import load_plan
+
+    niyam_dir = get_niyam_dir(repo_root)
+    mission_id = resolve_mission_id(niyam_dir)
+    if not mission_id:
+        return None
+
+    run_dir = niyam_dir / "runs" / mission_id
+    plan_data = load_plan(run_dir)
+    
+    target_task = None
+    for t in plan_data.get("tasks", []):
+        if t["id"] == task_id:
+            target_task = t
+            break
+
+    if not target_task:
+        return None
+
+    task_dir = run_dir / "tasks" / task_id
+    content = f"# Code Review for Task {task_id}: {target_task.get('title')}\n\n"
+    content += f"## Task Contract\n```json\n{json.dumps(target_task, indent=2)}\n```\n\n"
+    
+    diff_path = task_dir / "diff.patch"
+    if diff_path.exists():
+        content += f"## Git Diff\n```diff\n{redact_secrets(diff_path.read_text(encoding='utf-8'))}\n```\n\n"
+    else:
+        content += "## Git Diff\nNo diff available for this task.\n\n"
+
+    validation_path = task_dir / "validation.json"
+    if validation_path.exists():
+        try:
+            val_data = json.loads(validation_path.read_text(encoding="utf-8"))
+            content += f"## Validation Results\n```json\n{json.dumps(val_data, indent=2)}\n```\n\n"
+        except Exception:
+            pass
+
+    log_path = task_dir / "output.log"
+    if log_path.exists():
+        log_text = log_path.read_text(encoding="utf-8")
+        if len(log_text) > 2000:
+            log_text = log_text[-2000:]
+        content += f"## Executor Summary (tail)\n```text\n{log_text}\n```\n\n"
+
+    return content
+
+
 def run_review(
     lens: str,
     runtime: str,
     mode: str,
     console: Console,
+    task_id: str | None = None,
 ) -> None:
     """Run code review with the specified lens, runtime, and mode."""
     from niyam.core.config import find_niyam_root
@@ -118,7 +171,13 @@ def run_review(
 
     # 1. Fetch review content
     review_content = ""
-    if lens == "evidence":
+    
+    if task_id:
+        review_content = get_task_review_content(repo_root, task_id, console)
+        if not review_content:
+            console.print(f"[bold red]Error:[/] Could not retrieve evidence for task '{task_id}'.")
+            return
+    elif lens == "evidence":
         from niyam.core.config import get_niyam_dir
         from niyam.mission.planner import resolve_mission_id
         niyam_dir = get_niyam_dir(repo_root)
@@ -171,8 +230,8 @@ def run_review(
             "Do not accept compromises. Critique every line of the content below.\n\n"
         )
 
-    if lens == "evidence":
-        compiled_prompt = prefix + template_content.replace("{{evidence_content}}", review_content)
+    if task_id or lens == "evidence":
+        compiled_prompt = prefix + template_content.replace("{{evidence_content}}", review_content).replace("{{git_diff}}", review_content)
     else:
         compiled_prompt = prefix + template_content.replace("{{git_diff}}", review_content)
 

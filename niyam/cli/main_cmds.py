@@ -270,6 +270,26 @@ def doctor(
 
 
 @app.command()
+def validate(
+    task_id: Annotated[
+        str,
+        typer.Argument(help="Task ID to validate (e.g., T1, TASK-001)."),
+    ],
+    mission: Annotated[
+        Optional[str], typer.Option("--mission", help="Mission ID containing the task.")
+    ] = None,
+) -> None:
+    """Validate a task's execution (scope enforcement and tests)."""
+    from niyam.core.validate import run_task_validation
+
+    try:
+        run_task_validation(task_id=task_id, mission_id=mission, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def report(
     format: Annotated[
         ReportFormat,

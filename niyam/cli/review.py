@@ -27,10 +27,18 @@ class ReviewMode(str, Enum):
 @review_app.callback(invoke_without_command=True)
 def review(
     ctx: typer.Context,
+    task_id: Annotated[
+        Optional[str],
+        typer.Argument(help="Optional Task ID to review (e.g. TASK-001)."),
+    ] = None,
     lens: Annotated[
         ReviewLens,
         typer.Option("--lens", "-l", help="Review lens/perspective."),
     ] = ReviewLens.engineering,
+    reviewer: Annotated[
+        Optional[Runtime],
+        typer.Option("--reviewer", help="Alias for --runtime."),
+    ] = None,
     runtime: Annotated[
         Runtime,
         typer.Option("--runtime", "-r", help="Runtime to execute the review with."),
@@ -40,16 +48,20 @@ def review(
         typer.Option("--mode", "-m", help="Review mode."),
     ] = ReviewMode.collaborative,
 ) -> None:
-    """Run a structured code review on current changes."""
+    """Run a structured code review on current changes or a specific task."""
     if ctx.invoked_subcommand is not None:
         return
     from niyam.core.review import run_review
 
+    # If --reviewer is provided, it overrides --runtime
+    actual_runtime = reviewer.value if reviewer else runtime.value
+
     run_review(
         lens=lens.value,
-        runtime=runtime.value,
+        runtime=actual_runtime,
         mode=mode.value,
         console=console,
+        task_id=task_id,
     )
 
 
