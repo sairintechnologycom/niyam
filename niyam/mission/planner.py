@@ -146,9 +146,17 @@ def extract_yaml_or_json(text: str) -> dict | None:
 
 
 def build_planner_prompt(
-    requirement: str, repo_map: str, available_agents: list[str]
+    requirement: str, repo_map: str, available_agents: list[str],
+    project_context: str | None = None,
 ) -> str:
     agents_str = ", ".join(available_agents)
+
+    context_section = ""
+    if project_context:
+        context_section = f"""\nProject Context (PRD / Background):
+{project_context}
+"""
+
     return f"""You are the Niyam planning engine.
 Convert the following requirement into a bounded, dependency-resolved task plan.
 Each task must be small, bounded, and assigned to a specific agent from the available agents in the workspace.
@@ -158,7 +166,7 @@ Available Agents in this workspace:
 
 Repository Structure (File Map):
 {repo_map}
-
+{context_section}
 Requirement to implement:
 {requirement}
 
@@ -652,8 +660,25 @@ def run_mission_plan(
         orchestrator = config.runtimes[0] if config.runtimes else "claude"
         if shutil.which(orchestrator):
             repo_map = get_repo_map(repo_root)
+
+            # Load project context documents (PRDs, user stories, etc.)
+            project_context = None
+            try:
+                from niyam.core.context import load_context_documents
+                context_docs = load_context_documents(repo_root)
+                if context_docs:
+                    sections = []
+                    for doc in context_docs:
+                        meta = doc["meta"]
+                        header = f"### {meta.get('type', 'context').upper()}: {meta.get('name', 'unknown')}"
+                        sections.append(f"{header}\n{doc['content']}")
+                    project_context = "\n\n".join(sections)
+            except Exception:
+                pass
+
             current_prompt = build_planner_prompt(
-                requirement_content, repo_map, available_agents
+                requirement_content, repo_map, available_agents,
+                project_context=project_context,
             )
 
             # Write prompt for trace

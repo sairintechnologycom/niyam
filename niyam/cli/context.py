@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -41,3 +41,98 @@ def context_diff() -> None:
     from niyam.core.context import run_context_diff
 
     run_context_diff(console=console)
+
+
+@context_app.command("add")
+def context_add(
+    text: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Inline text content for the context document (PRD, overview, etc.).",
+        ),
+    ] = None,
+    context_type: Annotated[
+        str,
+        typer.Option(
+            "--type",
+            "-t",
+            help="Context document type: prd, overview, user-stories, tech-spec, custom.",
+        ),
+    ] = "prd",
+    file: Annotated[
+        Optional[str],
+        typer.Option(
+            "--file",
+            "-f",
+            help="Path to a file to import as context.",
+        ),
+    ] = None,
+    stdin: Annotated[
+        bool,
+        typer.Option(
+            "--stdin",
+            help="Read context content from stdin (for piping).",
+        ),
+    ] = False,
+    name: Annotated[
+        Optional[str],
+        typer.Option(
+            "--name",
+            "-n",
+            help="Custom name for the context document.",
+        ),
+    ] = None,
+) -> None:
+    """Add a project context document (PRD, user stories, tech spec, etc.).
+
+    Provide content via inline text, --file, or --stdin. Examples:
+
+        niyam context add --type prd "Build a todo app with auth"
+        niyam context add --type prd --file ./docs/PRD.md
+        echo "Build X" | niyam context add --type prd --stdin
+        niyam context add --type user-stories --file ./stories.md
+    """
+    from niyam.core.context import run_context_add
+    from niyam.core.sync import run_sync
+
+    run_context_add(
+        context_type=context_type,
+        text=text,
+        file_path=file,
+        from_stdin=stdin,
+        name=name,
+        console=console,
+    )
+    # Sync to runtimes so context is available
+    try:
+        run_sync(runtime=None, console=console)
+    except SystemExit:
+        pass  # Not fatal if sync fails (e.g. no runtimes configured)
+
+
+@context_app.command("list")
+def context_list() -> None:
+    """List all manually-added context documents."""
+    from niyam.core.context import run_context_list
+
+    run_context_list(console=console)
+
+
+@context_app.command("remove")
+def context_remove(
+    identifier: Annotated[
+        str,
+        typer.Argument(
+            help="Filename or type-name identifier of the context document to remove (e.g. prd-main).",
+        ),
+    ],
+) -> None:
+    """Remove a context document by name or identifier."""
+    from niyam.core.context import run_context_remove
+    from niyam.core.sync import run_sync
+
+    run_context_remove(identifier=identifier, console=console)
+    try:
+        run_sync(runtime=None, console=console)
+    except SystemExit:
+        pass

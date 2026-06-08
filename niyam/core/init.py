@@ -228,9 +228,10 @@ def run_init(
             + f"  [dim]•[/] Project: [bold]{project_name}[/]\n"
             "\n"
             "[dim]Next steps:[/]\n"
-            "  niyam context refresh   [dim]# detect your stack[/]\n"
-            "  niyam policy validate   [dim]# check policies[/]\n"
-            "  niyam doctor            [dim]# verify setup[/]",
+            '  niyam context add -t prd "..."  [dim]# provide your PRD or project description[/]\n'
+            "  niyam context refresh           [dim]# detect your stack[/]\n"
+            "  niyam policy validate           [dim]# check policies[/]\n"
+            "  niyam doctor                    [dim]# verify setup[/]",
             title="[bold green]Niyam Initialized[/]",
             border_style="green",
         )

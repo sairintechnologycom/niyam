@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import re
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +19,12 @@ from niyam.core.config import find_niyam_root, load_niyam_config
 from niyam.core.scanner.stack_detector import detect_stack
 
 logger = logging.getLogger(__name__)
+
+# Valid context document types
+CONTEXT_TYPES = ("prd", "overview", "user-stories", "tech-spec", "custom")
+
+# Warn when context document exceeds this many characters
+CONTEXT_SIZE_WARNING = 10_000
 
 # Compatibility alias
 _scan_repo = detect_stack
@@ -408,4 +416,312 @@ def run_context_show(console: Console, repo_root: Path | None = None) -> None:
             if v:
                 console.print(f"  - {k}: [green]{v}[/]")
 
+    # Show manually-added context documents
+    docs = load_context_documents(repo_root)
+    if docs:
+        console.print("\n[bold]Project Context Documents:[/]")
+        for doc in docs:
+            meta = doc["meta"]
+            size = len(doc["content"])
+            console.print(
+                f"  - [cyan]{meta.get('type', 'custom')}[/]: "
+                f"[bold]{meta.get('name', doc['filename'])}[/] "
+                f"[dim]({size:,} chars, added {meta.get('added_at', 'unknown')})[/]"
+            )
+    else:
+        console.print(
+            "\n[dim]No project context documents added. "
+            "Use [bold]niyam context add --type prd \"...\"[/] to provide a PRD.[/]"
+        )
+
     console.print(f"\n[dim]Full details available in {context_json}[/]")
+
+
+# ── Context document management ───────────────────────────────────────
+
+
+def _get_context_docs_dir(repo_root: Path) -> Path:
+    """Return the directory where context documents are stored."""
+    return repo_root / ".niyam" / "context" / "docs"
+
+
+def _parse_context_frontmatter(content: str) -> tuple[dict, str]:
+    """Parse YAML frontmatter from a context document.
+
+    Returns (metadata_dict, body_text).
+    """
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL)
+    if match:
+        try:
+            meta = yaml.safe_load(match.group(1)) or {}
+        except Exception:
+            meta = {}
+        return meta, match.group(2)
+    return {}, content
+
+
+def _make_context_filename(context_type: str, name: str | None) -> str:
+    """Generate a safe filename for a context document."""
+    from niyam.core.security import sanitize_filename
+
+    if name:
+        base = sanitize_filename(name)
+    else:
+        base = "main"
+    return f"{context_type}-{base}.md"
+
+
+def run_context_add(
+    context_type: str,
+    text: str | None = None,
+    file_path: str | None = None,
+    from_stdin: bool = False,
+    name: str | None = None,
+    console: Console | None = None,
+    repo_root: Path | None = None,
+) -> Path:
+    """Add a context document (PRD, user stories, etc.) to the workspace.
+
+    Exactly one of text, file_path, or from_stdin must be provided.
+    Returns the path to the created context document.
+    """
+    if console is None:
+        console = Console()
+
+    if not repo_root:
+        repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first.")
+        raise SystemExit(1)
+
+    # Validate context type
+    if context_type not in CONTEXT_TYPES:
+        console.print(
+            f"[bold red]Error:[/] Invalid context type '{context_type}'. "
+            f"Valid types: {', '.join(CONTEXT_TYPES)}"
+        )
+        raise SystemExit(1)
+
+    # Resolve content from exactly one source
+    sources = sum([text is not None, file_path is not None, from_stdin])
+    if sources == 0:
+        console.print("[bold red]Error:[/] Provide content as text, --file, or --stdin.")
+        raise SystemExit(1)
+    if sources > 1:
+        console.print("[bold red]Error:[/] Provide only one of: text argument, --file, or --stdin.")
+        raise SystemExit(1)
+
+    source_label = "inline"
+    if file_path:
+        fp = Path(file_path)
+        if not fp.exists():
+            console.print(f"[bold red]Error:[/] File not found: {file_path}")
+            raise SystemExit(1)
+        content = fp.read_text(encoding="utf-8")
+        source_label = "file"
+        # Use file stem as name if not provided
+        if not name:
+            name = fp.stem
+    elif from_stdin:
+        content = sys.stdin.read()
+        source_label = "stdin"
+    else:
+        content = text or ""
+
+    if not content.strip():
+        console.print("[bold red]Error:[/] Context content is empty.")
+        raise SystemExit(1)
+
+    # Warn on large documents
+    if len(content) > CONTEXT_SIZE_WARNING:
+        console.print(
+            f"[yellow]⚠ Context document is large ({len(content):,} chars). "
+            f"This may increase token usage during mission planning.[/]"
+        )
+
+    # Build the document with YAML frontmatter
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    doc_name = name or "main"
+    frontmatter = yaml.dump(
+        {
+            "type": context_type,
+            "name": doc_name,
+            "added_at": now,
+            "source": source_label,
+        },
+        default_flow_style=False,
+        sort_keys=False,
+    ).strip()
+
+    full_content = f"---\n{frontmatter}\n---\n\n{content}\n"
+
+    # Save to .niyam/context/docs/
+    docs_dir = _get_context_docs_dir(repo_root)
+    docs_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = _make_context_filename(context_type, name)
+    doc_path = docs_dir / filename
+
+    if doc_path.exists():
+        console.print(
+            f"[yellow]Overwriting existing context document: {filename}[/]"
+        )
+
+    doc_path.write_text(full_content, encoding="utf-8")
+
+    # Update project.yaml description for prd/overview types
+    if context_type in ("prd", "overview"):
+        _update_project_description(repo_root, content, console)
+
+    console.print(
+        f"[bold green]✓[/] Added [cyan]{context_type}[/] context document: "
+        f"[bold]{filename}[/] ({len(content):,} chars)"
+    )
+
+    return doc_path
+
+
+def _update_project_description(repo_root: Path, content: str, console: Console) -> None:
+    """Update project.yaml with a description from the PRD/overview."""
+    project_yaml_path = repo_root / ".niyam" / "project.yaml"
+    if not project_yaml_path.exists():
+        return
+
+    try:
+        with open(project_yaml_path, encoding="utf-8") as f:
+            project_data = yaml.safe_load(f) or {}
+    except Exception:
+        return
+
+    # Extract first paragraph as description (up to 500 chars)
+    lines = content.strip().split("\n")
+    # Skip markdown headers
+    desc_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith("---"):
+            continue
+        if stripped:
+            desc_lines.append(stripped)
+        elif desc_lines:
+            break  # Stop at first blank line after content
+
+    description = " ".join(desc_lines)[:500]
+    if description:
+        project_data["description"] = description
+        with open(project_yaml_path, "w", encoding="utf-8") as f:
+            yaml.dump(project_data, f, sort_keys=False)
+
+
+def run_context_list(console: Console, repo_root: Path | None = None) -> None:
+    """List all manually-added context documents."""
+    if not repo_root:
+        repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first.")
+        raise SystemExit(1)
+
+    docs = load_context_documents(repo_root)
+    if not docs:
+        console.print(
+            "[yellow]No context documents found.[/]\n"
+            "[dim]Add one with: niyam context add --type prd \"Your PRD text...\"[/]"
+        )
+        return
+
+    from rich.table import Table
+
+    table = Table(title="Project Context Documents", border_style="cyan")
+    table.add_column("Type", style="cyan")
+    table.add_column("Name", style="bold")
+    table.add_column("Source", style="dim")
+    table.add_column("Size", justify="right")
+    table.add_column("Added", style="dim")
+    table.add_column("File", style="dim")
+
+    for doc in docs:
+        meta = doc["meta"]
+        table.add_row(
+            meta.get("type", "custom"),
+            meta.get("name", "—"),
+            meta.get("source", "—"),
+            f"{len(doc['content']):,} chars",
+            meta.get("added_at", "—"),
+            doc["filename"],
+        )
+
+    console.print(table)
+
+
+def run_context_remove(
+    identifier: str, console: Console, repo_root: Path | None = None
+) -> None:
+    """Remove a context document by filename or type-name pattern."""
+    if not repo_root:
+        repo_root = find_niyam_root()
+    if not repo_root:
+        console.print("[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first.")
+        raise SystemExit(1)
+
+    docs_dir = _get_context_docs_dir(repo_root)
+    if not docs_dir.exists():
+        console.print("[yellow]No context documents directory found.[/]")
+        return
+
+    # Try exact filename match first
+    target = docs_dir / identifier
+    if not target.exists():
+        # Try with .md extension
+        target = docs_dir / f"{identifier}.md"
+    if not target.exists():
+        # Scan for partial match on type-name
+        candidates = []
+        for f in sorted(docs_dir.glob("*.md")):
+            if identifier in f.stem:
+                candidates.append(f)
+        if len(candidates) == 1:
+            target = candidates[0]
+        elif len(candidates) > 1:
+            console.print(
+                f"[bold red]Error:[/] Ambiguous identifier '{identifier}'. "
+                f"Matches: {', '.join(c.name for c in candidates)}"
+            )
+            return
+        else:
+            console.print(f"[bold red]Error:[/] Context document '{identifier}' not found.")
+            return
+
+    # Safety: ensure the file is inside docs_dir
+    try:
+        target.resolve().relative_to(docs_dir.resolve())
+    except ValueError:
+        console.print("[bold red]Error:[/] Invalid path.")
+        return
+
+    target.unlink()
+    console.print(f"[bold green]✓[/] Removed context document: [cyan]{target.name}[/]")
+
+
+def load_context_documents(repo_root: Path) -> list[dict]:
+    """Load all context documents from .niyam/context/docs/.
+
+    Returns a list of dicts with keys: filename, meta, content.
+    """
+    docs_dir = _get_context_docs_dir(repo_root)
+    if not docs_dir.exists():
+        return []
+
+    documents = []
+    for f in sorted(docs_dir.glob("*.md")):
+        raw = f.read_text(encoding="utf-8")
+        meta, body = _parse_context_frontmatter(raw)
+        documents.append({
+            "filename": f.name,
+            "meta": meta,
+            "content": body.strip(),
+        })
+
+    return documents
+
