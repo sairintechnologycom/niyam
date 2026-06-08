@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from niyam.mission.utils import get_failure_diagnostics
+from niyam.mission.executor import run_mission_start
 from niyam.mission.planner import build_replanner_prompt, run_mission_replan
 from rich.console import Console
 
@@ -131,3 +132,64 @@ tasks:
     assert len(updated_plan["tasks"]) == 3 # T1 (completed) + T_REC_1 + T2_FIXED
     assert updated_plan["tasks"][1]["type"] == "recovery"
     assert updated_plan["tasks"][1]["id"] == "T_REC_1"
+
+
+@patch("niyam.mission.executor.execute_single_task")
+def test_auto_heal_execute_bypasses_approval(mock_execute_single_task, run_dir, tmp_path):
+    """Test that auto_heal_execute bypasses the approval gate for recovery tasks."""
+    repo_root = tmp_path
+    
+    # Setup mission-plan.yaml with a recovery task waiting for approval
+    plan_data = {
+        "mission": {
+            "id": "test-mission",
+            "orchestrator": "claude",
+            "status": "approved",
+            "requirement": "Requirements...",
+            "created": "2026-06-08T00:00:00Z",
+            "worktree": False,
+        },
+        "tasks": [
+            {
+                "id": "T_REC_1",
+                "status": "planned",
+                "title": "Recovery: Install pkg",
+                "agent": "default-agent",
+                "type": "recovery",
+                "approval_required": True,
+            },
+        ],
+    }
+    plan_path = run_dir / "mission-plan.yaml"
+    import yaml
+    with open(plan_path, "w") as f:
+        yaml.dump(plan_data, f)
+        
+    (run_dir / "approval.json").write_text('{"approved": true}')
+    (run_dir / "requirement.md").write_text("Requirements...")
+    
+    # Mock execute_single_task to succeed
+    def mock_execute(*args, **kwargs):
+        # We need to simulate the task finishing to break the loop
+        task = kwargs.get("task", args[0] if len(args) > 0 else {})
+        t_id = task["id"]
+        from niyam.mission.state_machine import transition_task
+        transition_task(run_dir, t_id, "completed")
+        return True
+
+    mock_execute_single_task.side_effect = mock_execute
+    
+    console = Console(quiet=True)
+    with patch("niyam.core.config.find_niyam_root", return_value=repo_root):
+        with patch("niyam.mission.executor.resolve_mission_id", return_value="test-mission"):
+            # Should automatically execute without pausing for approval
+            run_mission_start(console, auto_heal_execute=True, mission_id="test-mission")
+    
+    # Check that it actually ran
+    assert mock_execute_single_task.called
+    
+    with open(plan_path) as f:
+        updated_plan = yaml.safe_load(f)
+    
+    assert updated_plan["mission"]["status"] == "completed"
+    assert updated_plan["tasks"][0]["status"] == "completed"

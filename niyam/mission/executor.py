@@ -41,6 +41,7 @@ def run_mission_start(
     auto_heal: bool | None = None,
     non_interactive: bool = False,
     mission_id: str | None = None,
+    auto_heal_execute: bool = False,
 ) -> None:
     """Start or resume the latest approved mission."""
     from niyam.core.config import find_niyam_root
@@ -283,9 +284,9 @@ def run_mission_start(
                     is_recovery = t.get("type") == "recovery"
                     if (is_recovery or t.get("approval_required", False)) and t["status"] not in ("approved", "retry_ready"):
                         # If the task requires approval but hasn't been approved yet
-                        if non_interactive:
+                        if non_interactive or (is_recovery and auto_heal_execute):
                             with print_lock:
-                                console.print(f"[{t_id}] [yellow]Non-interactive mode: Auto-approving task with 'approval_required' or 'recovery' type[/]")
+                                console.print(f"[{t_id}] [yellow]Auto-approving task '{t_id}' (Type: {t.get('type')})[/]")
                             t["status"] = "approved"
                             save_plan(run_dir, current_plan)
                         else:
@@ -570,6 +571,7 @@ def run_mission_resume(
     worktree: bool | None = None,
     non_interactive: bool = False,
     mission_id: str | None = None,
+    auto_heal_execute: bool = False,
 ) -> None:
     """Resume a paused mission."""
     from niyam.core.config import find_niyam_root
@@ -600,6 +602,7 @@ def run_mission_resume(
         worktree=worktree,
         non_interactive=non_interactive,
         mission_id=mission_id,
+        auto_heal_execute=auto_heal_execute,
     )
 
 
@@ -609,6 +612,7 @@ def run_mission_retry(
     worktree: bool | None = None,
     non_interactive: bool = False,
     mission_id: str | None = None,
+    auto_heal_execute: bool = False,
 ) -> None:
     """Retry failed tasks of the latest mission."""
     from niyam.core.config import find_niyam_root
@@ -660,6 +664,7 @@ def run_mission_retry(
         worktree=worktree,
         non_interactive=non_interactive,
         mission_id=mission_id,
+        auto_heal_execute=auto_heal_execute,
     )
 
 

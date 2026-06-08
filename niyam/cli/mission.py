@@ -257,6 +257,13 @@ def mission_start(
             help="Enable or disable autonomous resilience mid-mission.",
         ),
     ] = None,
+    auto_heal_execute: Annotated[
+        bool,
+        typer.Option(
+            "--auto-heal-execute",
+            help="Autonomously execute recovery tasks without human approval.",
+        ),
+    ] = False,
     ) -> None:
     """Start or resume the latest approved mission."""
     from niyam.mission.executor import run_mission_start
@@ -267,6 +274,7 @@ def mission_start(
             parallel=parallel,
             worktree=worktree,
             auto_heal=auto_heal,
+            auto_heal_execute=auto_heal_execute,
             non_interactive=non_interactive,
             mission_id=mission_id,
         )
@@ -337,6 +345,13 @@ def mission_resume(
         Optional[str],
         typer.Option("--mission", help="Mission ID to resume."),
     ] = None,
+    auto_heal_execute: Annotated[
+        bool,
+        typer.Option(
+            "--auto-heal-execute",
+            help="Autonomously execute recovery tasks without human approval.",
+        ),
+    ] = False,
 ) -> None:
     """Resume a paused mission."""
     from niyam.mission.executor import run_mission_resume
@@ -348,6 +363,7 @@ def mission_resume(
             non_interactive=non_interactive,
             console=console,
             mission_id=mission_id,
+            auto_heal_execute=auto_heal_execute,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -381,6 +397,13 @@ def mission_retry(
         Optional[str],
         typer.Option("--mission", help="Mission ID to retry."),
     ] = None,
+    auto_heal_execute: Annotated[
+        bool,
+        typer.Option(
+            "--auto-heal-execute",
+            help="Autonomously execute recovery tasks without human approval.",
+        ),
+    ] = False,
 ) -> None:
     """Retry failed or skipped tasks of the latest mission."""
     from niyam.mission.executor import run_mission_retry
@@ -392,6 +415,7 @@ def mission_retry(
             non_interactive=non_interactive,
             mission_id=mission_id,
             console=console,
+            auto_heal_execute=auto_heal_execute,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
