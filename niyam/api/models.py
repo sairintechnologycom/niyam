@@ -46,6 +46,7 @@ class MissionDetails(BaseModel):
     metrics: Optional[TokenMetrics] = None
     readiness_score: Optional[int] = None
     decision: Optional[str] = None
+    approvals: Optional[dict[str, Any]] = None
 
 
 class ActionResponse(BaseModel):

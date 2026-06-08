@@ -5,17 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 
 from niyam.core.config import find_niyam_root, get_niyam_dir
 
 logger = logging.getLogger(__name__)
-from niyam.mission.planner import resolve_mission_id
 from niyam.mission.utils import load_plan
 from niyam.mission.dashboard import get_task_durations
 from niyam.api.models import (
@@ -89,6 +86,83 @@ def get_fleet_analytics():
     repo_root, _ = get_repo_context()
     analytics = PerformanceMetrics(repo_root)
     return analytics.get_fleet_summary()
+
+
+@app.get("/policies")
+def get_policies():
+    """Get configured governance policies for the workspace."""
+    from niyam.core.config import load_niyam_config
+    from niyam.policies.guard import load_security_policy, load_commands_policy
+    
+    repo_root, niyam_dir = get_repo_context()
+    
+    try:
+        config = load_niyam_config(repo_root)
+        guard_config = config.governance.guard.model_dump() if config.governance else {}
+    except Exception:
+        guard_config = {}
+
+    security_policy = load_security_policy(repo_root)
+    commands_policy = load_commands_policy(repo_root)
+    
+    # Try to load approvals
+    app_policy_path = niyam_dir / "policies" / "approvals.yaml"
+    approvals = []
+    if app_policy_path.exists():
+        try:
+            from niyam.core.security import safe_load_yaml
+            app_data = safe_load_yaml(app_policy_path) or {}
+            approvals = app_data.get("approval_required_for", [])
+        except Exception:
+            pass
+
+    return {
+        "security": security_policy,
+        "commands": commands_policy,
+        "approvals": approvals,
+        "guard_config": guard_config
+    }
+
+
+@app.get("/audits/prompts")
+def get_prompt_audits():
+    """Get a log of prompts used across missions for auditing."""
+    _, niyam_dir = get_repo_context()
+    runs_dir = niyam_dir / "runs"
+    if not runs_dir.exists():
+        return []
+
+    prompts = []
+    # Sort by directory mtime (newest first)
+    run_dirs = sorted(
+        [d for d in runs_dir.iterdir() if d.is_dir()],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True,
+    )
+
+    for run_dir in run_dirs:
+        tasks_dir = run_dir / "tasks"
+        if not tasks_dir.exists():
+            continue
+            
+        for task_dir in tasks_dir.iterdir():
+            if not task_dir.is_dir():
+                continue
+                
+            prompt_file = task_dir / "prompt.md"
+            if prompt_file.exists():
+                try:
+                    content = prompt_file.read_text(encoding="utf-8")
+                    prompts.append({
+                        "mission_id": run_dir.name,
+                        "task_id": task_dir.name,
+                        "content": content,
+                        "timestamp": task_dir.stat().st_mtime
+                    })
+                except Exception:
+                    pass
+
+    return prompts
 
 
 @app.get("/missions", response_model=list[MissionSummary])
@@ -195,6 +269,35 @@ def get_mission(mission_id: str):
 
     score, decision = _get_run_readiness(run_dir)
 
+    # Load approvals info
+    approval_data = None
+    approval_path = run_dir / "approval.json"
+    if approval_path.exists():
+        try:
+            with open(approval_path, encoding="utf-8") as f:
+                approval_data = json.load(f)
+        except Exception:
+            pass
+
+    # Get required roles
+    repo_root, _ = get_repo_context()
+    required_roles = ["default"]
+    if repo_root:
+        try:
+            from niyam.core.config import load_niyam_config
+            config = load_niyam_config(repo_root)
+            if config.governance and config.governance.guard:
+                required_roles = config.governance.guard.mission_approval_roles or ["default"]
+        except Exception:
+            pass
+
+    # Build the approvals summary for UI
+    approvals_summary = {
+        "approved": approval_data.get("approved", False) if approval_data else False,
+        "required_roles": required_roles,
+        "current_approvals": approval_data.get("approvals", {}) if approval_data else {}
+    }
+
     return MissionDetails(
         id=mission_id,
         status=meta.get("status", "planned"),
@@ -206,6 +309,7 @@ def get_mission(mission_id: str):
         metrics=metrics,
         readiness_score=score,
         decision=decision,
+        approvals=approvals_summary,
     )
 
 
@@ -294,6 +398,7 @@ def mission_action(mission_id: str, action: str):
         )
     elif action == "replan":
         from niyam.mission.planner import run_mission_replan
+        from rich.console import Console
         try:
             run_mission_replan(
                 console=Console(quiet=True),
@@ -309,6 +414,123 @@ def mission_action(mission_id: str, action: str):
             raise HTTPException(status_code=500, detail=str(e))
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported action: {action}")
+
+
+@app.post("/missions/{mission_id}/approve", response_model=ActionResponse)
+def approve_mission(mission_id: str, role: str = "default"):
+    """Approve a planned mission, supporting multi-party role-based approvals."""
+    from rich.console import Console
+    from niyam.mission.planner import run_mission_approve
+    
+    console = Console(quiet=True)
+    try:
+        run_mission_approve(console=console, interactive=False, mission_id=mission_id, role=role)
+        
+        # Load the updated approvals info to return status
+        repo_root, niyam_dir = get_repo_context()
+        run_dir = niyam_dir / "runs" / mission_id
+        approval_path = run_dir / "approval.json"
+        
+        approved = False
+        pending_roles = []
+        if approval_path.exists():
+            try:
+                with open(approval_path, encoding="utf-8") as f:
+                    app_data = json.load(f)
+                approved = app_data.get("approved", False)
+                # Load configuration to get all required roles
+                from niyam.core.config import load_niyam_config
+                try:
+                    config = load_niyam_config(repo_root)
+                    required_approvals = config.governance.guard.mission_approval_roles if config.governance and config.governance.guard else ["default"]
+                except Exception:
+                    required_approvals = ["default"]
+                if not required_approvals:
+                    required_approvals = ["default"]
+                pending_roles = [r for r in required_approvals if r not in app_data.get("approvals", {})]
+            except Exception:
+                pass
+        
+        status = "approved" if approved else "pending_approvals"
+        msg = f"Approved as role '{role}'."
+        if not approved and pending_roles:
+            msg += f" Still waiting for: {', '.join(pending_roles)}"
+        else:
+            msg += " Mission is now fully approved and ready to start."
+            
+        return ActionResponse(
+            success=True,
+            message=msg,
+            new_status=status
+        )
+    except SystemExit:
+        raise HTTPException(status_code=400, detail="Approval failed. Check mission plan validation or status.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/missions/{mission_id}/tasks/{task_id}/approve", response_model=ActionResponse)
+def approve_task(mission_id: str, task_id: str):
+    """Approve a task that is blocked waiting for manual human approval."""
+    _, niyam_dir = get_repo_context()
+    run_dir = niyam_dir / "runs" / mission_id
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Mission {mission_id} not found.")
+        
+    task_dir = run_dir / "tasks" / task_id
+    if not task_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found.")
+        
+    approval_file = task_dir / "approval.json"
+    
+    # Write the approval file so the executor polling loop can pick it up
+    try:
+        from datetime import datetime, timezone
+        approval_data = {
+            "approved": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "actor": "human via portal"
+        }
+        approval_file.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+        return ActionResponse(
+            success=True,
+            message=f"Task {task_id} approved successfully.",
+            new_status="approved"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/missions/{mission_id}/tasks/{task_id}/deny", response_model=ActionResponse)
+def deny_task(mission_id: str, task_id: str):
+    """Deny a task that is blocked waiting for manual human approval."""
+    _, niyam_dir = get_repo_context()
+    run_dir = niyam_dir / "runs" / mission_id
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Mission {mission_id} not found.")
+        
+    task_dir = run_dir / "tasks" / task_id
+    if not task_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found.")
+        
+    approval_file = task_dir / "approval.json"
+    
+    try:
+        from datetime import datetime, timezone
+        approval_data = {
+            "approved": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "actor": "human via portal",
+            "reason": "Denied via portal"
+        }
+        approval_file.write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
+        return ActionResponse(
+            success=True,
+            message=f"Task {task_id} denied.",
+            new_status="failed"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def start_server(host: str = "127.0.0.1", port: int = 8080):
