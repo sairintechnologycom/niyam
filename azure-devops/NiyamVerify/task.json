@@ -1,0 +1,66 @@
+{
+    "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+    "id": "2708b7e0-e145-11ee-8411-00155d01fe01",
+    "name": "NiyamVerify",
+    "friendlyName": "Niyam Governance Verify",
+    "description": "Verify cryptographic integrity, guardrails, and readiness scores for AI-assisted development.",
+    "helpMarkDown": "Verify AI session evidence using [Niyam](https://github.com/sairintechnologycom/niyam).",
+    "category": "Quality",
+    "author": "Sairin Technology",
+    "version": {
+        "Major": 0,
+        "Minor": 1,
+        "Patch": 0
+    },
+    "instanceNameFormat": "Niyam Verify $(targetBranch)",
+    "inputs": [
+        {
+            "name": "targetBranch",
+            "type": "string",
+            "label": "Target Branch",
+            "defaultValue": "main",
+            "required": true,
+            "helpMarkDown": "The branch to compare changes against (e.g. main or origin/main)."
+        },
+        {
+            "name": "strict",
+            "type": "boolean",
+            "label": "Strict Gating",
+            "defaultValue": "true",
+            "required": false,
+            "helpMarkDown": "If true, the task will fail the build if any governance violations or readiness scores are below the minimum."
+        },
+        {
+            "name": "minScore",
+            "type": "string",
+            "label": "Minimum Readiness Score",
+            "defaultValue": "50",
+            "required": false,
+            "helpMarkDown": "Minimum overall readiness score (0-100) required to pass."
+        },
+        {
+            "name": "publicKey",
+            "type": "string",
+            "label": "Public Key (PEM)",
+            "defaultValue": "",
+            "required": false,
+            "helpMarkDown": "Optional PEM-encoded Ed25519 public key for zero-trust evidence verification. Can also be provided via the `NIYAM_PUBLIC_KEY` environment variable."
+        },
+        {
+            "name": "version",
+            "type": "string",
+            "label": "Niyam Version",
+            "defaultValue": "latest",
+            "required": false,
+            "helpMarkDown": "Specify a specific version of Niyam to install. Defaults to 'latest'."
+        }
+    ],
+    "execution": {
+        "Node10": {
+            "target": "index.js"
+        },
+        "Node16": {
+            "target": "index.js"
+        }
+    }
+}

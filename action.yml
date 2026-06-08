@@ -1,0 +1,63 @@
+name: 'Niyam Governance Verify'
+description: 'Verify cryptographic integrity, guardrails, and readiness scores for AI-assisted development.'
+author: 'Sairin Technology'
+inputs:
+  target-branch:
+    description: 'Target branch to compare changes against (e.g. main).'
+    required: false
+    default: 'main'
+  strict:
+    description: 'If true, fails the build on any governance violations.'
+    required: false
+    default: 'true'
+  min-score:
+    description: 'Minimum readiness score (0-100) required to pass.'
+    required: false
+    default: '50'
+  public-key:
+    description: 'PEM-encoded Ed25519 public key for zero-trust evidence verification.'
+    required: false
+  version:
+    description: 'Niyam version to install (defaults to latest on PyPI).'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Niyam
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          pip install niyam
+        else
+          pip install niyam==${{ inputs.version }}
+        fi
+
+    - name: Run Niyam CI Verify
+      shell: bash
+      env:
+        NIYAM_PUBLIC_KEY: ${{ inputs.public-key }}
+      run: |
+        STRICT_FLAG=""
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          STRICT_FLAG="--strict"
+        fi
+        
+        PUBLIC_KEY_ARG=""
+        if [ -n "$NIYAM_PUBLIC_KEY" ]; then
+          # We pass it as an environment variable which niyam ci verify already supports
+          # but we can also pass it as an argument if we prefer. 
+          # The CLI implementation uses os.environ.get("NIYAM_PUBLIC_KEY") as a fallback.
+          echo "Using provided public key for verification."
+        fi
+        
+        niyam ci verify \
+          --target "${{ inputs.target-branch }}" \
+          $STRICT_FLAG \
+          --min-score "${{ inputs.min-score }}"

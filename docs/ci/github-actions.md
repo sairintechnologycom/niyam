@@ -2,45 +2,36 @@
 
 This guide explains how to set up `niyam scan` as a pull request quality gate and static analysis reporting tool in GitHub Actions.
 
-## 1. Basic Pull Request Gate
+## 1. Using the Official Niyam GitHub Action
 
-This workflow scans the repository on every PR, failing the run if any `high` or `critical` severity findings are detected:
+The easiest way to integrate Niyam is using the official action. This automatically handles Python setup, Niyam installation, and readiness scoring.
 
 ```yaml
-name: Niyam Governance Scan
+name: Niyam Governance Verify
 
 on:
   pull_request:
     branches: [ main, dev ]
 
 jobs:
-  governance-scan:
+  niyam-verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Niyam Governance Verify
+        uses: sairintechnology/niyam@main  # Or use a specific version tag
         with:
-          python-version: '3.11'
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install niyam
-
-      - name: Run Niyam scan
-        run: |
-          niyam scan . --profile enterprise --fail-on high --report-file niyam-report.md
-
-      - name: Upload Scan Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: niyam-readiness-report
-          path: niyam-report.md
+          target-branch: 'main'
+          min-score: 70
+          strict: true
+          public-key: ${{ secrets.NIYAM_PUBLIC_KEY }}
 ```
+
+## 2. Basic Pull Request Gate (Manual Script)
+
+If you prefer to run the CLI manually, you can use the following steps:
 
 ## 2. Using Baselines to Prevent Failure on Legacy Code
 

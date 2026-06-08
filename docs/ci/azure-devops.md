@@ -2,9 +2,9 @@
 
 This guide explains how to set up `niyam scan` as a pull request quality gate and static analysis reporting tool in Azure Pipelines (`azure-pipelines.yml`).
 
-## 1. Basic Pull Request Gate
+## 1. Using the Official Niyam Azure DevOps Task
 
-This pipeline runs on every PR target branch merge, failing the build if any `high` or `critical` severity findings are detected:
+The easiest way to integrate Niyam is using the official extension. This automatically handles Niyam installation and readiness score verification.
 
 ```yaml
 trigger: none
@@ -12,36 +12,25 @@ pr:
   branches:
     include:
       - main
-      - dev
 
 jobs:
-- job: GovernanceScan
-  displayName: 'Niyam Governance Scan'
+- job: GovernanceVerify
+  displayName: 'Niyam Governance Verify'
   pool:
     vmImage: 'ubuntu-latest'
   steps:
-  - task: UsePythonVersion@0
+  - task: NiyamVerify@0
     inputs:
-      versionSpec: '3.11'
-    displayName: 'Use Python 3.11'
-
-  - script: |
-      python -m pip install --upgrade pip
-      pip install niyam
-    displayName: 'Install Niyam'
-
-  - script: |
-      niyam scan . --profile enterprise --fail-on high --report-file $(Build.ArtifactStagingDirectory)/niyam-report.md
-    displayName: 'Run Niyam Scan'
-
-  - task: PublishBuildArtifacts@1
-    inputs:
-      PathtoPublish: '$(Build.ArtifactStagingDirectory)/niyam-report.md'
-      ArtifactName: 'niyam-readiness-report'
-      publishLocations: 'Container'
-    displayName: 'Publish Scan Report'
-    condition: always()
+      targetBranch: 'main'
+      minScore: 70
+      strict: true
+      publicKey: $(NIYAM_PUBLIC_KEY)
+    displayName: 'Run Niyam Governance Verify'
 ```
+
+## 2. Basic Pull Request Gate (Manual Script)
+
+If you prefer to run the CLI manually, you can use the following steps:
 
 ## 2. Using Baselines to Prevent Failure on Legacy Code
 
