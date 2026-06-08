@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
-import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
 import yaml
 import fnmatch
 import re
@@ -21,9 +20,23 @@ from rich.console import Console
 from rich.panel import Panel
 
 from niyam.core.config import load_niyam_config, find_niyam_root
-from niyam.mission.utils import print_lock, validation_lock, plan_lock, compute_sha256, load_plan, save_plan
-from niyam.mission.worktree import create_worktree, cleanup_worktree, is_git_repo, commit_worktree_changes
+from niyam.mission.utils import (
+    print_lock,
+    validation_lock,
+    plan_lock,
+    compute_sha256,
+    load_plan,
+    save_plan,
+)
+from niyam.mission.worktree import (
+    create_worktree,
+    cleanup_worktree,
+    is_git_repo,
+    commit_worktree_changes,
+)
 from niyam.mission.state_machine import transition_task, log_mission_event
+
+logger = logging.getLogger(__name__)
 
 
 def log_execution_event(
@@ -32,15 +45,16 @@ def log_execution_event(
     """Append execution event to execution-log.json (JSON array format)."""
     log_path = run_dir / "execution-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     event = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "event": event_type,
         "task_id": task_id,
         "details": details,
     }
-    
+
     import fcntl
+
     with open(log_path, "a+", encoding="utf-8") as f:
         try:
             fcntl.flock(f, fcntl.LOCK_EX)
@@ -54,7 +68,7 @@ def log_execution_event(
                         events = []
                 except Exception:
                     events = []
-            
+
             events.append(event)
             f.seek(0)
             f.truncate()
@@ -76,7 +90,7 @@ def log_policy_event(
         "type": event_type,
         "details": details,
     }
-    
+
     import fcntl
 
     for log_path in (
@@ -97,7 +111,7 @@ def log_policy_event(
                             events = []
                     except Exception:
                         events = []
-                
+
                 events.append(event)
                 f.seek(0)
                 f.truncate()
@@ -109,7 +123,9 @@ def log_policy_event(
                     pass
 
 
-def record_acceptance_criteria(run_dir: Path, task_id: str, criteria: list[str]) -> None:
+def record_acceptance_criteria(
+    run_dir: Path, task_id: str, criteria: list[str]
+) -> None:
     """Record acceptance criteria as explicit review evidence for a task."""
     if not criteria:
         return
@@ -168,14 +184,18 @@ def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict 
             input_match = re.search(r"input:\s*([\d,]+)", output_text)
             output_match = re.search(r"output:\s*([\d,]+)", output_text)
             cost_match = re.search(r"Total cost:\s*\$([\d.]+)", output_text)
-            
-            input_tokens = int(input_match.group(1).replace(",", "")) if input_match else 0
-            output_tokens = int(output_match.group(1).replace(",", "")) if output_match else 0
+
+            input_tokens = (
+                int(input_match.group(1).replace(",", "")) if input_match else 0
+            )
+            output_tokens = (
+                int(output_match.group(1).replace(",", "")) if output_match else 0
+            )
             cost_usd = float(cost_match.group(1)) if cost_match else None
-            
+
             if input_tokens == 0 and output_tokens == 0:
                 input_tokens = total_tokens
-                
+
             return {
                 "runtime": "claude",
                 "total_tokens": total_tokens,
@@ -188,7 +208,10 @@ def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict 
             pass
 
     # Gemini tokens: 10,500 (prompt: 8,000 / candidates: 2,500)
-    gemini_match = re.search(r"Gemini tokens:\s*([\d,]+)\s*\(prompt:\s*([\d,]+)\s*/\s*candidates:\s*([\d,]+)\)", output_text)
+    gemini_match = re.search(
+        r"Gemini tokens:\s*([\d,]+)\s*\(prompt:\s*([\d,]+)\s*/\s*candidates:\s*([\d,]+)\)",
+        output_text,
+    )
     if gemini_match:
         try:
             total = int(gemini_match.group(1).replace(",", ""))
@@ -207,7 +230,10 @@ def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict 
             pass
 
     # Codex tokens: 9,000 (input: 6,000 / output: 3,000)
-    codex_match = re.search(r"Codex tokens:\s*([\d,]+)\s*\(input:\s*([\d,]+)\s*/\s*output:\s*([\d,]+)\)", output_text)
+    codex_match = re.search(
+        r"Codex tokens:\s*([\d,]+)\s*\(input:\s*([\d,]+)\s*/\s*output:\s*([\d,]+)\)",
+        output_text,
+    )
     if codex_match:
         try:
             total = int(codex_match.group(1).replace(",", ""))
@@ -339,7 +365,6 @@ def update_token_ledger(
         "total_wasted_cost_usd": total_wasted,
     }
 
-
     if show_marketing:
         total_baseline_tokens = sum(e.get("baseline_tokens", 0) for e in events)
         total_baseline_cost = sum(e.get("baseline_cost_usd", 0.0) for e in events)
@@ -362,7 +387,6 @@ def update_token_ledger(
         from niyam.core.cost import (
             get_branch_name,
             get_repo_name,
-            log_cost_event,
             CostEvent,
         )
 
@@ -385,7 +409,6 @@ def update_token_ledger(
         pass
 
     return cost
-
 
 
 def run_validation_command(
@@ -536,7 +559,7 @@ def get_mock_change_path(allowed_files: list[str], task_id: str) -> str:
 
 def check_overlap(files1: list[str], files2: list[str]) -> bool:
     """Check if two sets of allowed files/globs overlap.
-    
+
     Robustly handles nested globs like 'src/**' and 'src/components/*'.
     """
     if not files1 or not files2:
@@ -561,26 +584,26 @@ def check_overlap(files1: list[str], files2: list[str]) -> bool:
             # 1. Exact match
             if p1 == p2:
                 return True
-            
+
             # 2. Directory prefix check (e.g. 'src/**' vs 'src/app.py')
             # Strip glob characters to get base path
             b1 = p1.split("*")[0].rstrip("/")
             b2 = p2.split("*")[0].rstrip("/")
-            
-            if not b1 or not b2: # Root overlap
-                 return True
-                 
+
+            if not b1 or not b2:  # Root overlap
+                return True
+
             # If one base path is a parent of another, they MIGHT overlap
             # We check if b1 is a prefix of b2 or vice-versa
             if b1 == b2:
                 return True
-            
+
             if b1.startswith(b2 + "/") or b2.startswith(b1 + "/"):
-                 # They are in the same directory branch.
-                 # If the parent one is a glob, they definitely overlap.
-                 # E.g. 'src/**' (b1='src') vs 'src/components/x.py' (b2='src/components/x.py')
-                 if "*" in p1 or "*" in p2:
-                     return True
+                # They are in the same directory branch.
+                # If the parent one is a glob, they definitely overlap.
+                # E.g. 'src/**' (b1='src') vs 'src/components/x.py' (b2='src/components/x.py')
+                if "*" in p1 or "*" in p2:
+                    return True
 
             # 3. Fnmatch fallback for simple cases (e.g. *.py)
             try:
@@ -588,7 +611,7 @@ def check_overlap(files1: list[str], files2: list[str]) -> bool:
                     return True
             except Exception:
                 pass
-                
+
     return False
 
 
@@ -771,7 +794,7 @@ def execute_single_task(
     task_id = task["id"]
     task_dir = run_dir / "tasks" / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
-    
+
     task_cwd = repo_root
     worktree_path = None
     if branch_name is None:
@@ -779,7 +802,12 @@ def execute_single_task(
     run_hooks("pre_task", {"mission_id": mission_id, "task": task}, niyam_dir, console)
 
     if task.get("approval_required") and not non_interactive:
-        transition_task(run_dir, task_id, "awaiting_approval", reason="Manual approval required by contract.")
+        transition_task(
+            run_dir,
+            task_id,
+            "awaiting_approval",
+            reason="Manual approval required by contract.",
+        )
         with print_lock:
             console.print(
                 Panel(
@@ -790,32 +818,52 @@ def execute_single_task(
                     border_style="yellow",
                 )
             )
-        
-        _notify_saas_event(run_dir, "TASK_APPROVAL_REQUESTED", {"task_id": task_id, "title": task["title"]})
-        
+
+        _notify_saas_event(
+            run_dir,
+            "TASK_APPROVAL_REQUESTED",
+            {"task_id": task_id, "title": task["title"]},
+        )
+
         # Simple polling logic or wait for local approval.json
         approval_file = task_dir / "approval.json"
         while not approval_file.exists():
             # For now, we wait for a local file to be created in the task dir
             time.sleep(5)
-            
+
         try:
             with open(approval_file, encoding="utf-8") as f:
                 approval_data = json.load(f)
             if not approval_data.get("approved"):
-                transition_task(run_dir, task_id, "failed", reason="Task denied by reviewer.", actor="human")
+                transition_task(
+                    run_dir,
+                    task_id,
+                    "failed",
+                    reason="Task denied by reviewer.",
+                    actor="human",
+                )
                 with print_lock:
                     console.print(f"[{task_id}] [bold red]Task denied by reviewer.[/]")
                 return False
-            
-            transition_task(run_dir, task_id, "approved", reason="Task approved by human.", actor="human")
+
+            transition_task(
+                run_dir,
+                task_id,
+                "approved",
+                reason="Task approved by human.",
+                actor="human",
+            )
             with print_lock:
-                console.print(f"[{task_id}] [bold green]Task approved. Proceeding...[/]")
+                console.print(
+                    f"[{task_id}] [bold green]Task approved. Proceeding...[/]"
+                )
         except Exception:
             return False
 
     if use_worktree:
-        transition_task(run_dir, task_id, "preparing", reason="Setting up worktree isolation.")
+        transition_task(
+            run_dir, task_id, "preparing", reason="Setting up worktree isolation."
+        )
         try:
             worktree_path = create_worktree(
                 repo_root, run_dir, mission_id, task, console, branch_name=branch_name
@@ -824,36 +872,49 @@ def execute_single_task(
 
             # Inject task-specific active guardrails (Task Isolation)
             try:
-                allowed_list = task.get("allowed_files") or task.get("files_allowed") or ["*"]
-                blocked_list = task.get("blocked_list") or task.get("blocked_files") or []
-                
+                allowed_list = (
+                    task.get("allowed_files") or task.get("files_allowed") or ["*"]
+                )
+                blocked_list = (
+                    task.get("blocked_list") or task.get("blocked_files") or []
+                )
+
                 hook_cache_dir = worktree_path / ".niyam" / "hook-cache"
                 hook_cache_dir.mkdir(parents=True, exist_ok=True)
                 hook_config_path = hook_cache_dir / "guard-config.json"
-                
+
                 # Load existing base config to preserve global deny lists
                 base_config = {}
                 if hook_config_path.exists():
                     try:
-                        base_config = json.loads(hook_config_path.read_text(encoding="utf-8"))
+                        base_config = json.loads(
+                            hook_config_path.read_text(encoding="utf-8")
+                        )
                     except Exception:
                         pass
-                
+
                 task_hook_config = {
                     "guard_enabled": True,
                     "deny_patterns": base_config.get("deny_patterns", []),
                     "warn_patterns": base_config.get("warn_patterns", []),
-                    "deny_write_patterns": blocked_list + base_config.get("deny_write_patterns", []),
+                    "deny_write_patterns": blocked_list
+                    + base_config.get("deny_write_patterns", []),
                     "allow_write_patterns": base_config.get("allow_write_patterns", []),
-                    "frozen_paths": allowed_list, # Restrict active writes to this task's scope
+                    "frozen_paths": allowed_list,  # Restrict active writes to this task's scope
                 }
-                hook_config_path.write_text(json.dumps(task_hook_config, indent=2), encoding="utf-8")
+                hook_config_path.write_text(
+                    json.dumps(task_hook_config, indent=2), encoding="utf-8"
+                )
             except Exception as e:
                 with print_lock:
-                    console.print(f"[{task_id}] [dim yellow]Warning: Failed to inject task-specific guardrails: {e}[/]")
+                    console.print(
+                        f"[{task_id}] [dim yellow]Warning: Failed to inject task-specific guardrails: {e}[/]"
+                    )
 
         except Exception as e:
-            transition_task(run_dir, task_id, "failed", reason=f"Failed to setup worktree: {e}")
+            transition_task(
+                run_dir, task_id, "failed", reason=f"Failed to setup worktree: {e}"
+            )
             with print_lock:
                 console.print(f"[{task_id}] [bold red]Failed to setup worktree:[/] {e}")
             return False
@@ -878,13 +939,15 @@ def execute_single_task(
     try:
         from niyam.mission.planner import get_repo_map
         from niyam.core.context import ContextRouter
-        
+
         full_map = get_repo_map(repo_root)
         router = ContextRouter(repo_root)
         allowed_list = task.get("allowed_files") or task.get("files_allowed") or ["*"]
-        
+
         related_list = router.get_related_paths(allowed_list)
-        repo_map_str = router.prune_repo_map(full_map, allowed_list, related_files=related_list)
+        repo_map_str = router.prune_repo_map(
+            full_map, allowed_list, related_files=related_list
+        )
     except Exception as e:
         logger.debug("Failed to generate pruned repo map: %s", e)
 
@@ -958,7 +1021,10 @@ Do not perform destructive operations.
         with print_lock:
             console.print(f"[{task_id}] [dim]Mocking execution of {task_id}...[/]")
         log_mission_event(
-            run_dir, "TASK_EXECUTION_MOCK", task_id=task_id, details="Mocked execution successfully."
+            run_dir,
+            "TASK_EXECUTION_MOCK",
+            task_id=task_id,
+            details="Mocked execution successfully.",
         )
 
         if use_worktree and worktree_path and task.get("writes_files", True):
@@ -1077,7 +1143,7 @@ Do not perform destructive operations.
                         success = True
                 except subprocess.TimeoutExpired:
                     run_failed = True
-                except subprocess.CalledProcessError as e:
+                except subprocess.CalledProcessError:
                     run_failed = True
                     if task_log_path.exists():
                         try:
@@ -1146,12 +1212,16 @@ Do not perform destructive operations.
         # Capture task-specific diff
         if changed_files and is_git:
             try:
-                # If using worktree, diff HEAD~1..HEAD (since we haven't committed yet, wait, 
+                # If using worktree, diff HEAD~1..HEAD (since we haven't committed yet, wait,
                 # we commit at the end of the function. So right now it's just dirty changes in worktree)
                 diff_cmd = ["git", "diff"]
-                res_diff = subprocess.run(diff_cmd, cwd=task_cwd, capture_output=True, text=True)
+                res_diff = subprocess.run(
+                    diff_cmd, cwd=task_cwd, capture_output=True, text=True
+                )
                 if res_diff.returncode == 0:
-                    (task_dir / "diff.patch").write_text(res_diff.stdout, encoding="utf-8")
+                    (task_dir / "diff.patch").write_text(
+                        res_diff.stdout, encoding="utf-8"
+                    )
             except Exception:
                 pass
 
@@ -1278,19 +1348,24 @@ Do not perform destructive operations.
         elif hasattr(task_validation, "commands"):
             task_cmds = task_validation.commands
 
-        # Only run project-wide validation for implementation/validation tasks 
+        # Only run project-wide validation for implementation/validation tasks
         # or if files were actually changed.
-        should_run_project_val = (
-            task.get("type") in ("implementation", "validation") or bool(changed_files)
-        )
-        
+        should_run_project_val = task.get("type") in (
+            "implementation",
+            "validation",
+        ) or bool(changed_files)
+
         executed_cmds = set()
 
         if should_run_project_val:
             for name, cmd in checks:
                 if cmd:
-                    cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
-                    validation_results.append({"name": name, "command": cmd, "success": cmd_success})
+                    cmd_success = run_validation_command(
+                        cmd, run_dir, task_cwd, console
+                    )
+                    validation_results.append(
+                        {"name": name, "command": cmd, "success": cmd_success}
+                    )
                     executed_cmds.add(cmd.strip())
                     if not cmd_success:
                         success = False
@@ -1300,51 +1375,65 @@ Do not perform destructive operations.
                 # Skip if already run in project validation
                 if cmd.strip() in executed_cmds:
                     continue
-                    
+
                 cmd_success = run_validation_command(cmd, run_dir, task_cwd, console)
-                validation_results.append({"name": f"task_val_{i}", "command": cmd, "success": cmd_success})
+                validation_results.append(
+                    {"name": f"task_val_{i}", "command": cmd, "success": cmd_success}
+                )
                 if not cmd_success:
                     success = False
 
         # Evaluate minimum test coverage if configured
         try:
-            from niyam.core.config import load_niyam_config
             niyam_config = load_niyam_config(repo_root)
-            if niyam_config and niyam_config.governance and niyam_config.governance.scan:
+            if (
+                niyam_config
+                and niyam_config.governance
+                and niyam_config.governance.scan
+            ):
                 min_coverage = niyam_config.governance.scan.min_test_coverage
                 if min_coverage is not None:
                     from niyam.core.coverage import find_and_parse_coverage
+
                     cov_result = find_and_parse_coverage(repo_root)
                     if cov_result:
                         actual_coverage = cov_result["percentage"]
                         if actual_coverage < min_coverage:
                             success = False
-                            validation_results.append({
-                                "name": "coverage", 
-                                "command": "internal_coverage_check", 
-                                "success": False, 
-                                "error": f"Coverage {actual_coverage}% < {min_coverage}%"
-                            })
+                            validation_results.append(
+                                {
+                                    "name": "coverage",
+                                    "command": "internal_coverage_check",
+                                    "success": False,
+                                    "error": f"Coverage {actual_coverage}% < {min_coverage}%",
+                                }
+                            )
                         else:
-                            validation_results.append({
-                                "name": "coverage", 
-                                "command": "internal_coverage_check", 
-                                "success": True, 
-                                "details": f"Coverage: {actual_coverage}%"
-                            })
+                            validation_results.append(
+                                {
+                                    "name": "coverage",
+                                    "command": "internal_coverage_check",
+                                    "success": True,
+                                    "details": f"Coverage: {actual_coverage}%",
+                                }
+                            )
                     else:
                         success = False
-                        validation_results.append({
-                            "name": "coverage", 
-                            "command": "internal_coverage_check", 
-                            "success": False, 
-                            "error": "Coverage report not found"
-                        })
+                        validation_results.append(
+                            {
+                                "name": "coverage",
+                                "command": "internal_coverage_check",
+                                "success": False,
+                                "error": "Coverage report not found",
+                            }
+                        )
         except Exception:
             pass
 
     if validation_results:
-        (task_dir / "validation.json").write_text(json.dumps(validation_results, indent=2), encoding="utf-8")
+        (task_dir / "validation.json").write_text(
+            json.dumps(validation_results, indent=2), encoding="utf-8"
+        )
 
     try:
         parsed_usage = None
@@ -1432,7 +1521,7 @@ Do not perform destructive operations.
             estimation_method=estimation_method,
             cost_override=cost_usd,
         )
-        
+
         # Also save to task dir
         token_usage = {
             "input_tokens": input_tokens,
@@ -1442,7 +1531,9 @@ Do not perform destructive operations.
             "estimated": estimated,
             "runtime": orchestrator,
         }
-        (task_dir / "token-usage.json").write_text(json.dumps(token_usage, indent=2), encoding="utf-8")
+        (task_dir / "token-usage.json").write_text(
+            json.dumps(token_usage, indent=2), encoding="utf-8"
+        )
 
         # Task-Level Budget Check
         try:
@@ -1450,19 +1541,21 @@ Do not perform destructive operations.
             if config and config.governance and config.governance.budget:
                 budget = config.governance.budget
                 total_task_tokens = input_tokens + output_tokens
-                
+
                 # 1. Cost check
                 if budget.max_task_cost_usd is not None:
                     if actual_cost > budget.max_task_cost_usd:
                         success = False
                         with print_lock:
-                            console.print(Panel(
-                                f"[bold red]🛑 Task Cost Budget Breached![/]\n"
-                                f"Task: {task_id} / Cost: ${actual_cost:.4f} / Limit: ${budget.max_task_cost_usd:.4f}\n"
-                                f"Task has been automatically failed.",
-                                title="[bold red]Task Budget Enforcer[/]",
-                                border_style="red"
-                            ))
+                            console.print(
+                                Panel(
+                                    f"[bold red]🛑 Task Cost Budget Breached![/]\n"
+                                    f"Task: {task_id} / Cost: ${actual_cost:.4f} / Limit: ${budget.max_task_cost_usd:.4f}\n"
+                                    f"Task has been automatically failed.",
+                                    title="[bold red]Task Budget Enforcer[/]",
+                                    border_style="red",
+                                )
+                            )
                         log_mission_event(
                             run_dir,
                             "BUDGET_VIOLATION",
@@ -1472,20 +1565,24 @@ Do not perform destructive operations.
                         )
                     elif actual_cost >= 0.8 * budget.max_task_cost_usd:
                         with print_lock:
-                            console.print(f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} cost reached 80% of limit (${actual_cost:.4f} / ${budget.max_task_cost_usd:.4f})")
+                            console.print(
+                                f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} cost reached 80% of limit (${actual_cost:.4f} / ${budget.max_task_cost_usd:.4f})"
+                            )
 
                 # 2. Token check
                 if budget.max_task_tokens is not None:
                     if total_task_tokens > budget.max_task_tokens:
                         success = False
                         with print_lock:
-                            console.print(Panel(
-                                f"[bold red]🛑 Task Token Budget Breached![/]\n"
-                                f"Task: {task_id} / Tokens: {total_task_tokens} / Limit: {budget.max_task_tokens}\n"
-                                f"Task has been automatically failed.",
-                                title="[bold red]Task Budget Enforcer[/]",
-                                border_style="red"
-                            ))
+                            console.print(
+                                Panel(
+                                    f"[bold red]🛑 Task Token Budget Breached![/]\n"
+                                    f"Task: {task_id} / Tokens: {total_task_tokens} / Limit: {budget.max_task_tokens}\n"
+                                    f"Task has been automatically failed.",
+                                    title="[bold red]Task Budget Enforcer[/]",
+                                    border_style="red",
+                                )
+                            )
                         log_mission_event(
                             run_dir,
                             "BUDGET_VIOLATION",
@@ -1495,16 +1592,22 @@ Do not perform destructive operations.
                         )
                     elif total_task_tokens >= 0.8 * budget.max_task_tokens:
                         with print_lock:
-                            console.print(f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} tokens reached 80% of limit ({total_task_tokens} / {budget.max_task_tokens})")
+                            console.print(
+                                f"[bold yellow]⚠️ Task Budget Alert:[/] Task {task_id} tokens reached 80% of limit ({total_task_tokens} / {budget.max_task_tokens})"
+                            )
         except Exception:
             pass
 
     except Exception:
         pass
 
-
     if success and use_worktree and worktree_path:
-        transition_task(run_dir, task_id, "merging", reason="Committing and merging changes from worktree.")
+        transition_task(
+            run_dir,
+            task_id,
+            "merging",
+            reason="Committing and merging changes from worktree.",
+        )
         try:
             commit_worktree_changes(worktree_path, task_id, console)
             res = subprocess.run(

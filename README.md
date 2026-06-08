@@ -35,44 +35,49 @@ niyam run "migrate all API endpoints to v2"
 
 ## 💎 Key Features
 
-### 🛡️ Active Action Governance
+### 🛡️ Active Action Governance & Approvals
 *   **Command Guardrails:** Intercept and block dangerous shell commands (e.g., destructive database drops or global file deletions) before execution.
 *   **Path Freezing:** Restrict agents to specific scopes. Protect core files like `LICENSE` or sensitive `infra/` folders from unauthorized AI writes.
 *   **Credential Redaction:** A built-in engine that identifies and redacts secrets, API keys, and PII from agent logs and CLI outputs in real-time.
+*   **Enterprise Approval Gates:** Role-based (e.g., Product, QA, Security) manual approval gates for critical tasks and mission plans directly from the CLI or Portal UI.
 
 ![Niyam Action Governance](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-guard.png)
 
-### 🔍 Production Readiness Scanning
+### 🤖 Multi-Agent Orchestration & Resilience
+*   **Agent Roles:** Define specialized AI personas (e.g., `security-reviewer`, `qa-engineer`) with tailored system prompts and dedicated toolsets.
+*   **Isolated Multi-Worktree Parallelism:** Run tasks in parallel using isolated **Git Worktrees**, preventing agent cross-talk and ensuring clean, atomic PRs.
+*   **Autonomous Environment Healing:** Auto-heal and self-correct environments by triggering AI re-planning and automatic retries upon task/validation failure.
+
+### 🔍 Compliance & Readiness Checking
 *   **Repo Audits:** Scan your repository against strict profiles (`startup`, `team`, `enterprise`, `regulated`) to detect missing documentation, unpinned dependencies, or secret exposures.
 *   **Readiness Scoring:** Get a numerical **Readiness Score (0-100)** and a clear **GO / NO-GO** decision for every branch or mission.
+*   **CI/CD Pipeline Scaffolding:** Generate ready-to-use CI/CD workflows (`niyam ci generate [github/gitlab/azure]`) that run strict policy validations (`niyam ci verify`) directly in your pull requests.
 
-![Niyam Readiness Scan](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-scan.png)
-
-### 🤖 Multi-Agent Orchestration
-*   **Agent Roles:** Define specialized AI personas (e.g., `security-reviewer`, `qa-engineer`) with tailored system prompts and dedicated toolsets.
-*   **Isolated Execution:** Run tasks in parallel using **Git Worktrees**, preventing agent cross-talk and ensuring clean, atomic PRs.
-
-### 📑 Evidence & Compliance Hub
+### 📑 Evidence & FinOps Cost Tracking
 *   **Joint Evidence Reports:** Automatically synthesize scan findings, observed command logs, and cost data into standardized, audit-ready compliance documents.
 *   **FinOps Cost Tracking:** A local ledger that logs every token consumed and estimates USD spend against customizable pricing tables.
 
 ---
 
-## 📊 Live Mission Dashboard
+## 📊 Live Mission Dashboard & Web Portal
 
-Monitor your autonomous agents in real-time with the built-in terminal dashboard:
+Niyam provides both terminal-based and browser-based interfaces to monitor your autonomous agents and manage approvals:
 
+### 1. Terminal Dashboard
 ```bash
 niyam dashboard --watch
 ```
-
-![Niyam Mission Dashboard](https://raw.githubusercontent.com/sairintechnologycom/niyam/main/docs/images/niyam-dashboard.png)
-
-### What the Dashboard Tracks:
 *   **Live Task Progress:** Visual status of all mission tasks (Planned, Running, Completed, Failed).
 *   **Real-time Logs:** View active output from implementation agents as they work in isolated worktrees.
-*   **Validation Monitor:** Watch unit tests and lint checks run and report results live.
-*   **Resource Efficiency:** Track actual token spend vs. baseline estimates to optimize your AI engineering budget.
+*   **Validation Monitor & Resource Efficiency:** Watch unit tests and lint checks run and report results live, alongside actual token spend.
+
+### 2. Browser-Based Portal UI
+```bash
+niyam portal
+```
+*   **Policy Analytics:** Visual cards detailing Active Guardrails, Command Filters, Security Isolation, and active Path Freezing.
+*   **Interactive Approval Center:** Review pending tasks/missions and authorize execution by role directly from the Web UI.
+*   **FinOps & Agent Metrics:** Monitor token consumption, cost breakdowns, and agent success rates.
 
 ---
 
