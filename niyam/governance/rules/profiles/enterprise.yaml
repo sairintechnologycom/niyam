@@ -28,6 +28,20 @@ rules:
         - 'sk-proj-[a-zA-Z0-9]{20,}'
         - '-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----'
         - '[a-zA-Z0-9]+://[^:]+:[^@\s]+@[a-zA-Z0-9.-]+'
+      files:
+        - "*.py"
+        - "*.js"
+        - "*.ts"
+        - "*.tsx"
+        - "*.jsx"
+        - "*.json"
+        - "*.yaml"
+        - "*.yml"
+        - "*.toml"
+        - ".env"
+        - ".env.local"
+        - ".env.production"
+        - ".env.development"
 
   - id: DEP001
     title: Missing Dependency Lockfile
@@ -67,7 +81,7 @@ rules:
     description: No health check route (e.g. /health, /healthz, /ping) was found in the application source.
     recommendation: Implement a simple health route returning 200 OK.
     match:
-      type: content_regex
+      type: content_missing
       patterns:
         - "/health"
         - "/healthz"

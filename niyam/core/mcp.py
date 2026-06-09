@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 from typing import Literal
+from contextlib import contextmanager
+
+from filelock import FileLock
 from pydantic import BaseModel, Field
 
 from niyam.core.config import find_niyam_root
@@ -47,8 +51,22 @@ def get_mcp_registry_path(root: Path | None = None) -> Path:
     return root / ".niyam" / "mcp-registry.json"
 
 
+def get_mcp_registry_lock_path(root: Path | None = None) -> Path:
+    """Get the lock path used to serialize MCP registry writes."""
+    return get_mcp_registry_path(root).with_suffix(".json.lock")
+
+
+@contextmanager
+def mcp_registry_lock(root: Path | None = None):
+    """Serialize read-modify-write operations on the MCP registry."""
+    lock_path = get_mcp_registry_lock_path(root)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(lock_path)):
+        yield
+
+
 def load_mcp_registry(root: Path | None = None) -> MCPRegistry:
-    """Load the local MCP/tool registry from JSON file, returning empty registry on error/missing."""
+    """Load the local MCP/tool registry from JSON file."""
     path = get_mcp_registry_path(root)
     if not path.exists():
         return MCPRegistry()
@@ -56,19 +74,32 @@ def load_mcp_registry(root: Path | None = None) -> MCPRegistry:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return MCPRegistry.model_validate(data)
-    except Exception:
-        return MCPRegistry()
+    except Exception as e:
+        raise ValueError(f"Failed to load MCP registry at {path}: {e}") from e
 
 
-def save_mcp_registry(registry: MCPRegistry, root: Path | None = None) -> None:
+def save_mcp_registry(
+    registry: MCPRegistry, root: Path | None = None, *, locked: bool = False
+) -> None:
     """Save the MCP/tool registry locally to the JSON file with secret redaction."""
     path = get_mcp_registry_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     redacted_data = redact_secrets(registry.model_dump())
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(redacted_data, f, indent=2)
+    def _write() -> None:
+        tmp_path = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(redacted_data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, path)
+
+    if locked:
+        _write()
+    else:
+        lock_path = get_mcp_registry_lock_path(root)
+        with FileLock(str(lock_path)):
+            _write()
 
 
 def _classify_risk_ai(
@@ -245,4 +276,3 @@ def classify_risk(
     if max_risk_val == 0:
         return "medium"
     return inv_risk_levels[max_risk_val]  # type: ignore
-

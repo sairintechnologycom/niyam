@@ -21,6 +21,7 @@ SUPPORTED_MATCH_TYPES = {
     "filename_pattern",
     "content_contains",
     "content_regex",
+    "content_missing",
     "directory_exists",
     "directory_missing",
 }
@@ -104,7 +105,7 @@ def is_text_file(path: Path) -> bool:
     return suffix in TEXT_EXTENSIONS
 
 
-def walk_files(root: Path) -> list[Path]:
+def walk_files(root: Path, *, include_test_dirs: bool = False) -> list[Path]:
     """Find all relevant files to scan, ignoring build directories and metadata."""
     exclude_dirs = {
         ".git",
@@ -118,10 +119,10 @@ def walk_files(root: Path) -> list[Path]:
         ".ruff_cache",
         ".sutra",
         "scratch",
-        "test-fixtures",
-        "tests",
         "examples",
     }
+    if not include_test_dirs:
+        exclude_dirs.update({"test-fixtures", "tests"})
 
     files = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -204,15 +205,20 @@ def load_profile_rules(profile: str) -> list[GovernanceRule]:
 
 
 def evaluate_rule(
-    rule: GovernanceRule, root: Path, files: list[Path]
+    rule: GovernanceRule,
+    root: Path,
+    files: list[Path],
+    existence_files: list[Path] | None = None,
 ) -> list[dict[str, Any]]:
     """Evaluate a single governance rule against the workspace files."""
     import hashlib
 
     findings = []
+    existence_files = existence_files or files
 
     # 1. Resolve relative paths
     relative_paths = [f.relative_to(root) for f in files]
+    existence_relative_paths = [f.relative_to(root) for f in existence_files]
 
     # 2. Check conditional execution (if_exists)
     if_exists = rule.match.if_exists
@@ -221,7 +227,7 @@ def evaluate_rule(
             if_exists = [if_exists]
 
         condition_met = False
-        for f in relative_paths:
+        for f in existence_relative_paths:
             for pat in if_exists:
                 if fnmatch.fnmatch(f.name, pat) or fnmatch.fnmatch(str(f), pat):
                     condition_met = True
@@ -302,7 +308,7 @@ def evaluate_rule(
         # Check if ANY file matches the patterns
         for pat in patterns:
             matched = False
-            for f in relative_paths:
+            for f in existence_relative_paths:
                 if fnmatch.fnmatch(f.name, pat) or fnmatch.fnmatch(str(f), pat):
                     matched = True
                     break
@@ -330,7 +336,7 @@ def evaluate_rule(
             }
         )
 
-    elif mtype in ("content_contains", "content_regex"):
+    elif mtype in ("content_contains", "content_regex", "content_missing"):
         # Filter files by pattern match if specified
         target_files = files
         if rule.match.files:
@@ -342,6 +348,42 @@ def evaluate_rule(
                     for p in rule.match.files
                 ):
                     target_files.append(f)
+
+        if mtype == "content_missing":
+            found = False
+            for f in target_files:
+                try:
+                    content = f.read_text(encoding="utf-8", errors="ignore")
+                    for pat in patterns:
+                        if re.search(pat, content):
+                            found = True
+                            break
+                    if found:
+                        break
+                except Exception:
+                    pass
+
+            if not found:
+                fp_src = f"{rule.id}::"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                findings.append(
+                    {
+                        "schema_version": "1.0.0",
+                        "id": rule.id,
+                        "title": rule.title,
+                        "category": rule.category,
+                        "severity": rule.severity,
+                        "confidence": confidence_val,
+                        "file_path": "",
+                        "line_number": None,
+                        "description": rule.description,
+                        "recommendation": rule.recommendation,
+                        "remediation_effort": remediation_val,
+                        "tags": tags_val,
+                        "fingerprint": fingerprint,
+                    }
+                )
+            return findings
 
         for f in target_files:
             try:
@@ -466,8 +508,13 @@ def run_scanner_checks(
         config = load_niyam_config(root)
         if config and config.governance and config.governance.scan:
             min_coverage = config.governance.scan.min_test_coverage
-    except Exception:
+    except FileNotFoundError:
         pass
+    except Exception as e:
+        if (root / ".niyam" / "niyam.yaml").exists() or (
+            root / ".sutra" / "sutra.yaml"
+        ).exists():
+            raise ValueError(f"Invalid Niyam configuration: {e}") from e
 
     if custom_rules_path:
         rules = load_rules_from_yaml(custom_rules_path)
@@ -481,13 +528,18 @@ def run_scanner_checks(
         rules = load_profile_rules(profile)
         profile_name = profile
 
-    # 2. Gather scanned files
+    # 2. Gather scanned files. Content scanning intentionally skips tests and
+    # fixtures; existence checks need the full inventory so real test suites,
+    # lockfiles, and CI files are not missed.
     files = walk_files(root)
+    existence_files = walk_files(root, include_test_dirs=True)
 
     # 3. Evaluate all rules
     findings = []
     for rule in rules:
-        findings.extend(evaluate_rule(rule, root, files))
+        findings.extend(
+            evaluate_rule(rule, root, files, existence_files=existence_files)
+        )
 
     # Test coverage check
     if min_coverage is not None:

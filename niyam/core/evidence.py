@@ -216,8 +216,10 @@ def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
     try:
         registry = load_mcp_registry(repo_root)
         tools_list = list(registry.tools.values())
-    except Exception:
+        load_error = None
+    except Exception as e:
         tools_list = []
+        load_error = str(e)
 
     total = len(tools_list)
     approved = sum(1 for t in tools_list if t.approved)
@@ -260,6 +262,7 @@ def _get_mcp_data(repo_root: Path) -> dict[str, Any]:
         "unapproved_high": redacted_unapproved_high_critical,
         "unapproved_high_critical_tools": redacted_unapproved_high_critical,
         "recommended_actions": recommended_actions,
+        "error": load_error,
     }
 
 
@@ -316,9 +319,11 @@ class UnifiedEvidenceCompiler:
 
         # 3. Scan Results
         scan_results = {
-            "score": 100,
+            "score": 0,
+            "readiness_score": 0,
             "findings": [],
-            "decision": "GO"
+            "decision": "NOT_SCANNED",
+            "decision_reason": "No scan report was provided or found.",
         }
         scan_path = None
         if self.run_dir:
@@ -450,12 +455,13 @@ def run_generate_evidence(
                 break
 
     if not scan_json_path:
-         # Final fallback: create a dummy "clean" scan result if we just want a report of other things
          scan_results = {
-             "score": 100,
+             "score": 0,
+             "readiness_score": 0,
              "findings": [],
-             "decision": "GO",
-             "generated_at": datetime.now(timezone.utc).isoformat()
+             "decision": "NOT_SCANNED",
+             "decision_reason": "No scan report was provided or found.",
+             "generated_at": datetime.now(timezone.utc).isoformat(),
          }
     else:
         try:
@@ -463,6 +469,12 @@ def run_generate_evidence(
                 scan_results = json.load(f)
         except Exception as e:
             raise ValueError(f"Failed to parse scan JSON file {scan_json_path}: {e}")
+
+    scan_project_path = scan_results.get("project_path")
+    if scan_project_path:
+        scan_root = Path(scan_project_path).resolve()
+        if scan_root.exists():
+            root = scan_root
 
     # 1. Compile project config metadata
     project_name = "Niyam Project"

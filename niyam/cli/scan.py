@@ -54,6 +54,8 @@ def _scan_path_was_omitted() -> bool:
 
 def generate_sarif_report(results: dict) -> str:
     """Generate a valid SARIF v2.1.0 JSON string from scan results."""
+    from niyam import __version__
+
     findings = results.get("findings", [])
 
     severity_map = {
@@ -118,7 +120,7 @@ def generate_sarif_report(results: dict) -> str:
                     "driver": {
                         "name": "Niyam Scanner",
                         "rules": list(rules_dict.values()),
-                        "version": "0.4.0",
+                        "version": __version__,
                     }
                 },
                 "results": sarif_results,
@@ -241,7 +243,12 @@ def scan_command(
         ),
     ] = "startup",
     output: Annotated[
-        str, typer.Option("--output", "-o", help="Output format: text, json, markdown.")
+        str,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output format: text, json, markdown, sarif.",
+        ),
     ] = "text",
     report_file: Annotated[
         str,

@@ -50,6 +50,10 @@ def cost_log(
 
     root = find_niyam_root() or Path.cwd()
 
+    if input_tokens < 0 or output_tokens < 0:
+        console.print("[bold red]Error:[/] Token counts must be non-negative.")
+        raise typer.Exit(1)
+
     pricing = load_pricing(root)
     estimated_cost = calculate_cost(model, input_tokens, output_tokens, pricing)
 

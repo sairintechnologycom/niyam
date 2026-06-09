@@ -82,6 +82,7 @@ def mcp_register(
         save_mcp_registry,
         classify_risk,
         MCPTool,
+        mcp_registry_lock,
     )
 
     def redact_if_str(val: Optional[str]) -> Optional[str]:
@@ -89,8 +90,11 @@ def mcp_register(
             return None
         return redact_text(val)
 
-    # Load registry
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
 
     # Existence check
     existing_tool = None
@@ -243,8 +247,17 @@ def mcp_register(
         updated_at=final_updated_at,
     )
 
-    registry.tools[name] = tool
-    save_mcp_registry(registry)
+    with mcp_registry_lock():
+        try:
+            registry = load_mcp_registry()
+        except ValueError as e:
+            console.print(f"[bold red]Error:[/] {e}")
+            raise SystemExit(1)
+        if name in registry.tools and not update:
+            console.print(f"[bold red]Error:[/] Tool '{name}' is already registered.")
+            raise SystemExit(1)
+        registry.tools[name] = tool
+        save_mcp_registry(registry, locked=True)
 
     console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully registered.")
 
@@ -255,7 +268,11 @@ def mcp_list() -> None:
     from niyam.core.mcp import load_mcp_registry
     from rich.table import Table
 
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
     if not registry.tools:
         console.print("[yellow]No tools registered yet.[/]")
         return
@@ -297,7 +314,11 @@ def mcp_show(
     from niyam.core.mcp import load_mcp_registry
     from rich.panel import Panel
 
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
     if name not in registry.tools:
         console.print(f"[bold red]Error:[/] Tool '{name}' not found in registry.")
         raise SystemExit(1)
@@ -344,7 +365,11 @@ def mcp_approve(
     from niyam.core.mcp import load_mcp_registry, save_mcp_registry
     import datetime
 
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
     if name not in registry.tools:
         console.print(f"[bold red]Error:[/] Tool '{name}' not found in registry.")
         raise SystemExit(1)
@@ -374,7 +399,11 @@ def mcp_approve_all(
     from niyam.core.mcp import load_mcp_registry, save_mcp_registry
     import datetime
 
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
     unapproved = [name for name, t in registry.tools.items() if not t.approved]
     
     if not unapproved:
@@ -406,7 +435,11 @@ def mcp_risk_report() -> None:
     from rich.panel import Panel
     from rich.table import Table
 
-    registry = load_mcp_registry()
+    try:
+        registry = load_mcp_registry()
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
     if not registry.tools:
         console.print("[yellow]No tools registered to analyze.[/]")
         return
