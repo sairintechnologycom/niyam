@@ -34,6 +34,7 @@ class MemoryRecord(BaseModel):
         """Parse legacy JSONL records into structured MemoryRecord."""
         if not isinstance(data, dict):
             return data
+        data = data.copy()
 
         # Map 'source' to 'source_kind'
         if "source" in data and "source_kind" not in data:

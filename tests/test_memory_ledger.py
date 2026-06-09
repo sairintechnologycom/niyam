@@ -1,15 +1,21 @@
 """Tests for Phase B Memory Ledger Core."""
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from niyam.cli import app
+from niyam.core.memory import get_memory_file
 from niyam.core.memory_ledger.models import MemoryRecord
 from niyam.core.memory_ledger.local_store import LocalMemoryLedgerStore
 from niyam.core.memory_ledger.manifest import export_manifest, import_manifest
 from niyam.core.memory_ledger.diff import diff_manifests
+
+runner = CliRunner()
 
 
 def test_memory_record_validates_new_record():
@@ -146,3 +152,91 @@ def test_diff_detects_changes():
     assert diff.changed[0][0].id == "mem-2"
     assert diff.changed[0][1].content == "B mod"
 
+
+def test_memory_ledger_cli_init_list_validate_export(niyam_repo: Path):
+    os.chdir(niyam_repo)
+
+    init_result = runner.invoke(app, ["memory", "init"])
+    assert init_result.exit_code == 0
+
+    add_result = runner.invoke(
+        app, ["memory", "add", "project-lessons", "CLI ledger note"]
+    )
+    assert add_result.exit_code == 0
+
+    list_result = runner.invoke(app, ["memory", "list"])
+    assert list_result.exit_code == 0
+    assert "CLI ledger note" not in list_result.output
+    assert "note" in list_result.output
+
+    validate_result = runner.invoke(app, ["memory", "validate"])
+    assert validate_result.exit_code == 0
+
+    export_path = niyam_repo / "memory-export.json"
+    export_result = runner.invoke(
+        app,
+        ["memory", "export", "--output", str(export_path), "--format", "json"],
+    )
+    assert export_result.exit_code == 0
+    assert export_path.exists()
+
+    imported = import_manifest(export_path)
+    assert any(record.content == "CLI ledger note" for record in imported)
+
+
+def test_memory_ledger_cli_import_and_diff(niyam_repo: Path, tmp_path: Path):
+    os.chdir(niyam_repo)
+    before_path = tmp_path / "before.yaml"
+    after_path = tmp_path / "after.yaml"
+    import_path = tmp_path / "import.yaml"
+    timestamp = datetime.now(timezone.utc)
+
+    before = [
+        MemoryRecord(id="mem-1", type="note", content="A", created_at=timestamp),
+    ]
+    after = [
+        MemoryRecord(id="mem-1", type="note", content="A changed", created_at=timestamp),
+        MemoryRecord(id="mem-2", type="note", content="B", created_at=timestamp),
+    ]
+    export_manifest(before, before_path, fmt="yaml")
+    export_manifest(after, after_path, fmt="yaml")
+    export_manifest(after, import_path, fmt="yaml")
+
+    diff_result = runner.invoke(
+        app, ["memory", "diff", str(before_path), str(after_path)]
+    )
+    assert diff_result.exit_code == 0
+    assert "Added" in diff_result.output
+    assert "Changed" in diff_result.output
+
+    import_result = runner.invoke(app, ["memory", "import", str(import_path)])
+    assert import_result.exit_code == 0
+
+    list_result = runner.invoke(app, ["memory", "list"])
+    assert list_result.exit_code == 0
+    assert "mem-2" in list_result.output
+
+
+def test_existing_memory_add_still_updates_markdown_and_legacy_index(niyam_repo: Path):
+    os.chdir(niyam_repo)
+
+    result = runner.invoke(
+        app, ["memory", "add", "project-lessons", "Backcompat note"]
+    )
+    assert result.exit_code == 0
+
+    filepath = get_memory_file(niyam_repo, "project-lessons")
+    assert "- Backcompat note" in filepath.read_text(encoding="utf-8")
+
+    records_path = filepath.parent / "index.jsonl"
+    raw_records = [
+        json.loads(line)
+        for line in records_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert raw_records[-1]["memory_file"] == "project-lessons.md"
+    assert raw_records[-1]["source"] == "manual"
+
+    parsed = MemoryRecord.model_validate(raw_records[-1])
+    assert parsed.metadata["memory_file"] == "project-lessons.md"
+    assert parsed.source_kind == "manual"

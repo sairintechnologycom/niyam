@@ -159,8 +159,6 @@ Generate human-readable evidence report locally.
 
 ---
 
----
-
 ## Memory Ledger Commands
 
 ### `niyam memory init`

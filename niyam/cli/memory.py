@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.markup import escape
 
 from niyam.cli import console, memory_app
 
@@ -56,7 +58,7 @@ def memory_init() -> None:
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
-    
+
     index_path = get_memory_dir(repo_root) / "index.jsonl"
     store = LocalMemoryLedgerStore(index_path)
     store.init_store()
@@ -74,17 +76,22 @@ def memory_list() -> None:
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
-    
+
     index_path = get_memory_dir(repo_root) / "index.jsonl"
     store = LocalMemoryLedgerStore(index_path)
     records = store.list_records()
-    
+
     if not records:
         console.print("[yellow]No memory records found in ledger.[/yellow]")
         return
-        
+
     for r in records:
-        console.print(f"[{r.id}] {r.type} (scope: {r.scope}, source: {r.source_kind}) - {r.created_at}")
+        record_id = escape(f"[{r.id}]")
+        console.print(
+            f"{record_id} {escape(r.type)} "
+            f"(scope: {escape(r.scope)}, source: {escape(r.source_kind)}) "
+            f"- {r.created_at}"
+        )
 
 
 @memory_app.command("validate")
@@ -98,10 +105,10 @@ def memory_validate() -> None:
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
-    
+
     index_path = get_memory_dir(repo_root) / "index.jsonl"
     store = LocalMemoryLedgerStore(index_path)
-    
+
     try:
         store.validate_store()
         console.print("[bold green]✓[/] Memory ledger store is valid.")
@@ -112,11 +119,16 @@ def memory_validate() -> None:
 
 @memory_app.command("export")
 def memory_export(
-    output: Annotated[str, typer.Option("--output", "-o", help="Output file path.")],
-    format: Annotated[str, typer.Option("--format", "-f", help="Output format (json|yaml).")] = "json",
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Output file path."),
+    ],
+    fmt: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format (json|yaml)."),
+    ] = "json",
 ) -> None:
     """Export the memory ledger to a manifest file."""
-    from pathlib import Path
     from niyam.core.config import find_niyam_root
     from niyam.core.errors import NiyamConfigError
     from niyam.core.memory import get_memory_dir
@@ -126,18 +138,17 @@ def memory_export(
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
-    
-    if format not in ("json", "yaml"):
+
+    if fmt not in ("json", "yaml"):
         console.print("[bold red]Invalid format. Use 'json' or 'yaml'.[/]")
         raise typer.Exit(1)
-        
+
     index_path = get_memory_dir(repo_root) / "index.jsonl"
     store = LocalMemoryLedgerStore(index_path)
     records = store.list_records()
-    
-    out_path = Path(output)
+
     try:
-        export_manifest(records, out_path, fmt=format)  # type: ignore
+        export_manifest(records, output, fmt=fmt)  # type: ignore[arg-type]
         console.print(f"[bold green]✓[/] Exported {len(records)} records to {output}")
     except Exception as e:
         console.print(f"[bold red]Export failed:[/] {e}")
@@ -146,10 +157,9 @@ def memory_export(
 
 @memory_app.command("import")
 def memory_import(
-    file: Annotated[str, typer.Argument(help="Manifest file to import.")],
+    file: Annotated[Path, typer.Argument(help="Manifest file to import.")],
 ) -> None:
     """Import a memory ledger manifest file."""
-    from pathlib import Path
     from niyam.core.config import find_niyam_root
     from niyam.core.errors import NiyamConfigError
     from niyam.core.memory import get_memory_dir
@@ -159,18 +169,16 @@ def memory_import(
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
-        
+
     index_path = get_memory_dir(repo_root) / "index.jsonl"
     store = LocalMemoryLedgerStore(index_path)
-    
-    in_path = Path(file)
-    if not in_path.exists():
+
+    if not file.exists():
         console.print(f"[bold red]File not found:[/] {file}")
         raise typer.Exit(1)
-        
+
     try:
-        records = import_manifest(in_path)
-        # For phase B, import can just append the records. We assume naive import for now.
+        records = import_manifest(file)
         for r in records:
             store.append(r)
         console.print(f"[bold green]✓[/] Imported {len(records)} records from {file}")
@@ -181,46 +189,42 @@ def memory_import(
 
 @memory_app.command("diff")
 def memory_diff(
-    before: Annotated[str, typer.Argument(help="Before manifest file.")],
-    after: Annotated[str, typer.Argument(help="After manifest file.")],
+    before: Annotated[Path, typer.Argument(help="Before manifest file.")],
+    after: Annotated[Path, typer.Argument(help="After manifest file.")],
 ) -> None:
     """Show differences between two memory manifest files."""
-    from pathlib import Path
     from niyam.core.memory_ledger.manifest import import_manifest
     from niyam.core.memory_ledger.diff import diff_manifests
 
-    before_path = Path(before)
-    after_path = Path(after)
-    
-    if not before_path.exists() or not after_path.exists():
+    if not before.exists() or not after.exists():
         console.print("[bold red]One or both files not found.[/]")
         raise typer.Exit(1)
-        
+
     try:
-        before_records = import_manifest(before_path)
-        after_records = import_manifest(after_path)
-        
+        before_records = import_manifest(before)
+        after_records = import_manifest(after)
+
         diff = diff_manifests(before_records, after_records)
-        
+
         if diff.is_empty():
             console.print("No differences found.")
             return
-            
+
         if diff.added:
             console.print("[bold green]Added:[/]")
             for r in diff.added:
                 console.print(f"  + [{r.id}] {r.content[:50]}...")
-                
+
         if diff.removed:
             console.print("[bold red]Removed:[/]")
             for r in diff.removed:
                 console.print(f"  - [{r.id}] {r.content[:50]}...")
-                
+
         if diff.changed:
             console.print("[bold yellow]Changed:[/]")
-            for r_before, r_after in diff.changed:
+            for r_before, _r_after in diff.changed:
                 console.print(f"  ~ [{r_before.id}]")
-                
+
     except Exception as e:
         console.print(f"[bold red]Diff failed:[/] {e}")
         raise typer.Exit(1)

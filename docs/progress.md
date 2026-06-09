@@ -79,7 +79,7 @@ Phased roadmap added to `ROADMAP.md`:
 | Phase | Focus | Status |
 | --- | --- | --- |
 | A | Documentation and release alignment | Done |
-| B | Memory Ledger core | Pending |
+| B | Memory Ledger core | Done |
 | C | Memory policy, redaction, and lineage | Pending |
 | D | MCP-compatible memory server | Pending |
 | E | Control Room MVP on current mission/portal foundations | Pending |

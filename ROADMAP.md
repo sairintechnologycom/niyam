@@ -131,6 +131,8 @@ Acceptance:
 
 #### Phase B: Memory Ledger Core
 
+Status: complete as of 2026-06-09.
+
 Goal: upgrade existing project memory into a structured local ledger while
 preserving current markdown memory behavior.
 
@@ -149,8 +151,7 @@ niyam/core/memory_ledger/
 ├── local_store.py
 ├── manifest.py
 ├── diff.py
-├── policy.py
-└── lineage.py
+└── schemas.py
 ```
 
 CLI additions:
@@ -179,6 +180,13 @@ Acceptance:
 - JSON/YAML import-export round trip.
 - Memory diff detects added, removed, and changed records.
 - Existing memory tests still pass.
+
+Validation:
+
+```bash
+pytest tests/test_memory_ledger.py tests/test_memory.py tests/test_cli.py tests/regression/test_existing_cli_compatibility.py
+pytest tests/test_redaction.py tests/test_evidence_extended.py tests/test_governance_integration.py
+```
 
 #### Phase C: Memory Policy, Redaction, and Lineage
 

@@ -68,7 +68,7 @@ surface. Control Room builds on current `mission`, `portal`, `guard`, `swarm`,
 | Phase | Scope | Current modules to extend | Compatibility guardrail |
 | --- | --- | --- | --- |
 | A | Documentation and release alignment | `README.md`, `ROADMAP.md`, `docs/cli-reference.md` | No runtime behavior changes. |
-| B | Memory Ledger core | `niyam/cli/memory.py`, `niyam/core/memory.py`, `.niyam/memory/index.jsonl` | Preserve `niyam memory show/add/clear`. |
+| B | Memory Ledger core | `niyam/cli/memory.py`, `niyam/core/memory.py`, `.niyam/memory/index.jsonl` | Complete; preserve `niyam memory show/add/clear`. |
 | C | Memory policy, redaction, and lineage | `niyam/core/memory.py`, redaction utilities, evidence fixtures | Memory findings are additive and opt-in. |
 | D | MCP-compatible memory server | `niyam mcp`, new `niyam/mcp/memory_server.py` | Default path remains local-first with no external service dependency. |
 | E | Control Room MVP | `mission`, `portal`, `guard`, `swarm`, `evidence` | Extend current mission/portal behavior before adding `niyam workspace`. |
