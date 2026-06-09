@@ -267,7 +267,7 @@ def scan_command(
         typer.Option("--create-baseline", help="Path to write the baseline JSON file."),
     ] = None,
 ) -> None:
-    """[Experimental] Scan the repository for production-readiness and code risk factors."""
+    """Scan the repository for production-readiness and code risk factors."""
     if output == "text" and path == "." and _scan_path_was_omitted():
         path = prompt_text("Directory to scan", ".")
 

@@ -1,4 +1,4 @@
-"""Smoke tests for Niyam experimental governance commands and structure."""
+"""Smoke tests for Niyam governance commands and structure."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ runner = CliRunner()
 
 
 def test_governance_imports() -> None:
-    """Verify that all new governance modules can be imported correctly."""
+    """Verify that all governance modules can be imported correctly."""
     from niyam.governance.scan.command import execute_scan
     from niyam.governance.evidence.command import execute_generate_evidence
     from niyam.governance.common.schemas import (
@@ -28,41 +28,40 @@ def test_governance_imports() -> None:
     assert redact_secrets("password=supersecretkey") == "password=[REDACTED_SECRET]"
 
 
-def test_scan_experimental_help() -> None:
-    """Verify that niyam scan --help prints experimental notice."""
+def test_scan_help() -> None:
+    """Verify that niyam scan --help functions correctly."""
     result = runner.invoke(app, ["scan", "--help"])
     assert result.exit_code == 0
-    assert "[Experimental]" in result.output
+    assert "Scan the repository" in result.output
     assert "profile" in result.output
 
 
-def test_evidence_experimental_help() -> None:
-    """Verify that niyam evidence --help prints experimental notice."""
+def test_evidence_help() -> None:
+    """Verify that niyam evidence --help functions correctly."""
     result = runner.invoke(app, ["evidence", "--help"])
     assert result.exit_code == 0
-    assert "[Experimental]" in result.output
-    assert "generate" in result.output
+    assert "evidence and readiness report" in result.output
 
 
-def test_guard_experimental_help() -> None:
-    """Verify that niyam guard --help prints experimental notice."""
+def test_guard_help() -> None:
+    """Verify that niyam guard --help functions correctly."""
     result = runner.invoke(app, ["guard", "--help"])
     assert result.exit_code == 0
-    assert "[Experimental]" in result.output
+    assert "Safety guardrails" in result.output
 
 
-def test_mcp_experimental_help() -> None:
-    """Verify that niyam mcp --help prints experimental notice."""
+def test_mcp_help() -> None:
+    """Verify that niyam mcp --help functions correctly."""
     result = runner.invoke(app, ["mcp", "--help"])
     assert result.exit_code == 0
-    assert "[Experimental]" in result.output
+    assert "Manage AI agent tools" in result.output
 
 
-def test_cost_experimental_help() -> None:
-    """Verify that niyam cost --help prints experimental notice."""
+def test_cost_help() -> None:
+    """Verify that niyam cost --help functions correctly."""
     result = runner.invoke(app, ["cost", "--help"])
     assert result.exit_code == 0
-    assert "[Experimental]" in result.output
+    assert "Track AI engineering token usage" in result.output
 
 
 def test_regression_doctor_help() -> None:

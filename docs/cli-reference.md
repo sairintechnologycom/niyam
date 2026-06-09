@@ -18,7 +18,7 @@ The following options can be passed to the root `niyam` command:
 ### `niyam init`
 Initialize a governed AI-development workspace in the current directory.
 - **Options:**
-  - `--profile` (e.g. `fullstack`, `backend`, `frontend`)
+  - `--profile` (e.g. `fullstack`, `backend`, `frontend`, `startup-saas`)
   - `--runtime` (e.g. `claude`, `gemini`, `codex`)
 
 ### `niyam info`
@@ -50,26 +50,36 @@ Activate an additional AI runtime client adapter.
 
 ---
 
-## Experimental Governance Commands
-
-> [!NOTE]
-> The commands listed below are **experimental** and undergo frequent updates.
+## Governance & Readiness Commands
 
 ### `niyam scan`
 Scan the codebase for production readiness, configuration errors, and code risk factors.
 - **Arguments:**
   - `[path]`: Directory path to scan. Defaults to `.`.
 - **Options:**
-  - `--profile` / `-p`: Selection profile (`startup`, `team`, `enterprise`).
+  - `--profile` / `-p`: Selection profile (`startup`, `team`, `enterprise`, `regulated`).
   - `--output` / `-o`: Output reporting format (`text`, `json`, `markdown`, `sarif`).
   - `--report-file` / `-f`: Path to write the generated report to.
   - `--rules`: Path to custom rules YAML file.
   - `--fail-on`: Exit non-zero when findings reach the selected severity.
 
+### `niyam rules list`
+List available scan and policy rules for a profile.
+- **Options:**
+  - `--profile` / `-p`: Profile to list rules for (default: `startup`).
+
 ---
 
 ### `niyam guard`
 Manage AI security guardrails, path edit permissions, and observe execution history.
+
+#### `niyam guard observe`
+Wrap and run a command under observation mode (Alias for `guard run --mode observe`).
+- **Arguments:**
+  - Command args following `--` (e.g., `niyam guard observe -- npm test`).
+
+#### `niyam guard policy`
+Validate guard policy files (Alias for `policy validate`).
 
 #### `niyam guard enable`
 Activate all configured path freeze restrictions and destructive command blocks.
@@ -81,20 +91,8 @@ Deactivate path freeze blocks and destructive command guardrails.
 - **Options:**
   - `--dry-run`: Preview changes without writing them.
 
-#### `niyam guard careful`
-Activate warnings on destructive CLI commands.
-- **Options:**
-  - `--dry-run`: Preview changes without writing them.
-
-#### `niyam guard freeze`
-Restrict agent writes/edits to a specific directory path.
-- **Arguments:**
-  - `path`: Directory or file path to freeze.
-- **Options:**
-  - `--dry-run`: Preview changes without writing them.
-
 #### `niyam guard run`
-Wrap and run a shell command under observation mode.
+Wrap and run a shell command under guardrails.
 - **Arguments:**
   - Command args following `--` (e.g., `niyam guard run -- npm test`).
 - **Options:**
@@ -120,98 +118,41 @@ Insert or update a tool in the local catalog (`.niyam/mcp-registry.json`).
 - **Arguments:**
   - `name`: Name of the tool.
 - **Options:**
-  - `--type`: `mcp_server`, `api`, `cli`, `local_tool`, `browser`, `other`. (Required for new registrations).
+  - `--type`: `mcp_server`, `api`, `cli`, `local_tool`, `browser`, `other`.
   - `--command-or-url`: Execution command or URL endpoint.
   - `--owner`: Tool provider owner.
-  - `--risk`: Risk level: `low`, `medium`, `high`, `critical`. If omitted, heuristic classification is used.
-  - `--approved` / `--no-approved`: Explicit approval status.
-  - `--capabilities`: Comma-separated list of tool capabilities.
-  - `--capability`: Individual capability of the tool. Can be specified multiple times.
-  - `--data-access`: Description of data accessed by the tool.
-  - `--network-access`: Network access details.
-  - `--requires-approval` / `--no-requires-approval`: Sets whether the tool requires approval.
-  - `--notes`: Additional descriptions.
-  - `--update`: Updates the tool if it is already registered.
+  - `--risk`: Risk level: `low`, `medium`, `high`, `critical`.
 
 #### `niyam mcp list`
 Renders a tabular view of all registered tools.
-
-#### `niyam mcp show`
-Display detailed configuration parameters, owner, and notes for a tool.
-- **Arguments:**
-  - `name`: Name of the registered tool to view.
 
 #### `niyam mcp approve`
 Approves a registered tool or MCP server for usage.
 - **Arguments:**
   - `name`: Name of the tool to approve.
 
-#### `niyam mcp risk-report`
-Perform a security risk analysis of registered tools based on heuristic indicators.
-
 ---
 
 ### `niyam cost`
 Audit AI engineering session token consumption and model pricing rates.
 
-#### `niyam cost log`
-Record a single token consumption session log.
-- **Options:**
-  - `--tool`: Client agent tool (default: `unknown`).
-  - `--model`: Model name (default: `unknown`).
-  - `--input-tokens`: Prompt token count (default: 0).
-  - `--output-tokens`: Completion token count (default: 0).
-  - `--task`: Name/ID of task.
-  - `--status`: Execution outcome (`success`, `failed`, `repeated`).
-  - `--notes`: Additional text notes.
-
 #### `niyam cost summary`
 Print a high-level summary of total logged sessions, token count, and spend.
 
 #### `niyam cost report`
-Generate structured tables showing breakdowns of daily spend, repo spend, task spend, top expensive runs, and wasted budget.
-
----
-
-### `niyam mission`
-Manage mission planning, approval, execution, and explainability.
-
-#### `niyam mission ingest`
-Ingest a PRD markdown file into structured requirement stories.
-- **Arguments:**
-  - `prd_path`: Path to a Markdown PRD.
-- **Options:**
-  - `--ai` / `--no-ai`: Use the configured runtime when available, with deterministic fallback.
-
-#### `niyam mission plan`
-Generate a mission plan from a requirement file.
-- **Options:**
-  - `--strict`: Fail if AI planning is unavailable instead of using fallback planning.
-  - `--template`: Use a mission template.
-  - `--runtime`: Override the planning runtime.
-
-#### `niyam mission explain`
-Preview execution layers, write scopes, approval gates, validation commands, and swarm lock behavior for a mission.
-- **Options:**
-  - `--mission`: Mission ID to explain. Defaults to the latest active mission.
-
-#### `niyam mission start`
-Start or resume an approved mission.
-- **Options:**
-  - `--parallel` / `-p`: Override worker count.
-  - `--worktree` / `--no-worktree`: Enable or disable Git worktree isolation.
-  - `--auto-heal` / `--no-auto-heal`: Enable or disable recovery retries/replanning.
-  - `--non-interactive` / `--ci`: Run in non-interactive mode.
+Generate structured tables showing breakdowns of daily spend, repo spend, and task spend.
 
 ---
 
 ### `niyam evidence`
-Build compliance-ready governance documentation.
+Build audit-ready evidence and readiness report generation.
 
-#### `niyam evidence generate`
-Synthesizes logs, tool lists, scan outputs, and token costs into a single report.
+#### `niyam evidence [PATH]`
+Generate human-readable evidence report locally.
+- **Arguments:**
+  - `[path]`: Directory path or scan result JSON file. Defaults to latest scan result.
 - **Options:**
-  - `--from`: Scan report JSON path. Run fresh scan if omitted.
+  - `--from`: Scan report JSON path.
   - `--format`: File format (`markdown`, `json`, `html`).
   - `--output` / `-o`: Output file path. Prints to console if omitted.
-  - `--include`: Sections to include, comma-separated (e.g. `scan,guard,mcp,cost`).
+  - `--include`: Sections to include (e.g. `scan,guard,mcp,cost`).

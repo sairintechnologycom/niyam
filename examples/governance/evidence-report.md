@@ -1,112 +1,115 @@
-# Evidence Report — my-sample-app
-
-**Project:** my-sample-app
-**Branch:** `main`
-**Last Commit:** `a7b8c9d1e2f3a7b8c9d1e2f3a7b8c9d1e2f3a7b8` by Developer
-**Generated At:** 2026-06-04 10:45 UTC
-
----
+# Niyam Governance & Production Readiness Evidence Report
 
 ## 1. Executive Summary
-This document serves as an audit-ready evidence record for the repository readiness and AI agent governance.
+This document serves as an audit-ready evidence record for the repository readiness and AI agent governance. It aggregates static analysis, dependency health, and runtime agent execution safety logs.
 
-Included sections:
- * Production Readiness
- * Agent Governance Activity
- * Tool/MCP Risk Posture
- * AI Engineering Cost Summary
+## 2. Project Metadata
+* **Project Name:** niyam
+* **Generated At:** 2026-06-09 03:26 UTC
+* **Git Branch / Commit:** `Branch: main, Commit: c965efd`
 
----
 
-## 2. Production Readiness
+## 3. Readiness Score
+* **Readiness Score:** **100/100**
 
-| Metric | Status / Value |
-| --- | --- |
-| **Readiness Score** | **89/100** |
-| **Launch Decision** | **GO** |
-| **Total Findings** | 2 |
+### Readiness Score Breakdown
+| Dimension | Weight | Score |
+| --- | --- | --- |
+| Secrets | 20% | 20/20 |
+| Auth | 15% | 15/15 |
+| Dependencies | 15% | 15/15 |
+| Cloud | 15% | 15/15 |
+| Production Ops | 10% | 10/10 |
+| Ai Risk | 10% | 10/10 |
+| Data Protection | 10% | 10/10 |
+| Documentation | 5% | 5/5 |
 
-### Findings Breakdown
-* **Critical:** 0
-* **High:** 0
-* **Medium:** 1
-* **Low:** 1
-* **Info:** 0
+| **Total** | **100%** | **100/100** |
 
-### Launch Decision details
-Based on the readiness score of **89**, the automated gate recommends:
+## 4. Launch Decision
+* **Launch Decision:** **GO**
 
-🟢 **GO**: The project meets all standard readiness guidelines and is safe for production deployment.
+## 5. Decision Reason
+* **Decision Reason:** *Scan completed successfully.*
 
----
+## 6. Critical and High Findings
 
-## 3. Agent Governance Activity
-
-* **Guardrails Status:** Enabled
-* **Careful Mode:** Enabled
-* **Frozen Paths:** `['src/components', 'src/utils']`
-
-### Recent Observed Actions (Guard Logs)
-
-| Timestamp | Actor | Command | Exit Code | Duration (ms) |
+| ID | Title | Category | Severity | File Path |
 | --- | --- | --- | --- | --- |
-| 2026-06-04T10:01:00Z | agent | `git checkout main` | 0 | 150 |
-| 2026-06-04T10:02:15Z | agent | `npm install` | 0 | 3500 |
-| 2026-06-04T10:05:00Z | agent | `npm run test` | 0 | 1250 |
-| 2026-06-04T10:07:30Z | agent | `python script.py --key REDACTED` | 0 | 480 |
+| MCP-filesystem | Unapproved High-Risk Tool: filesystem | mcp | **HIGH** | `Global` |
 
----
 
-## 4. Tool/MCP Risk Posture
 
-* **Total Registered Tools:** 4
-* **Approved Tools:** 3
-* **Unapproved Tools:** 1
+## 7. Risk Register
 
-### Registered Tools Risk Breakdown
-
-| Name | Type | Risk Level | Approved | Owner |
-| --- | --- | --- | --- | --- |
-| filesystem | mcp_server | **HIGH** | Yes | Niyam Team |
-| shell-executor | cli | **CRITICAL** | No | System |
-| slack-api | api | **MEDIUM** | Yes | DevOps Team |
-| web-search | api | **LOW** | Yes | Search Specialist |
-
----
-
-## 5. AI Engineering Cost Summary
-
-* **Total Estimated Cost:** **$0.2095**
-* **Total Input Tokens:** 38,000
-* **Total Output Tokens:** 8,300
-
-### Cost Breakdown by Day
-
-| Day | Estimated Cost |
+| Severity | Count |
 | --- | --- |
-| 2026-06-04 | $0.2095 |
+| Critical | 0 |
+| High | 1 |
+| Medium | 0 |
+| Low | 0 |
+| Info | 0 |
 
----
 
-## 6. Policy Violations or Blocked Actions
-
-✓ No policy violations or blocked actions detected.
-
----
-
-## 7. Recommended Next Actions
+## 8. Recommended Remediation Plan
 
 Remediation actions are recommended below:
+* **[MCP-filesystem] Unapproved High-Risk Tool: filesystem** (HIGH): Approve the tool using 'niyam mcp approve filesystem' if it is safe to use.
 
-* **[Readiness] [DEP001] Missing Dependency Lockfile** (MEDIUM): Install dependencies using npm or yarn to generate a lockfile, then commit it to the repository.
-* **[Readiness] [TST001] Missing Test Suite** (LOW): Initialize a test directory (such as tests/) and write basic verification tests for your components.
-* **[Tool Governance] Approve High-Risk Tool**: Tool `shell-executor` has **CRITICAL** risk and needs review/approval.
 
----
 
-## 8. Audit Appendix
-This appendix contains cryptographic metadata and environment info for verification.
 
-* **Git Last Commit:** `a7b8c9d1e2f3a7b8c9d1e2f3a7b8c9d1e2f3a7b8`
-* **Git Author:** Developer
-* **Timestamp (UTC):** 2026-06-04 10:45 UTC
+## 9. AI-Assisted Development Governance Notes
+* **AI-Risk Placeholders / Commented Assertions:** Checked.
+* **Agent Governance / Guardrails Status:** Disabled
+### Agent Governance Summary (Niyam Guard)
+* **Total Actions:** 1
+* **Total Blocked:** 0
+* **Total Warned:** 0
+* **Total Approval Required:** 0
+* **Total Failed:** 0
+* **Top Command Categories:** echo (1)
+
+#### Latest Session Details
+* **Session ID:** `main-a92c5eb6-45ea-415d-a1b1-f4c9e3ad54c1`
+* **Session Total Actions:** 1
+* **Session Blocked:** 0
+* **Session Warned:** 0
+* **Session Failed:** 0
+
+### Recent Observed Actions (Agent Governance)
+| Timestamp | Actor | Command | Policy Decision | Exit Code |
+| --- | --- | --- | --- | --- |
+| 2026-06-08T11:56:18.479813Z | unknown | `echo hello from guard` | allow | 0 |
+
+
+
+* **MCP / Tool Approval Posture:** 1/2 tools approved.
+  * **Total Registered Tools:** 2
+  * **Approved Tools:** 1
+  * **Unapproved Tools:** 1
+  * **High-risk Tools:** 1
+  * **Critical-risk Tools:** 0
+  * **High/Critical Unapproved Tools:** 1
+
+
+### Registered Tools (MCP)
+| Name | Type | Risk Level | Approved | Owner |
+| --- | --- | --- | --- | --- |
+| filesystem | mcp_server | **HIGH** | No | N/A |
+| docs-search | mcp_server | **MEDIUM** | Yes | N/A |
+
+
+
+
+### Recommended MCP Actions
+* **[filesystem]** Approve tool 'filesystem' (Risk: high) via 'niyam mcp approve filesystem'.
+
+
+* **AI Engineering Cost Summary:** Estimated Cost: $0.0675 (Input tokens: 10000, Output tokens: 2500)
+
+## 10. Appendix Summary
+* **Redaction Status:** Redacted: True (Engine: niyam-redaction)
+* **Branch:** `main`
+* **Commit SHA:** `c965efd`
+* **Commit Author:** Bhushan

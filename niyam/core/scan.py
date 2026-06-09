@@ -117,6 +117,10 @@ def walk_files(root: Path) -> list[Path]:
         ".pytest_cache",
         ".ruff_cache",
         ".sutra",
+        "scratch",
+        "test-fixtures",
+        "tests",
+        "examples",
     }
 
     files = []

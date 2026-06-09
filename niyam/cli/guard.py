@@ -125,3 +125,33 @@ def guard_logs(
     from niyam.policies.guard import run_guard_show_logs
 
     run_guard_show_logs(limit=limit, console=console)
+
+
+@guard_app.command("observe")
+def guard_observe(
+    ctx: typer.Context,
+    capture_output: Annotated[
+        bool,
+        typer.Option(
+            "--capture-output", help="Capture command stdout/stderr output in logs."
+        ),
+    ] = False,
+) -> None:
+    """[Alias] Run a command under observation (Alias for 'guard run --mode observe')."""
+    from niyam.policies.guard import run_guard_run
+
+    run_guard_run(
+        cmd_args=ctx.args,
+        capture_output=capture_output,
+        dry_run=False,
+        console=console,
+        mode_override="observe",
+    )
+
+
+@guard_app.command("policy")
+def guard_policy() -> None:
+    """[Alias] Validate guard policy files (Alias for 'policy validate')."""
+    from niyam.policies.validator import run_policy_validate
+
+    run_policy_validate(console=console)

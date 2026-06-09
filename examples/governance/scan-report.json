@@ -1,0 +1,313 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-09T03:10:52Z",
+  "project_path": "/Users/bhushan/Documents/Projects/sutra",
+  "profile": "startup",
+  "score": 49,
+  "readiness_score": 49,
+  "decision": "NO_GO",
+  "decision_reason": "Hard blocker triggered: Critical secrets finding detected in repository. | Obvious private key committed in source code: docs/redaction.md | Public cloud exposure pattern detected in source code: docs/redaction.md | Committed environment configuration file (.env) with possible secrets. | More than 3 High findings detected (6 found).",
+  "findings": [
+    {
+      "schema_version": "1.0.0",
+      "id": "SEC002",
+      "title": "Hardcoded Secrets Detected",
+      "category": "secrets",
+      "severity": "critical",
+      "confidence": "medium",
+      "file_path": "docs/redaction.md",
+      "line_number": 69,
+      "description": "Found a pattern matching standard secrets (like AWS keys, tokens, generic assignments).",
+      "recommendation": "Move secret keys to environment variables or secret vaults.",
+      "remediation_effort": "medium",
+      "tags": [
+        "security",
+        "secrets"
+      ],
+      "fingerprint": "cab26f3f1e69b71ab40ec5885a4314cf6ba4b387716e2c04fd7fdb1883322e9b",
+      "status": "open"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "HLT001",
+      "title": "Missing Health Endpoint",
+      "category": "health",
+      "severity": "info",
+      "confidence": "medium",
+      "file_path": "niyam/core/saas.py",
+      "line_number": 87,
+      "description": "No health check route (e.g. /health, /healthz, /ping) was found in the application source.",
+      "recommendation": "Implement a simple health route returning 200 OK.",
+      "remediation_effort": "low",
+      "tags": [
+        "ops",
+        "monitoring"
+      ],
+      "fingerprint": "ac3d606e1f42ed71c073eca6509bdfcdf9c619641fa668350b6fb01b09901f23",
+      "status": "open"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "HLT001",
+      "title": "Missing Health Endpoint",
+      "category": "health",
+      "severity": "info",
+      "confidence": "medium",
+      "file_path": "niyam/api/server.py",
+      "line_number": 58,
+      "description": "No health check route (e.g. /health, /healthz, /ping) was found in the application source.",
+      "recommendation": "Implement a simple health route returning 200 OK.",
+      "remediation_effort": "low",
+      "tags": [
+        "ops",
+        "monitoring"
+      ],
+      "fingerprint": "4ece6e1c66a1929bfe265b9c16a39ef361b823c43b4988a80563f4c8fe7619b9",
+      "status": "open"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "TST001",
+      "title": "Missing Test Suite",
+      "category": "tests",
+      "severity": "low",
+      "confidence": "high",
+      "file_path": "",
+      "line_number": null,
+      "description": "No test directories or test files were detected in the project.",
+      "recommendation": "Create a tests/ directory and implement validation tests.",
+      "remediation_effort": "medium",
+      "tags": [
+        "testing"
+      ],
+      "fingerprint": "f641ab4e51edf4bbd926995a94fe4e8dd0368611445edf290dd95cd31e29da23",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-run-shell-injection",
+      "title": "Semgrep Rule Violation: yaml.github-actions.security.run-shell-injection.run-shell-injection",
+      "category": "security",
+      "severity": "high",
+      "file_path": ".github/workflows/release.yml",
+      "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-run-shell-injection",
+      "title": "Semgrep Rule Violation: yaml.github-actions.security.run-shell-injection.run-shell-injection",
+      "category": "security",
+      "severity": "high",
+      "file_path": "action.yml",
+      "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-run-shell-injection",
+      "title": "Semgrep Rule Violation: yaml.github-actions.security.run-shell-injection.run-shell-injection",
+      "category": "security",
+      "severity": "high",
+      "file_path": "action.yml",
+      "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-spawn-shell-true",
+      "title": "Semgrep Rule Violation: javascript.lang.security.audit.spawn-shell-true.spawn-shell-true",
+      "category": "security",
+      "severity": "high",
+      "file_path": "azure-devops/NiyamVerify/index.js",
+      "description": "Found '$SPAWN' with '{shell: true}'. This is dangerous because this call will spawn the command using a shell process. Doing so propagates current shell settings and variables, which makes it much easier for a malicious actor to execute commands. Use '{shell: false}' instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-wildcard-cors",
+      "title": "Semgrep Rule Violation: python.fastapi.security.wildcard-cors.wildcard-cors",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/api/server.py",
+      "description": "CORS policy allows any origin (using wildcard '*'). This is insecure and should be avoided.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/cost.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-use-defused-xml-parse",
+      "title": "Semgrep Rule Violation: python.lang.security.use-defused-xml-parse.use-defused-xml-parse",
+      "category": "security",
+      "severity": "high",
+      "file_path": "niyam/core/coverage.py",
+      "description": "The native Python `xml` library is vulnerable to XML External Entity (XXE) attacks.  These attacks can leak confidential data and \"XML bombs\" can cause denial of service. Do not use this library to parse untrusted input. Instead  the Python documentation recommends using `defusedxml`.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "title": "Semgrep Rule Violation: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/evidence.py",
+      "description": "Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "title": "Semgrep Rule Violation: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/evidence.py",
+      "description": "Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "title": "Semgrep Rule Violation: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/init.py",
+      "description": "Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/pr.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/pr.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/pr.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/pr.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/core/saas.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "title": "Semgrep Rule Violation: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/policies/guard.py",
+      "description": "Detected a dynamic value being used with urllib. urllib supports 'file://' schemes, so a dynamic value controlled by a malicious actor may allow them to read arbitrary files. Audit uses of urllib calls to ensure user data cannot control the URLs, or consider using the 'requests' library instead.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-missing-integrity",
+      "title": "Semgrep Rule Violation: html.security.audit.missing-integrity.missing-integrity",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "niyam/templates/portal/index.html",
+      "description": "This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows for the browser to verify that externally hosted files (for example from a CDN) are delivered without unexpected manipulation. Without this attribute, if an attacker can modify the externally hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the base64-encoded cryptographic hash of the resource (file) you\u2019re telling the browser to fetch in the 'integrity' attribute for all externally hosted files.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-detected-github-token",
+      "title": "Semgrep Rule Violation: generic.secrets.security.detected-github-token.detected-github-token",
+      "category": "security",
+      "severity": "high",
+      "file_path": "test-fixtures/apps/risky-vibe-app/.env.local",
+      "description": "GitHub Token detected",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-aws-db-instance-no-logging",
+      "title": "Semgrep Rule Violation: terraform.aws.security.aws-db-instance-no-logging.aws-db-instance-no-logging",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "test-fixtures/apps/risky-vibe-app/main.tf",
+      "description": "Database instance has no logging. Missing logs can cause missing important event information.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    },
+    {
+      "id": "EXT-SEMGREP-rds-insecure-password-storage-in-source-code",
+      "title": "Semgrep Rule Violation: terraform.lang.security.rds-insecure-password-storage-in-source-code.rds-insecure-password-storage-in-source-code",
+      "category": "security",
+      "severity": "medium",
+      "file_path": "test-fixtures/apps/risky-vibe-app/main.tf",
+      "description": "RDS instance or cluster with hardcoded credentials in source code. It is recommended to pass the credentials at runtime, or generate random credentials using the random_password resource.",
+      "recommendation": "Review the code logic, apply appropriate input/output sanitization, or refactor using safe standard libraries.",
+      "status": "open"
+    }
+  ],
+  "summary": {
+    "critical": 1,
+    "high": 6,
+    "medium": 14,
+    "low": 1,
+    "info": 2
+  },
+  "scoring_breakdown": {
+    "secrets": 0,
+    "auth": 15,
+    "dependencies": 15,
+    "cloud": 0,
+    "production_ops": 0,
+    "ai_risk": 10,
+    "data_protection": 10,
+    "documentation": 5
+  },
+  "redaction_status": {
+    "redacted": true,
+    "engine": "niyam-redaction"
+  },
+  "skipped_scanners": [
+    "gitleaks",
+    "trivy",
+    "checkov"
+  ]
+}

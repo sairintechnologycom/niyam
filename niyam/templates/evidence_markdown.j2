@@ -12,6 +12,14 @@ This document serves as an audit-ready evidence record for the repository readin
 ## 3. Readiness Score
 * **Readiness Score:** **{{ readiness_score }}/100**
 
+### Readiness Score Breakdown
+| Dimension | Weight | Score |
+| --- | --- | --- |
+{% for dim, weight in scan.scoring_weights.items() -%}
+| {{ dim.replace('_', ' ').title() }} | {{ weight }}% | {{ scan.scoring_breakdown.get(dim, weight) }}/{{ weight }} |
+{% endfor %}
+| **Total** | **100%** | **{{ readiness_score }}/100** |
+
 ## 4. Launch Decision
 * **Launch Decision:** **{{ decision.replace('_', ' ') }}**
 

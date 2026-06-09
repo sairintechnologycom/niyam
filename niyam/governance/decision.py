@@ -188,12 +188,29 @@ def evaluate_decision(
         decision = "NO_GO"
         # Overridden score is min(49, score) to force it below 50
         overridden_score = min(49, score)
-        decision_reason = "Hard blocker triggered: " + " | ".join(triggered_blockers)
+        
+        # Deduplicate and limit reason length
+        unique_blockers = []
+        for b in triggered_blockers:
+            if b not in unique_blockers:
+                unique_blockers.append(b)
+        
+        reason_text = " | ".join(unique_blockers[:5])
+        if len(unique_blockers) > 5:
+            reason_text += f" (and {len(unique_blockers) - 5} more...)"
+            
+        decision_reason = "Hard blocker triggered: " + reason_text
     # Second: HIGH_RISK blockers or public IaC exposure
     elif has_public_iac_exposure or has_many_high_findings:
         decision = "HIGH_RISK"
         overridden_score = min(69, score)
-        decision_reason = "Hard blocker triggered: " + " | ".join(triggered_blockers)
+        
+        # Deduplicate
+        unique_blockers = []
+        for b in triggered_blockers:
+            if b not in unique_blockers:
+                unique_blockers.append(b)
+        decision_reason = "Hard blocker triggered: " + " | ".join(unique_blockers)
     else:
         # Decision based on score
         if score >= 90:

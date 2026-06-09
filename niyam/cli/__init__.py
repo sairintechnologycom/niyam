@@ -87,21 +87,28 @@ app.add_typer(context_app)
 
 guard_app = typer.Typer(
     name="guard",
-    help="[Experimental] Safety guardrails for AI-assisted development.",
+    help="Safety guardrails for AI-assisted development.",
     no_args_is_help=True,
 )
 app.add_typer(guard_app)
 
 mcp_app = typer.Typer(
     name="mcp",
-    help="[Experimental] Manage AI agent tools and MCP servers.",
+    help="Manage AI agent tools and MCP servers.",
     no_args_is_help=True,
 )
 app.add_typer(mcp_app)
 
+rules_app = typer.Typer(
+    name="rules",
+    help="Manage scan and governance rules.",
+    no_args_is_help=True,
+)
+app.add_typer(rules_app)
+
 cost_app = typer.Typer(
     name="cost",
-    help="[Experimental] Track AI engineering token usage and costs.",
+    help="Track AI engineering token usage and costs.",
     no_args_is_help=True,
 )
 app.add_typer(cost_app)
@@ -164,10 +171,11 @@ app.add_typer(ci_app)
 
 evidence_app = typer.Typer(
     name="evidence",
-    help="[Experimental] Audit-ready evidence and readiness report generation.",
+    help="Audit-ready evidence and readiness report generation.",
     no_args_is_help=True,
 )
-app.add_typer(evidence_app)
+# Note: we do NOT add_typer(evidence_app) here to avoid collision with top-level 'evidence' command.
+# evidence.py will handle its own registration.
 
 identity_app = typer.Typer(
     name="identity",
@@ -247,6 +255,7 @@ from niyam.cli import review  # noqa: F401
 from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
+from niyam.cli import rules  # noqa: F401
 from niyam.cli import evidence  # noqa: F401
 from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401

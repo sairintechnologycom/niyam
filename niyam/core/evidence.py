@@ -679,6 +679,10 @@ def run_generate_evidence(
     ]
 
     # Prepare Jinja2 context and new output schema keys
+    from niyam.governance.scoring import PROFILE_WEIGHTS
+    profile_name = scan_results.get("profile", "startup")
+    weights = PROFILE_WEIGHTS.get(profile_name.lower(), PROFILE_WEIGHTS["startup"])
+
     context = {
         "schema_version": "1.0.0",
         "generated_at": timestamp,
@@ -702,13 +706,15 @@ def run_generate_evidence(
             "timestamp": timestamp,
         },
         "scan": {
-            "profile": scan_results.get("profile", "unknown"),
+            "profile": profile_name,
             "score": scan_results.get("score", 0),
             "decision": scan_results.get("decision", "NO_GO"),
             "findings_count": len(findings),
             "findings": findings,
             "critical_high_findings": critical_high,
             "breakdown": breakdown,
+            "scoring_weights": weights,
+            "scoring_breakdown": scan_results.get("scoring_breakdown", {}),
         },
         "governance": {
             "guard_status": guard_status,

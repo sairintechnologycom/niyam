@@ -1,0 +1,199 @@
+{
+  "schema_version": "1.0.0",
+  "created_at": "2026-06-09T03:11:49Z",
+  "project": "sutra",
+  "accepted_findings": [
+    {
+      "fingerprint": "cab26f3f1e69b71ab40ec5885a4314cf6ba4b387716e2c04fd7fdb1883322e9b",
+      "rule_id": "SEC002",
+      "severity": "critical",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": "ac3d606e1f42ed71c073eca6509bdfcdf9c619641fa668350b6fb01b09901f23",
+      "rule_id": "HLT001",
+      "severity": "info",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": "4ece6e1c66a1929bfe265b9c16a39ef361b823c43b4988a80563f4c8fe7619b9",
+      "rule_id": "HLT001",
+      "severity": "info",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": "f641ab4e51edf4bbd926995a94fe4e8dd0368611445edf290dd95cd31e29da23",
+      "rule_id": "TST001",
+      "severity": "low",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-run-shell-injection",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-run-shell-injection",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-run-shell-injection",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-spawn-shell-true",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-wildcard-cors",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-use-defused-xml-parse",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-direct-use-of-jinja2",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-dynamic-urllib-use-detected",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-missing-integrity",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-detected-github-token",
+      "severity": "high",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-aws-db-instance-no-logging",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    },
+    {
+      "fingerprint": null,
+      "rule_id": "EXT-SEMGREP-rds-insecure-password-storage-in-source-code",
+      "severity": "medium",
+      "reason": "Baseline auto-generated on 2026-06-09",
+      "accepted_by": "system",
+      "expires_at": null
+    }
+  ]
+}
