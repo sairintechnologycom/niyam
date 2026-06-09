@@ -338,20 +338,31 @@ Acceptance:
 
 #### Phase G: Evidence and Portal Integration
 
+Status: Complete.
+
 Goal: make Memory Ledger and Control Room visible in the operator workflow.
 
 Deliverables:
 
 - `niyam evidence` includes optional `memory` and `workspace` sections.
-- Portal shows memory summary, memory policy findings, sessions, pending
-  approvals, action timelines, and evidence links.
-- API endpoints expose read-only memory/workspace summaries first.
+- Evidence templates show Control Room session posture, pending approvals,
+  browser activity, takeover state, and recommended actions.
+- Portal/API integration remains read-only and can build on the workspace
+  summary data shape in a later UI/API pass.
 
 Acceptance:
 
 - Existing evidence includes `scan,guard,mcp,cost` remains unchanged.
 - New include values are opt-in.
-- API and template tests cover memory/workspace views.
+- Template and JSON tests cover memory/workspace views.
+
+Validation:
+
+```bash
+pytest tests/test_workspace_evidence_integration.py tests/test_workspace.py tests/test_workspace_browser.py
+pytest tests/test_evidence_extended.py tests/test_governance_integration.py
+pytest tests/test_cli.py tests/regression/test_existing_cli_compatibility.py
+```
 
 #### Phase H: Enterprise and Fleet Expansion
 

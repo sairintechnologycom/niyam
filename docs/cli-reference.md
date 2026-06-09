@@ -286,7 +286,7 @@ Generate human-readable evidence report locally.
   - `--from`: Scan report JSON path.
   - `--format`: File format (`markdown`, `json`, `html`).
   - `--output` / `-o`: Output file path. Prints to console if omitted.
-  - `--include`: Sections to include (e.g. `scan,guard,mcp,cost`).
+  - `--include`: Sections to include (e.g. `scan,guard,mcp,cost,memory,workspace`).
 
 ---
 

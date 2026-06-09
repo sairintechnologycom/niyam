@@ -84,14 +84,14 @@ Phased roadmap added to `ROADMAP.md`:
 | D | MCP-compatible memory server | Done |
 | E | Control Room MVP on current mission/portal foundations | Done |
 | F | Browser sandbox and human takeover | Done |
-| G | Evidence and portal integration | Pending |
+| G | Evidence and portal integration | Done |
 | H | Enterprise and fleet expansion | Pending |
 
 Non-breaking constraints:
 
 - Preserve existing `niyam memory show/add/clear`.
 - Keep the Memory Ledger MVP local-first.
-- Add evidence sections for memory/workspace as opt-in includes.
-- Do not introduce `niyam workspace` until command naming is validated.
+- Keep evidence sections for memory/workspace as opt-in includes.
+- Keep portal-facing workspace data read-only until SaaS/API design is finalized.
 - Keep existing scan, guard, MCP, cost, evidence, mission, swarm, fleet, and PR
   functionality green while adding AgentOps modules.

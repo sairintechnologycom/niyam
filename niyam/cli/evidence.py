@@ -34,7 +34,10 @@ def evidence_command(
         str,
         typer.Option(
             "--include",
-            help="Comma-separated sections to include: scan, guard, mcp, cost.",
+            help=(
+                "Comma-separated sections to include: scan, guard, mcp, cost, "
+                "memory, workspace."
+            ),
         ),
     ] = "scan,guard,mcp,cost",
 ) -> None:
@@ -82,4 +85,3 @@ def evidence_command(
     except Exception as e:
         console.print(f"[bold red]Error generating report:[/] {e}")
         raise typer.Exit(1)
-

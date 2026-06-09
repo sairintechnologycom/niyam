@@ -13,7 +13,7 @@
 
 Niyam bridges the gap between fast "vibe coding" and production-grade safety. It turns any repository into a governed AI-development workspace where you define the rules, and AI agents (Claude Code, Codex, Gemini) follow them.
 
-Niyam is evolving into an AgentOps control plane for teams that need to govern what agents do, what tools they use, what memory they rely on, and what evidence they produce.
+Niyam is an AgentOps control plane for teams that need to govern what agents do, what tools they use, what memory they rely on, and what evidence they produce. It is built for AI agent governance, AI coding agent safety, MCP tool governance, portable agent memory, approval gates, browser-agent supervision, and audit-ready evidence.
 
 ---
 
@@ -56,9 +56,10 @@ niyam run "migrate all API endpoints to v2"
 *   **Readiness Scoring:** Get a numerical **Readiness Score (0-100)** and a clear **GO / NO-GO** decision for every branch or mission.
 *   **CI/CD Pipeline Scaffolding:** Generate ready-to-use CI/CD workflows (`niyam ci generate [github/gitlab/azure]`) that run strict policy validations (`niyam ci verify`) directly in your pull requests.
 
-### Evidence, Memory, and FinOps
-*   **Joint Evidence Reports:** Automatically synthesize scan findings, observed command logs, and cost data into standardized, audit-ready compliance documents.
-*   **Memory Ledger Direction:** Niyam is adding portable, inspectable, policy-governed memory on top of the existing `niyam memory` commands.
+### Evidence, Memory, Control Room, and FinOps
+*   **Joint Evidence Reports:** Automatically synthesize scan findings, observed command logs, MCP registry posture, Memory Ledger posture, Control Room activity, browser actions, approvals, and cost data into standardized, audit-ready compliance documents.
+*   **Memory Ledger:** Portable, inspectable, policy-governed agent memory with structured records, import/export, diffing, redaction, recall lineage, policy checks, and an MCP-compatible memory server.
+*   **Control Room:** Local-first supervised human-agent task rooms with workspace sessions, append-only timelines, approval gates, browser-action recording, takeover state, and task evidence exports.
 *   **FinOps Cost Tracking:** A local ledger that logs every token consumed and estimates USD spend against customizable pricing tables.
 
 ---
@@ -112,15 +113,44 @@ uvx --from niyam niyam --help
 3. **Start building:**
    Open your agent (e.g. `claude`) and use `/implement`, `/review`, or `/ship`.
 
+## AgentOps Workflows
+
+**Govern portable agent memory:**
+```bash
+niyam memory init
+niyam memory validate
+niyam memory recall "deployment preference"
+niyam memory policy-check
+niyam memory serve-mcp
+```
+
+**Register the Memory Ledger MCP server:**
+```bash
+niyam mcp register-memory-server
+```
+
+**Run a supervised Control Room task:**
+```bash
+niyam workspace create "Research competitor pricing" --session-id TASK-001
+niyam workspace browser-start TASK-001 --url https://example.com
+niyam workspace browser-action TASK-001 --type submit --target "#publish"
+niyam workspace evidence TASK-001 --format markdown
+```
+
+**Generate audit-ready evidence with AgentOps sections:**
+```bash
+niyam evidence --include scan,guard,mcp,cost,memory,workspace
+```
+
 ## Maturity Guide
 
 | Capability | Status |
 | --- | --- |
 | Workspace init, runtime sync, context refresh | Stable |
 | Scan, guard, evidence, cost tracking | Experimental but covered by tests |
+| Memory Ledger, MCP memory server, Control Room workspace, browser recorder | Preview |
 | Mission planning/execution, worktree isolation | Experimental |
 | Swarm coordination, RAG indexing, auto-heal | Preview |
-| Memory Ledger and Control Room | Roadmap |
 
 Preview features are local-first and test-covered, but their command shape and defaults may evolve before GA.
 
@@ -130,6 +160,10 @@ Preview features are local-first and test-covered, but their command shape and d
 
 *   [**CLI Reference Guide**](docs/cli-reference.md)
 *   [**AgentOps Platform Direction**](docs/agentops-platform.md)
+*   [**Memory Ledger Guide**](docs/memory-ledger.md)
+*   [**MCP Memory Server Guide**](docs/mcp-memory-server.md)
+*   [**Control Room Guide**](docs/control-room.md)
+*   [**Browser Sandbox Guide**](docs/browser-sandbox.md)
 *   [**Governance Specification**](docs/governance.md)
 *   [**MCP Registry Guide**](docs/mcp.md)
 *   [**Migration Guide**](docs/migration-from-sutra.md)

@@ -61,4 +61,12 @@ All Control Room data resides in the local `.niyam/workspace/` directory:
 - `.niyam/workspace/artifacts/` (Phase F)
 
 ## Next Steps (Phase G)
-The current implementation provides the backend primitives for supervised execution. Phase G will focus on evidence and portal integration for a more seamless operator UX.
+Control Room data is now available through opt-in evidence reports:
+
+```bash
+niyam evidence --include scan,guard,mcp,cost,memory,workspace
+```
+
+The workspace section summarizes session status, pending approvals, browser
+activity, takeover state, high-risk actions, and recent sessions. Portal/API
+work should consume this read-only data shape before adding any write paths.

@@ -172,6 +172,45 @@ Remediation actions are recommended below:
 * **Memory Ledger Posture:** Memory Ledger not initialized or index missing.
 {% endif %}
 {%- endif %}
+{%- if "workspace" in include -%}
+{% if workspace.exists %}
+* **Control Room Posture:** {{ workspace.total_sessions }} workspace sessions.
+  * **Pending Approvals:** {{ workspace.pending_approvals }}
+  * **Browser Sessions:** {{ workspace.browser_sessions }}
+  * **Takeover Sessions:** {{ workspace.takeover_sessions }}
+  * **High-Risk Actions:** {{ workspace.high_risk_actions }}
+
+### Workspace Sessions by Status
+{% for status, count in workspace.status_counts.items() -%}
+* **{{ status.replace("_", " ").title() }}**: {{ count }}
+{% endfor %}
+
+{% if workspace.browser_action_counts %}
+### Browser Actions by Type
+{% for action_type, count in workspace.browser_action_counts.items() -%}
+* **{{ action_type }}**: {{ count }}
+{% endfor %}
+{% endif %}
+
+{% if workspace.recent_sessions %}
+### Recent Workspace Sessions
+| Session | Title | Status | Risk | Browser |
+| --- | --- | --- | --- | --- |
+{% for session in workspace.recent_sessions -%}
+| {{ session.id }} | {{ session.title }} | {{ session.status }} | {{ session.risk }} | {{ session.browser_status or "none" }} |
+{% endfor %}
+{% endif %}
+
+{% if workspace.recommended_actions %}
+### Recommended Workspace Actions
+{% for action in workspace.recommended_actions -%}
+* {{ action }}
+{% endfor %}
+{% endif %}
+{% else %}
+* **Control Room Posture:** No workspace sessions found.
+{% endif %}
+{%- endif %}
 {%- if "cost" in include and cost.total_cost is not none -%}
 * **AI Engineering Cost Summary:** Estimated Cost: ${{ "%.4f"|format(cost.total_cost) }} (Input tokens: {{ cost.total_input_tokens }}, Output tokens: {{ cost.total_output_tokens }})
 {%- endif %}

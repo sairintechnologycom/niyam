@@ -337,6 +337,72 @@
         {% endif %}
         {% endif %}
 
+        {% if "workspace" in include %}
+        <h2>Control Room Governance</h2>
+        {% if workspace.exists %}
+            <ul>
+                <li><strong>Total Sessions:</strong> {{ workspace.total_sessions }}</li>
+                <li><strong>Pending Approvals:</strong> {{ workspace.pending_approvals }}</li>
+                <li><strong>Browser Sessions:</strong> {{ workspace.browser_sessions }}</li>
+                <li><strong>Takeover Sessions:</strong> {{ workspace.takeover_sessions }}</li>
+                <li><strong>High-Risk Actions:</strong> {{ workspace.high_risk_actions }}</li>
+            </ul>
+
+            <h3>Workspace Sessions by Status</h3>
+            <ul>
+            {% for status, count in workspace.status_counts.items() %}
+                <li><strong>{{ status.replace("_", " ").title() }}:</strong> {{ count }}</li>
+            {% endfor %}
+            </ul>
+
+            {% if workspace.browser_action_counts %}
+            <h3>Browser Actions by Type</h3>
+            <ul>
+            {% for action_type, count in workspace.browser_action_counts.items() %}
+                <li><strong>{{ action_type }}:</strong> {{ count }}</li>
+            {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if workspace.recent_sessions %}
+            <h3>Recent Workspace Sessions</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Session</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Risk</th>
+                        <th>Browser</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for session in workspace.recent_sessions %}
+                    <tr>
+                        <td>{{ session.id }}</td>
+                        <td>{{ session.title }}</td>
+                        <td>{{ session.status }}</td>
+                        <td>{{ session.risk }}</td>
+                        <td>{{ session.browser_status or "none" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if workspace.recommended_actions %}
+            <h3>Recommended Workspace Actions</h3>
+            <ul>
+                {% for action in workspace.recommended_actions %}
+                <li>{{ action }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% else %}
+            <p><strong>Control Room Posture:</strong> No workspace sessions found.</p>
+        {% endif %}
+        {% endif %}
+
         {% if "cost" in include %}
         <h2>5. AI Engineering Cost Summary</h2>
         <ul>

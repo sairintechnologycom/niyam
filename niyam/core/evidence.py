@@ -367,6 +367,134 @@ def _get_memory_data(repo_root: Path) -> dict[str, Any]:
         }
 
 
+def _get_workspace_data(repo_root: Path) -> dict[str, Any]:
+    """Retrieve Control Room workspace/session analytics."""
+    from niyam.core.workspace import WorkspaceApprovals, WorkspaceStore, WorkspaceTimeline
+    from niyam.core.workspace.browser import BrowserStore
+
+    workspace_dir = repo_root / ".niyam" / "workspace"
+    sessions_dir = workspace_dir / "sessions"
+
+    if not sessions_dir.exists():
+        return {
+            "exists": False,
+            "total_sessions": 0,
+            "status_counts": {},
+            "risk_counts": {},
+            "pending_approvals": 0,
+            "approved_approvals": 0,
+            "rejected_approvals": 0,
+            "browser_sessions": 0,
+            "browser_action_counts": {},
+            "approval_required_browser_actions": 0,
+            "takeover_sessions": 0,
+            "high_risk_actions": 0,
+            "recent_sessions": [],
+            "recommended_actions": [],
+        }
+
+    try:
+        store = WorkspaceStore(workspace_dir)
+        timeline = WorkspaceTimeline(workspace_dir)
+        approvals = WorkspaceApprovals(workspace_dir)
+        browser_store = BrowserStore(workspace_dir)
+
+        sessions = store.list_sessions()
+        status_counts: dict[str, int] = {}
+        risk_counts: dict[str, int] = {}
+        pending_approvals = 0
+        approved_approvals = 0
+        rejected_approvals = 0
+        browser_sessions = 0
+        takeover_sessions = 0
+        high_risk_actions = 0
+        browser_action_counts: dict[str, int] = {}
+        approval_required_browser_actions = 0
+        recent_sessions = []
+
+        for session in sessions:
+            status_counts[session.status] = status_counts.get(session.status, 0) + 1
+            risk_counts[session.risk] = risk_counts.get(session.risk, 0) + 1
+
+            session_approvals = approvals.get_approvals(session.id)
+            pending_approvals += sum(1 for a in session_approvals if a.status == "pending")
+            approved_approvals += sum(1 for a in session_approvals if a.status == "approved")
+            rejected_approvals += sum(1 for a in session_approvals if a.status == "rejected")
+
+            actions = timeline.get_actions(session.id)
+            high_risk_actions += sum(
+                1 for action in actions if action.risk in ("high", "critical")
+            )
+
+            browser_session = browser_store.get_session(session.id)
+            if browser_session:
+                browser_sessions += 1
+                if browser_session.status == "takeover":
+                    takeover_sessions += 1
+
+            browser_actions = browser_store.get_actions(session.id)
+            for action in browser_actions:
+                browser_action_counts[action.action_type] = (
+                    browser_action_counts.get(action.action_type, 0) + 1
+                )
+                if action.status == "approval_required":
+                    approval_required_browser_actions += 1
+                if action.risk in ("high", "critical"):
+                    high_risk_actions += 1
+
+            recent_sessions.append(
+                {
+                    "id": session.id,
+                    "title": session.title,
+                    "status": session.status,
+                    "risk": session.risk,
+                    "agent_type": session.agent_type,
+                    "created_at": session.created_at.isoformat(),
+                    "browser_status": browser_session.status if browser_session else None,
+                    "pending_approvals": sum(
+                        1 for a in session_approvals if a.status == "pending"
+                    ),
+                }
+            )
+
+        recommended_actions = []
+        if pending_approvals:
+            recommended_actions.append(
+                f"Review {pending_approvals} pending workspace approval(s)."
+            )
+        if takeover_sessions:
+            recommended_actions.append(
+                f"Resolve {takeover_sessions} browser takeover session(s)."
+            )
+        if status_counts.get("approval_required", 0):
+            recommended_actions.append(
+                f"Resume or close {status_counts['approval_required']} approval-required session(s)."
+            )
+
+        return {
+            "exists": True,
+            "total_sessions": len(sessions),
+            "status_counts": status_counts,
+            "risk_counts": risk_counts,
+            "pending_approvals": pending_approvals,
+            "approved_approvals": approved_approvals,
+            "rejected_approvals": rejected_approvals,
+            "browser_sessions": browser_sessions,
+            "browser_action_counts": browser_action_counts,
+            "approval_required_browser_actions": approval_required_browser_actions,
+            "takeover_sessions": takeover_sessions,
+            "high_risk_actions": high_risk_actions,
+            "recent_sessions": recent_sessions[:5],
+            "recommended_actions": recommended_actions,
+        }
+    except Exception as e:
+        return {
+            "exists": True,
+            "total_sessions": 0,
+            "error": str(e),
+        }
+
+
 class UnifiedEvidenceCompiler:
     """Class responsible for assembling all metrics and logs into a single package."""
 
@@ -444,6 +572,9 @@ class UnifiedEvidenceCompiler:
         cost_data = _get_cost_data(self.root) if "cost" in include_list else {}
         guard_logs = _get_guard_logs(self.root) if "guard" in include_list else []
         memory_data = _get_memory_data(self.root) if "memory" in include_list else {}
+        workspace_data = (
+            _get_workspace_data(self.root) if "workspace" in include_list else {}
+        )
         
         # 6. Task Logs
         task_logs = {}
@@ -465,6 +596,7 @@ class UnifiedEvidenceCompiler:
             "token_ledger": token_ledger,
             "mcp": mcp_data,
             "memory": memory_data,
+            "workspace": workspace_data,
             "cost": cost_data,
             "guard_logs": guard_logs[:100], # Cap logs in unified package
             "task_logs": task_logs,
@@ -603,6 +735,7 @@ def run_generate_evidence(
     )
 
     memory_data = _get_memory_data(root) if "memory" in include_list else {}
+    workspace_data = _get_workspace_data(root) if "workspace" in include_list else {}
 
     # 2. Findings breakdown & critical/high counts
     findings = list(scan_results.get("findings", []))
@@ -826,6 +959,7 @@ def run_generate_evidence(
         "violations": violations,
         "mcp": mcp_data,
         "memory": memory_data,
+        "workspace": workspace_data,
         "cost": cost_data,
         "audit_trail": audit_trail,
     }
