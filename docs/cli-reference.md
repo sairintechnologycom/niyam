@@ -151,6 +151,90 @@ Generate structured tables showing breakdowns of daily spend, repo spend, and ta
 
 ---
 
+## Workspace & Execution Commands
+
+### `niyam workspace`
+Manage supervised human-agent task rooms, timelines, and approvals.
+
+#### `niyam workspace create`
+Create a new supervised human-agent task room.
+- **Arguments:**
+  - `title`: Title of the session.
+- **Options:**
+  - `--agent-type`: Type of agent (manual, cli, code, browser, mcp).
+  - `--risk`: Risk level (low, medium, high, critical).
+  - `--objective`: Objective of the session.
+  - `--session-id`: Custom session ID.
+
+#### `niyam workspace list`
+List all workspace sessions.
+
+#### `niyam workspace show`
+Show details of a specific workspace session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace log`
+Log an action to the session timeline.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--type`: Action type.
+  - `--actor`: Actor (human, agent, system).
+  - `--input`: Action input.
+  - `--output`: Action output.
+  - `--risk`: Risk level.
+
+#### `niyam workspace pause`
+Pause a workspace session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace resume`
+Resume a paused workspace session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace request-approval`
+Request approval for an action in a session.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--action`: Action requiring approval.
+  - `--risk`: Risk level.
+  - `--reason`: Reason for approval.
+  - `--by`: User requesting approval.
+
+#### `niyam workspace approve`
+Approve a pending request.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--approval`: Approval ID.
+  - `--by`: User approving.
+
+#### `niyam workspace reject`
+Reject a pending request.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--approval`: Approval ID.
+  - `--by`: User rejecting.
+
+#### `niyam workspace timeline`
+View the timeline of a session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace evidence`
+Export evidence for a workspace session.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--format`: Export format (markdown or json).
+
+---
+
 ### `niyam evidence`
 Build audit-ready evidence and readiness report generation.
 

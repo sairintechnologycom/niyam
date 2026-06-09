@@ -275,6 +275,8 @@ python3 -m compileall niyam/mcp niyam/cli/memory.py niyam/cli/mcp.py
 
 #### Phase E: Control Room MVP
 
+Status: Complete.
+
 Goal: add supervised execution-room primitives on top of existing mission,
 guard, swarm, and portal capabilities.
 

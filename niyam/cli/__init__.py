@@ -261,6 +261,7 @@ from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401
 from niyam.cli import fleet  # noqa: F401
 from niyam.cli import swarm  # noqa: F401
+from niyam.cli import workspace  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:
