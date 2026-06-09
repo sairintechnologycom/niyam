@@ -1,5 +1,5 @@
 # Niyam workspace configuration example
-version: "0.4.0"
+version: "1.0.0-rc1"
 project_name: "my-sample-app"
 profile: "fullstack"
 runtimes:

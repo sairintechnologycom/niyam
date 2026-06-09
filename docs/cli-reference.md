@@ -156,3 +156,63 @@ Generate human-readable evidence report locally.
   - `--format`: File format (`markdown`, `json`, `html`).
   - `--output` / `-o`: Output file path. Prints to console if omitted.
   - `--include`: Sections to include (e.g. `scan,guard,mcp,cost`).
+
+---
+
+---
+
+## Memory Ledger Commands
+
+### `niyam memory init`
+Initialize structured Memory Ledger storage under `.niyam/memory/`.
+
+### `niyam memory list`
+List structured Memory Ledger records.
+
+### `niyam memory validate`
+Validate Memory Ledger records against the portable memory schema.
+
+### `niyam memory export`
+Export Memory Ledger records as JSON or YAML.
+
+### `niyam memory import`
+Import Memory Ledger records from JSON or YAML.
+
+### `niyam memory diff`
+Compare two Memory Ledger manifests and show added, removed, and changed records.
+
+---
+
+## Planned Commands (AgentOps & Control Room)
+
+The following commands are planned for upcoming releases. They are documented
+here to show roadmap direction and are not part of the current stable CLI
+surface unless noted otherwise.
+
+### `niyam memory redact`
+*Planned for Phase C.*
+
+Redact sensitive values from memory records using Niyam's existing redaction
+foundation.
+
+### `niyam memory policy-check`
+*Planned for Phase C.*
+
+Evaluate memory records against scope, retention, confidence, and access rules.
+
+### `niyam memory trace`
+*Planned for Phase C.*
+
+Inspect source and recall lineage for a memory record.
+
+### `niyam memory recall`
+*Planned for Phase C.*
+
+Recall relevant memory records for a task or query.
+
+### `niyam workspace`
+*Candidate command group for Phase E.*
+
+The Control Room concept will first build on existing `mission`, `portal`,
+`guard`, `swarm`, and `evidence` surfaces. A dedicated `workspace` command group
+is intentionally deferred until the CLI shape is validated.

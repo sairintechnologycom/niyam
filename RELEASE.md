@@ -31,7 +31,7 @@ The GitHub workflow is configured to:
 
 ---
 
-## Release Notes: v0.4.0 (Experimental Governance Release)
+## Release Notes: 1.0.0-rc1 (AgentOps & Control Plane Foundation)
 
 ### 1. New Experimental Governance Capabilities
 This release introduces a suite of local-first governance and observability capabilities designed to help teams audit, measure, and safely execute AI-assisted development:
@@ -59,6 +59,7 @@ This release introduces a suite of local-first governance and observability capa
 - **Local Pricing Sync:** Rates are configured manually in `.niyam/pricing.json` and are not updated dynamically from vendor API endpoints.
 
 ### 4. Roadmap
+- **AgentOps Platform:** Moving towards a complete control plane with a local Memory Ledger and a human-in-the-loop Control Room.
 - **Active Guardrail Enforcement:** Implementing runtime interception to actively block/warn against unsafe files or commands.
 - **Dynamic Cost APIs:** Integrating cost endpoints for automated live pricing sync.
 - **Advanced Scan Profiles:** Adding domain-specific rules (e.g., Python, Node, Go best practices).

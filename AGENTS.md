@@ -127,42 +127,65 @@ Ask for human approval before making changes in these areas:
 <claude-mem-context>
 # Memory Context
 
-# [sutra] recent context, 2026-06-08 9:30pm GMT+5:30
+# [sutra] recent context, 2026-06-09 3:41pm GMT+5:30
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 25 obs (11,154t read) | 1,828,498t work | 99% savings
+Stats: 50 obs (21,340t read) | 928,630t work | 98% savings
 
-### May 29, 2026
-2554 12:05p 🔵 Sutra Project — Full Architecture and File Inventory
-2555 " 🔴 Security Vulnerability: `bash` in ALLOWED_VALIDATION_EXECUTABLES Enables Arbitrary Command Execution
-2556 " 🔴 context diff Bug: Manual Section Addition Always Reports "Changes Detected" After Refresh
-2557 " 🔵 Sutra Smoke Test — Full Init-to-Report Workflow Verified Clean
-2558 " 🔵 Sutra Hook Architecture — Guard Config Stored Separately from Generated Script
-2559 " 🔵 Sutra Review Command — Generates Prompt File, Invokes Runtime CLI or Falls Back to Console Print
-2560 12:07p 🔴 Four Developer-Review Bugs Fixed — Security, Context Diff, Evidence Exit Code, Hook Template
-2561 " 🔵 Sutra Second Smoke Test Clean — All Fixes Verified End-to-End in Fresh Workspace
-2568 " 🔵 Smoke Test Reveals Remaining ruff Format Issue — Generated Hook File Needs Formatting
-2569 12:08p 🔴 Security Fix Confirmed — bash Exploit Blocked, validation-bypass File Not Created
-2571 12:15p 🔴 Sutra — Claude Runtime Pre-Tool Hook Script Ruff Format Compliance Fixed
-### Jun 6, 2026
-5974 11:47a ✅ Niyam README Screenshot Guide — 3 Key Screenshots Defined with Save Paths
-### Jun 8, 2026
-7165 7:48p ⚖️ Niyam 7-Enhancement Roadmap Reviewed — Implementation Plan Defined
-7171 7:51p 🟣 Niyam Enhancement 1: CLI TTY Detection, Rich Spinner, and Questionary Fallback Implemented
-7172 " 🟣 Niyam Enhancement 1: Fuzzy Command Suggestion Added to CLI Entry Point
-7173 " 🟣 Niyam Enhancement 2: structlog Integration Added with --json-logs Flag
-7174 " 🔴 Niyam Enhancement 2: `niyam init` Made Idempotent — No Longer Exits 1 on Re-run
-7175 " 🟣 Niyam Enhancement 2: State Machine Now Enforces Strict Transition Validation with IllegalStateTransitionError
-7176 " 🟣 Niyam Enhancement 3: Guard Dry-Run Mode Implemented with Actionable Remediation Table
-7177 " 🟣 Niyam Enhancement 3: Policy Validator Table Now Shows Actionable Remediation Column
-7178 " 🟣 Niyam Enhancement 4: chromadb Dependency Added for RAG/Vector DB Support
-7179 " 🟣 Niyam Enhancement 5: DAGPlanner Class Added with Topological Sort and Cycle Detection
-7180 " 🔵 Niyam Codebase Pre-Enhancement State — Key Gaps vs Enhancement Guide
-7184 7:59p 🔵 Niyam CLI — 7-Enhancement Implementation Roadmap Reviewed
-7185 8:04p 🔵 Niyam CLI — 7-Enhancement Roadmap Reviewed for Implementation
+### Jun 9, 2026
+7210 10:09a 🔵 Niyam CLI Architecture — Full Command Surface and Module Map Confirmed
+7213 10:12a 🟣 Niyam E2E Test Fixtures Created — Four Realistic Project Archetypes at /private/tmp/niyam-e2e-review/
+7214 10:14a 🟣 Niyam E2E Test Fixture Projects Created
+7215 " 🔵 Niyam Full Test Suite — 488/488 Tests Pass in 4m42s
+7217 10:16a 🔵 Niyam False Positive — SEC002 Fires on .env.example Values
+7218 " 🔵 Niyam False Negative — TST001 Fires on enterprise-mixed Despite Tests in Subdirectory
+7219 " 🔵 Niyam Enterprise Profile Rule Definitions — 10 Rules with 5 Match Types Confirmed
+7221 10:20a 🔵 Niyam Installed Binary vs Source Version Mismatch — 0.3.9 vs 0.5.0
+7222 " 🔵 Niyam Rule Engine Error Handling — Three Failure Modes All Return Exit 3
+7223 " 🔵 Niyam HLT001 False Negative — Health Route Present But Finding Still Fires
+7224 " 🔵 Niyam Malformed niyam.yaml Silently Ignored — Scan Proceeds with Default Profile
+7225 " 🔵 Niyam Baseline Race Condition — --create-baseline Output Not Written in Same Invocation
+7226 " 🔵 Niyam Evidence Pack — Rich JSON with Guard Logs, MCP Registry, Cost, and Audit Trail
+7227 " 🔵 Niyam init + doctor — 32 Files Written, 31 Doctor Checks Pass, 4 External Scanner Warnings
+7229 10:21a 🔵 Niyam E2E Developer Test — Enterprise Evaluation Scope Established
+7230 10:22a 🔵 Niyam Guard Mode — All Four Policy Modes Verified Working
+7231 " 🔵 Niyam Guard Secret Redaction — --capture-output Redacts Secrets in Logs
+7232 " 🔵 Niyam Guard Audit Log — JSONL Schema with Full Action Context
+7233 " 🔵 Niyam MCP Registry — Registration, Validation, Risk Auto-Classification Working
+7234 " 🔵 Niyam MCP Registry Bug — Re-register Silently Overwrites Metadata with Nulls
+7235 10:55a 🔵 Niyam baseline.py — Hard Blocker Logic and Risk Acceptance Architecture
+7236 " 🔵 Niyam Evidence Pack — Exact 10-Section Markdown Schema and 11-Key JSON Schema
+7237 " 🔵 Niyam MCP Registry — CLI Commands, Heuristic Risk Classification, and Storage Location
+7238 " 🔵 Niyam Config Root Discovery — find_niyam_root() with .sutra/ Legacy Fallback
+7243 10:56a 🟣 Niyam scan.py — New content_missing Match Type Added
+7244 " 🟣 Niyam scan.py — Two-Pass File Scanning: Content Files vs Existence Files
+7245 " 🔴 Niyam evidence.py — Fake "GO" Fallback Replaced with Honest NOT_SCANNED State
+7250 10:57a ✅ Niyam Version Bumped to 1.0.0-rc1 — SARIF Report Uses Dynamic Version
+7251 " 🔴 Niyam cost CLI — Negative Token Count Validation Added
+7252 " 🔴 Niyam MCP Registry — Atomic Writes via FileLock + Temp File + os.replace
+7256 10:58a 🔄 Niyam mcp register — Optimistic Pre-Check + Locked Commit Pattern for Concurrent Safety
+7258 " ✅ Niyam MCP CLI — ValueError Propagation Added to All Five Remaining Commands
+7260 " 🔴 Niyam MCP Registry — save_mcp_registry() gains locked=True to prevent double-lock deadlock
+7262 10:59a 🔴 Niyam scan.py — Config Load Error Handling Distinguishes Missing vs Corrupt Config
+7263 " 🔵 Niyam security.py — ALLOWED_VALIDATION_EXECUTABLES Allowlist and safe_load_yaml at Line 283
+7266 " ✅ Niyam SEC001 Secret Scan Rule — File Scope Filter Added to All Four Profiles
+7268 " 🔴 Niyam SEC001 — .env.* Glob Replaced with Explicit .env.local/.env.production/.env.development
+7269 11:02a ✅ Niyam evidence.py — MCP Registry Load Errors Captured in Evidence Output
+7270 " 🟣 Niyam 1.0.0-rc1 — All 133 Tests Green After Enhancement Wave
+7272 " 🔵 Niyam E2E Scan Results — Four Fixture Projects Verified Against Enterprise Profile
+7274 11:04a 🔵 Niyam MCP Registry E2E — Concurrent Registrations Preserved, Corrupt Registry Surfaced with Exit 1
+7276 11:08a 🟣 Niyam 1.0.0-rc1 — Full 488/488 Test Suite Green Including New Security and Scan Tests
+7279 11:10a ✅ Niyam 1.0.0-rc1 — Pre-Commit Diff Summary: 12 Files, 261 Insertions, 44 Deletions
+7284 11:13a ✅ Niyam 1.0.0-rc1 Changes Staged for Commit on main Branch
+7285 11:14a ✅ Niyam 1.0.0-rc1 Fixes Committed and Pushed to GitHub main
+7287 11:28a 🔵 Niyam Roadmap — Current State and Next Phase Planning
+7288 11:30a 🔵 Niyam Swarm Mode Design — Concurrent Agent File Coordination Architecture
+7289 " 🔵 MCP Tool Registry MVP — Phase 4A Detailed Implementation Plan Exists
+7290 " 🔵 Niyam Long-Term Orchestration Roadmap — 4 MVP Phases + Product-Grade Phases
+7296 " 🔵 Niyam Token Budget Rules and Evidence Pack Spec — Sections 10 & 11 of ROADMAP.md
 
-Access 1828k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 929k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
