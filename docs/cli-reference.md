@@ -131,6 +131,13 @@ Approves a registered tool or MCP server for usage.
 - **Arguments:**
   - `name`: Name of the tool to approve.
 
+#### `niyam mcp register-memory-server`
+Registers Niyam's local Memory Ledger MCP server in `.niyam/mcp-registry.json`.
+- **Options:**
+  - `--name`: Registry name. Defaults to `niyam-memory-ledger`.
+  - `--approved` / `--no-approved`: Approval state for the server.
+  - `--update`: Update an existing registry entry.
+
 ---
 
 ### `niyam cost`
@@ -179,6 +186,22 @@ Import Memory Ledger records from JSON or YAML.
 ### `niyam memory diff`
 Compare two Memory Ledger manifests and show added, removed, and changed records.
 
+### `niyam memory redact`
+Redact sensitive values from structured memory records.
+
+### `niyam memory policy-check`
+Evaluate Memory Ledger records against scope, retention, confidence, and access
+rules.
+
+### `niyam memory trace`
+Inspect source and recall lineage for a memory record.
+
+### `niyam memory recall`
+Recall relevant memory records for a task or query.
+
+### `niyam memory serve-mcp`
+Start the local MCP-compatible Memory Ledger server over stdio.
+
 ---
 
 ## Planned Commands (AgentOps & Control Room)
@@ -186,27 +209,6 @@ Compare two Memory Ledger manifests and show added, removed, and changed records
 The following commands are planned for upcoming releases. They are documented
 here to show roadmap direction and are not part of the current stable CLI
 surface unless noted otherwise.
-
-### `niyam memory redact`
-*Planned for Phase C.*
-
-Redact sensitive values from memory records using Niyam's existing redaction
-foundation.
-
-### `niyam memory policy-check`
-*Planned for Phase C.*
-
-Evaluate memory records against scope, retention, confidence, and access rules.
-
-### `niyam memory trace`
-*Planned for Phase C.*
-
-Inspect source and recall lineage for a memory record.
-
-### `niyam memory recall`
-*Planned for Phase C.*
-
-Recall relevant memory records for a task or query.
 
 ### `niyam workspace`
 *Candidate command group for Phase E.*

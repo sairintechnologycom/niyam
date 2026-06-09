@@ -384,9 +384,18 @@ def memory_trace(
 
 @memory_app.command("recall")
 def memory_recall(
-    query: Annotated[str, typer.Argument(help="Keyword query to match against memory records.")],
-    limit: Annotated[int | None, typer.Option("--limit", help="Max number of records to return.")] = None,
-    scope: Annotated[str | None, typer.Option("--scope", help="Filter by scope (e.g., project).")] = None,
+    query: Annotated[
+        str,
+        typer.Argument(help="Keyword query to match against memory records."),
+    ],
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", help="Max number of records to return."),
+    ] = None,
+    scope: Annotated[
+        str | None,
+        typer.Option("--scope", help="Filter by scope (e.g., project)."),
+    ] = None,
 ) -> None:
     """Recall relevant memory records for a task or query."""
     from niyam.core.config import find_niyam_root
@@ -423,3 +432,25 @@ def memory_recall(
         
         console.print(f"--- {escape(f'[{r.id}]')} {escape(r.type)} ---")
         console.print(escape(r.content))
+
+
+@memory_app.command("serve-mcp")
+def memory_serve_mcp(
+    root: Annotated[
+        Path | None,
+        typer.Option(
+            "--root",
+            help="Niyam workspace root. Defaults to current workspace.",
+        ),
+    ] = None,
+) -> None:
+    """Start the Memory Ledger MCP server over stdio."""
+    from niyam.core.config import find_niyam_root
+    from niyam.core.errors import NiyamConfigError
+    from niyam.mcp.memory_server import run_stdio_server
+
+    repo_root = root or find_niyam_root()
+    if not repo_root:
+        raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
+
+    run_stdio_server(repo_root)

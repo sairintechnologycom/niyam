@@ -228,6 +228,8 @@ pytest tests/test_redaction.py tests/test_evidence_extended.py tests/test_govern
 
 #### Phase D: MCP-Compatible Memory Server
 
+Status: complete as of 2026-06-09.
+
 Goal: expose governed memory to MCP-compatible clients without introducing a
 new storage backend requirement.
 
@@ -263,6 +265,13 @@ Acceptance:
 - MCP server can be registered through `niyam mcp register`.
 - Operations are covered by unit tests.
 - No external service dependency is required for the default path.
+
+Validation:
+
+```bash
+pytest tests/test_mcp_memory_server.py tests/test_memory_ledger.py tests/test_memory_policy.py tests/test_memory_recall.py tests/test_mcp.py
+python3 -m compileall niyam/mcp niyam/cli/memory.py niyam/cli/mcp.py
+```
 
 #### Phase E: Control Room MVP
 

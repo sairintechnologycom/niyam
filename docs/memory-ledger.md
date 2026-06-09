@@ -29,5 +29,23 @@ The schema ensures consistency across all agents.
 - `niyam memory export --format json|yaml -o file`: Export records to a JSON or YAML manifest.
 - `niyam memory import file`: Import records from a manifest.
 - `niyam memory diff file1 file2`: Show added, removed, and changed records between manifests.
+- `niyam memory redact`: Redact sensitive values from structured records.
+- `niyam memory policy-check`: Evaluate records against local memory policy.
+- `niyam memory recall`: Recall matching records and append recall lineage.
+- `niyam memory trace`: Inspect lineage for a record.
+- `niyam memory serve-mcp`: Start the local MCP-compatible Memory Ledger server.
 
 The existing markdown files continue to function, and `niyam memory add` automatically writes a valid `MemoryRecord` to the ledger.
+
+## MCP Server
+
+The Phase D MCP server exposes Memory Ledger operations to MCP-compatible
+clients over stdio:
+
+```bash
+niyam memory serve-mcp
+niyam mcp register-memory-server
+```
+
+See [mcp-memory-server.md](mcp-memory-server.md) for tool names and client
+integration details.

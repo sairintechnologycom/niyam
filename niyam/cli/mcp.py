@@ -262,6 +262,77 @@ def mcp_register(
     console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully registered.")
 
 
+@mcp_app.command("register-memory-server")
+def mcp_register_memory_server(
+    name: Annotated[
+        str,
+        typer.Option("--name", help="Registry name for the Niyam Memory MCP server."),
+    ] = "niyam-memory-ledger",
+    approved: Annotated[
+        bool,
+        typer.Option("--approved/--no-approved", help="Mark the server approved."),
+    ] = True,
+    update: Annotated[
+        bool,
+        typer.Option("--update", help="Update the registry entry if it exists."),
+    ] = False,
+) -> None:
+    """Register the local Niyam Memory Ledger MCP server."""
+    import datetime
+
+    from niyam.core.mcp import (
+        MCPTool,
+        load_mcp_registry,
+        mcp_registry_lock,
+        save_mcp_registry,
+    )
+
+    command = "niyam memory serve-mcp"
+    now_str = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+
+    with mcp_registry_lock():
+        try:
+            registry = load_mcp_registry()
+        except ValueError as e:
+            console.print(f"[bold red]Error:[/] {e}")
+            raise SystemExit(1)
+
+        existing = registry.tools.get(name)
+        if existing and not update:
+            console.print(f"[bold red]Error:[/] Tool '{name}' is already registered.")
+            raise SystemExit(1)
+
+        registry.tools[name] = MCPTool(
+            name=name,
+            type="mcp_server",
+            command_or_url=command,
+            owner="niyam",
+            risk_level="medium",
+            approved=approved,
+            capabilities=[
+                "memory.create",
+                "memory.search",
+                "memory.recall",
+                "memory.update",
+                "memory.delete",
+                "memory.export",
+                "memory.trace",
+                "memory.policy_check",
+            ],
+            data_access=".niyam/memory/index.jsonl",
+            network_access="none",
+            requires_approval=not approved,
+            notes="Local stdio MCP server for governed Niyam Memory Ledger operations.",
+            created_at=existing.created_at if existing else now_str,
+            updated_at=now_str,
+        )
+        save_mcp_registry(registry, locked=True)
+
+    console.print(f"[bold green]✓[/] Memory MCP server [bold]{name}[/] registered.")
+
+
 @mcp_app.command("list")
 def mcp_list() -> None:
     """List all registered tools."""
