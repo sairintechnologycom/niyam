@@ -130,6 +130,48 @@ Remediation actions are recommended below:
 * **MCP / Tool Approval Posture:** MCP Registry not found. Skipping MCP governance posture.
 {% endif %}
 {%- endif %}
+{%- if "memory" in include -%}
+{% if memory.exists %}
+* **Memory Ledger Posture:** {{ memory.total }} total records.
+  * **Expired Records:** {{ memory.expired }}
+  * **Redaction Actions:** {{ memory.redactions }}
+
+### Memory by Type
+{% for t, c in memory.by_type.items() -%}
+* **{{ t.capitalize() }}**: {{ c }}
+{% endfor %}
+
+### Memory by Scope
+{% for s, c in memory.by_scope.items() -%}
+* **{{ s.capitalize() }}**: {{ c }}
+{% endfor %}
+
+{% if memory.findings_by_severity %}
+### Memory Policy Findings
+{% for sev, c in memory.findings_by_severity.items() -%}
+* **{{ sev.upper() }}**: {{ c }}
+{% endfor %}
+{% endif %}
+
+{% if memory.recent_recalls %}
+### Recent Recalls
+| Timestamp | Record ID | Reason |
+| --- | --- | --- |
+{% for r in memory.recent_recalls -%}
+| {{ r.timestamp }} | {{ r.record_id }} | {{ r.reason }} |
+{% endfor %}
+{% endif %}
+
+{% if memory.recommended_actions %}
+### Recommended Memory Actions
+{% for action in memory.recommended_actions -%}
+* {{ action }}
+{% endfor %}
+{% endif %}
+{% else %}
+* **Memory Ledger Posture:** Memory Ledger not initialized or index missing.
+{% endif %}
+{%- endif %}
 {%- if "cost" in include and cost.total_cost is not none -%}
 * **AI Engineering Cost Summary:** Estimated Cost: ${{ "%.4f"|format(cost.total_cost) }} (Input tokens: {{ cost.total_input_tokens }}, Output tokens: {{ cost.total_output_tokens }})
 {%- endif %}

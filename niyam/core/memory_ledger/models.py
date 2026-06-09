@@ -59,3 +59,45 @@ class MemoryRecord(BaseModel):
                     metadata["original_confidence"] = data.pop("confidence")
 
         return data
+
+
+class MemoryPolicy(BaseModel):
+    """Configuration for memory policies."""
+    allowed_scopes: list[Literal["user", "project", "workspace", "organization"]] = ["project"]
+    max_retention_days: int | None = None
+    redact_secrets: bool = True
+    require_source_ref: bool = False
+    min_confidence: float | None = None
+    allowed_types: list[Literal["semantic", "episodic", "procedural", "preference", "note"]] | None = None
+    blocked_tags: list[str] = Field(default_factory=list)
+
+
+class MemoryPolicyFinding(BaseModel):
+    """Finding resulting from a memory policy evaluation."""
+    record_id: str
+    severity: Literal["info", "low", "medium", "high", "critical"]
+    code: str
+    message: str
+    field: str | None = None
+
+
+class MemoryLineageEvent(BaseModel):
+    """Audit log event for memory record lifecycle."""
+    id: str
+    timestamp: datetime
+    event_type: Literal[
+        "created",
+        "updated",
+        "deleted",
+        "recalled",
+        "redacted",
+        "policy_checked",
+        "imported",
+        "exported",
+    ]
+    record_id: str | None = None
+    actor: str | None = None
+    task_id: str | None = None
+    source_ref: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

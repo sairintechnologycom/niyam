@@ -283,6 +283,90 @@ def _get_cost_data(repo_root: Path) -> dict[str, Any]:
     return metrics
 
 
+def _get_memory_data(repo_root: Path) -> dict[str, Any]:
+    """Retrieve memory ledger analytics."""
+    from niyam.core.memory import get_memory_dir
+    from niyam.core.memory_ledger.local_store import LocalMemoryLedgerStore
+    from niyam.core.memory_ledger.lineage import LocalMemoryLineageStore
+    from niyam.core.memory_ledger.policy import load_policy, run_policy_check
+    from datetime import datetime, timezone
+
+    mem_dir = get_memory_dir(repo_root)
+    index_path = mem_dir / "index.jsonl"
+    lineage_path = mem_dir / "lineage" / "recall-events.jsonl"
+    policy_path = mem_dir / "policies" / "memory-policy.yaml"
+
+    if not index_path.exists():
+        return {
+            "exists": False,
+            "total": 0,
+            "by_type": {},
+            "by_scope": {},
+            "expired": 0,
+            "findings_by_severity": {},
+            "redactions": 0,
+            "recent_recalls": [],
+            "recommended_actions": [],
+        }
+
+    try:
+        store = LocalMemoryLedgerStore(index_path)
+        records = store.list_records()
+        
+        total = len(records)
+        by_type = {}
+        by_scope = {}
+        expired = 0
+        now = datetime.now(timezone.utc)
+
+        for r in records:
+            by_type[r.type] = by_type.get(r.type, 0) + 1
+            by_scope[r.scope] = by_scope.get(r.scope, 0) + 1
+            if r.expires_at and r.expires_at < now:
+                expired += 1
+
+        policy = load_policy(policy_path)
+        findings = run_policy_check(records, policy)
+        
+        findings_by_severity = {}
+        for f in findings:
+            findings_by_severity[f.severity] = findings_by_severity.get(f.severity, 0) + 1
+
+        redactions = 0
+        recent_recalls = []
+        if lineage_path.exists():
+            lineage_store = LocalMemoryLineageStore(lineage_path)
+            events = list(lineage_store.iter_events())
+            redactions = sum(1 for e in events if e.event_type == "redacted")
+            recent_recalls = [
+                {"timestamp": e.timestamp.isoformat(), "record_id": e.record_id, "reason": e.reason}
+                for e in events if e.event_type == "recalled"
+            ][-5:] # last 5 recalls
+
+        recommended_actions = []
+        if findings:
+            recommended_actions.append(f"Resolve {len(findings)} memory policy findings (run 'niyam memory policy-check').")
+
+        return {
+            "exists": True,
+            "total": total,
+            "by_type": by_type,
+            "by_scope": by_scope,
+            "expired": expired,
+            "findings_by_severity": findings_by_severity,
+            "redactions": redactions,
+            "recent_recalls": recent_recalls,
+            "recommended_actions": recommended_actions,
+        }
+
+    except Exception as e:
+        return {
+            "exists": True,
+            "total": 0,
+            "error": str(e)
+        }
+
+
 class UnifiedEvidenceCompiler:
     """Class responsible for assembling all metrics and logs into a single package."""
 
@@ -359,6 +443,7 @@ class UnifiedEvidenceCompiler:
         mcp_data = _get_mcp_data(self.root) if "mcp" in include_list else {}
         cost_data = _get_cost_data(self.root) if "cost" in include_list else {}
         guard_logs = _get_guard_logs(self.root) if "guard" in include_list else []
+        memory_data = _get_memory_data(self.root) if "memory" in include_list else {}
         
         # 6. Task Logs
         task_logs = {}
@@ -379,6 +464,7 @@ class UnifiedEvidenceCompiler:
             "scan": scan_results,
             "token_ledger": token_ledger,
             "mcp": mcp_data,
+            "memory": memory_data,
             "cost": cost_data,
             "guard_logs": guard_logs[:100], # Cap logs in unified package
             "task_logs": task_logs,
@@ -515,6 +601,8 @@ def run_generate_evidence(
             "recommended_actions": [],
         }
     )
+
+    memory_data = _get_memory_data(root) if "memory" in include_list else {}
 
     # 2. Findings breakdown & critical/high counts
     findings = list(scan_results.get("findings", []))
@@ -737,6 +825,7 @@ def run_generate_evidence(
         "guard_summary": guard_summary,
         "violations": violations,
         "mcp": mcp_data,
+        "memory": memory_data,
         "cost": cost_data,
         "audit_trail": audit_trail,
     }

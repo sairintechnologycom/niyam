@@ -270,6 +270,73 @@
         {% endif %}
         {% endif %}
 
+        {% if "memory" in include %}
+        <h2>Memory Ledger Governance</h2>
+        {% if memory.exists %}
+            <ul>
+                <li><strong>Total Records:</strong> {{ memory.total }}</li>
+                <li><strong>Expired Records:</strong> {{ memory.expired }}</li>
+                <li><strong>Redaction Actions:</strong> {{ memory.redactions }}</li>
+            </ul>
+
+            <h3>Memory by Type</h3>
+            <ul>
+            {% for t, c in memory.by_type.items() %}
+                <li><strong>{{ t.capitalize() }}:</strong> {{ c }}</li>
+            {% endfor %}
+            </ul>
+
+            <h3>Memory by Scope</h3>
+            <ul>
+            {% for s, c in memory.by_scope.items() %}
+                <li><strong>{{ s.capitalize() }}:</strong> {{ c }}</li>
+            {% endfor %}
+            </ul>
+
+            {% if memory.findings_by_severity %}
+            <h3>Memory Policy Findings</h3>
+            <ul>
+            {% for sev, c in memory.findings_by_severity.items() %}
+                <li><strong>{{ sev.upper() }}:</strong> {{ c }}</li>
+            {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if memory.recent_recalls %}
+            <h3>Recent Recalls</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Record ID</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in memory.recent_recalls %}
+                <tr>
+                    <td>{{ r.timestamp }}</td>
+                    <td>{{ r.record_id }}</td>
+                    <td>{{ r.reason }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {% if memory.recommended_actions %}
+            <h3>Recommended Memory Actions</h3>
+            <ul>
+                {% for action in memory.recommended_actions %}
+                <li>{{ action }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        {% else %}
+            <p><strong>Memory Ledger Posture:</strong> Memory Ledger not initialized or index missing.</p>
+        {% endif %}
+        {% endif %}
+
         {% if "cost" in include %}
         <h2>5. AI Engineering Cost Summary</h2>
         <ul>
