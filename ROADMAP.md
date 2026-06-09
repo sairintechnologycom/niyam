@@ -317,6 +317,8 @@ Acceptance:
 
 #### Phase F: Browser Sandbox and Human Takeover
 
+Status: Complete.
+
 Goal: make Control Room demonstrable through a narrow browser-agent workflow.
 
 Deliverables:

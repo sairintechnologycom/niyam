@@ -38,11 +38,27 @@ The Control Room serves as an extension of the existing mission, portal, guard, 
 - `niyam workspace timeline TASK-001`: View the full timeline of actions in a session.
 - `niyam workspace evidence TASK-001 --format markdown|json`: Export session metadata and timeline records.
 
+### Browser Sandbox (Phase F)
+
+The Control Room supports sandboxed browser sessions for supervised tasks:
+
+- `niyam workspace browser-start TASK-001 --url https://example.com`: Start a tracked browser session.
+- `niyam workspace browser-action TASK-001 --type navigate --target "https://example.com/pricing"`: Log a browser action.
+- `niyam workspace browser-pause TASK-001`: Pause the browser session.
+- `niyam workspace browser-resume TASK-001`: Resume the browser session.
+
+#### Human Takeover
+
+- `niyam workspace takeover TASK-001 --by USER`: Flag that a human has taken control of the session.
+- `niyam workspace release TASK-001 --by USER`: Return the session to agent control.
+
 ## Storage
 All Control Room data resides in the local `.niyam/workspace/` directory:
 - `.niyam/workspace/sessions/`
 - `.niyam/workspace/timelines/`
 - `.niyam/workspace/approvals/`
+- `.niyam/workspace/browser/` (Phase F)
+- `.niyam/workspace/artifacts/` (Phase F)
 
-## Next Steps (Phase F)
-The current implementation models the necessary state management and backend actions. The upcoming Phase F will introduce a browser sandbox and human takeover capabilities for a complete supervised execution environment.
+## Next Steps (Phase G)
+The current implementation provides the backend primitives for supervised execution. Phase G will focus on evidence and portal integration for a more seamless operator UX.

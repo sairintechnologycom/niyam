@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from click.testing import CliRunner
+from typer.testing import CliRunner
 import pytest
 from niyam.cli import app
 from niyam.core.workspace import WorkspaceAction, WorkspaceSession, WorkspaceStore, WorkspaceTimeline, WorkspaceApprovals
@@ -10,9 +10,17 @@ from niyam.core.workspace import WorkspaceAction, WorkspaceSession, WorkspaceSto
 runner = CliRunner()
 
 
+def _workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.chdir(tmp_path)
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir()
+    (niyam_dir / "niyam.yaml").write_text("version: 1.0.0-rc1\n", encoding="utf-8")
+    return tmp_path
+
+
 def test_workspace_create_and_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("niyam.core.config.NIYAM_DIR", str(tmp_path / ".niyam"))
-    
+    _workspace(tmp_path, monkeypatch)
+
     result = runner.invoke(app, ["workspace", "create", "Research Pricing", "--agent-type", "manual", "--session-id", "TASK-TEST1"])
     assert result.exit_code == 0
     assert "Created workspace session: TASK-TEST1" in result.stdout
@@ -30,8 +38,8 @@ def test_workspace_create_and_list(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 
 def test_workspace_log_and_timeline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("niyam.core.config.NIYAM_DIR", str(tmp_path / ".niyam"))
-    
+    _workspace(tmp_path, monkeypatch)
+
     runner.invoke(app, ["workspace", "create", "Test Logic", "--session-id", "TASK-LOG1"])
     
     result = runner.invoke(app, ["workspace", "log", "TASK-LOG1", "--type", "prompt", "--actor", "human", "--input", "Hello agent"])
@@ -51,8 +59,8 @@ def test_workspace_log_and_timeline(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 def test_workspace_pause_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("niyam.core.config.NIYAM_DIR", str(tmp_path / ".niyam"))
-    
+    _workspace(tmp_path, monkeypatch)
+
     runner.invoke(app, ["workspace", "create", "Test Pause", "--session-id", "TASK-PAUSE1"])
     
     runner.invoke(app, ["workspace", "pause", "TASK-PAUSE1"])
@@ -64,8 +72,8 @@ def test_workspace_pause_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_workspace_approval_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("niyam.core.config.NIYAM_DIR", str(tmp_path / ".niyam"))
-    
+    _workspace(tmp_path, monkeypatch)
+
     runner.invoke(app, ["workspace", "create", "Test Approval", "--session-id", "TASK-APP1"])
     
     result_req = runner.invoke(app, ["workspace", "request-approval", "TASK-APP1", "--action", "delete-db", "--by", "userA"])
@@ -90,7 +98,7 @@ def test_workspace_approval_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 def test_workspace_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("niyam.core.config.NIYAM_DIR", str(tmp_path / ".niyam"))
+    _workspace(tmp_path, monkeypatch)
     runner.invoke(app, ["workspace", "create", "Test Evidence", "--session-id", "TASK-EVIDENCE"])
     runner.invoke(app, ["workspace", "log", "TASK-EVIDENCE", "--type", "prompt", "--actor", "human", "--input", "Hello"])
     

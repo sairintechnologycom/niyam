@@ -1,12 +1,10 @@
 """Workspace approvals management."""
 
-import json
-from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from .models import WorkspaceApproval
-from niyam.core.errors import NiyamError
+
 
 class WorkspaceApprovals:
     def __init__(self, workspace_dir: Path):
@@ -44,4 +42,4 @@ class WorkspaceApprovals:
                     approvals[appr.id] = appr
                 except Exception:
                     pass
-        return list(approvals.values())
+        return sorted(approvals.values(), key=lambda approval: approval.requested_at)

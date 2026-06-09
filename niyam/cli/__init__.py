@@ -205,6 +205,13 @@ swarm_app = typer.Typer(
 )
 app.add_typer(swarm_app)
 
+workspace_app = typer.Typer(
+    name="workspace",
+    help="Manage supervised Control Room task sessions.",
+    no_args_is_help=True,
+)
+app.add_typer(workspace_app)
+
 
 @app.callback()
 def main_callback(

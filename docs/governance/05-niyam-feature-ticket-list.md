@@ -72,7 +72,7 @@ surface. Control Room builds on current `mission`, `portal`, `guard`, `swarm`,
 | C | Memory policy, redaction, and lineage | `niyam/core/memory.py`, redaction utilities, evidence fixtures | Complete; memory findings are additive and opt-in. |
 | D | MCP-compatible memory server | `niyam mcp`, new `niyam/mcp/memory_server.py` | Complete; default path remains local-first with no external service dependency. |
 | E | Control Room MVP | `workspace`, `mission`, `portal`, `evidence` | Complete; introduced `niyam workspace` as CLI foundation. |
-| F | Browser sandbox and human takeover | Portal/API, guard/policy primitives, workspace artifacts | Browser workflow is narrow, sandboxed, and test-gated. |
+| F | Browser sandbox and human takeover | Portal/API, guard/policy primitives, workspace artifacts | Complete; implemented browser backend abstraction and takeover foundation. |
 | G | Evidence and portal integration | `niyam evidence`, portal templates/API | Existing `scan,guard,mcp,cost` evidence output remains unchanged. |
 | H | Enterprise and fleet expansion | `fleet`, policy, approvals, evidence, SaaS API | Backward compatibility tests remain required. |
 

@@ -233,6 +233,46 @@ Export evidence for a workspace session.
 - **Options:**
   - `--format`: Export format (markdown or json).
 
+#### `niyam workspace browser-start`
+Start a sandboxed browser session.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--url`: Start URL.
+
+#### `niyam workspace browser-action`
+Log a browser action to the workspace timeline and backend.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--type`: Action type (navigate, click, type, submit, screenshot, extract, wait).
+  - `--target`: Action target (URL or selector).
+  - `--input`: Action input text.
+
+#### `niyam workspace browser-pause`
+Pause a browser session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace browser-resume`
+Resume a browser session.
+- **Arguments:**
+  - `session_id`: Session ID.
+
+#### `niyam workspace takeover`
+Human takeover of a session.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--by`: User taking over.
+
+#### `niyam workspace release`
+Release human takeover of a session.
+- **Arguments:**
+  - `session_id`: Session ID.
+- **Options:**
+  - `--by`: User releasing.
+
 ---
 
 ### `niyam evidence`

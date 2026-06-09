@@ -1,12 +1,10 @@
 """Workspace timeline for tracking actions."""
 
-import json
-from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from .models import WorkspaceAction
-from niyam.core.errors import NiyamError
+
 
 class WorkspaceTimeline:
     def __init__(self, workspace_dir: Path):
@@ -20,19 +18,18 @@ class WorkspaceTimeline:
     def log_action(self, action: WorkspaceAction) -> None:
         path = self._get_timeline_path(action.session_id)
         
-        # Redact sensitive data if niyam.core.security.redact is available
-        try:
-            from niyam.core.security import redact
-            if action.input:
-                action.input, redacted_input = redact(action.input)
-                if redacted_input:
-                    action.redacted = True
-            if action.output:
-                action.output, redacted_output = redact(action.output)
-                if redacted_output:
-                    action.redacted = True
-        except ImportError:
-            pass # fallback if redact is not implemented
+        from niyam.governance.common.redaction import redact_text
+
+        if action.input:
+            redacted_input = redact_text(action.input, with_fingerprint=False)
+            if redacted_input != action.input:
+                action.input = redacted_input
+                action.redacted = True
+        if action.output:
+            redacted_output = redact_text(action.output, with_fingerprint=False)
+            if redacted_output != action.output:
+                action.output = redacted_output
+                action.redacted = True
             
         with path.open("a", encoding="utf-8") as f:
             f.write(action.model_dump_json() + "\n")
