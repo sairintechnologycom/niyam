@@ -63,12 +63,18 @@ class MemoryRecord(BaseModel):
 
 class MemoryPolicy(BaseModel):
     """Configuration for memory policies."""
-    allowed_scopes: list[Literal["user", "project", "workspace", "organization"]] = ["project"]
+
+    allowed_scopes: list[Literal["user", "project", "workspace", "organization"]] = (
+        Field(default_factory=lambda: ["project"])
+    )
     max_retention_days: int | None = None
     redact_secrets: bool = True
     require_source_ref: bool = False
     min_confidence: float | None = None
-    allowed_types: list[Literal["semantic", "episodic", "procedural", "preference", "note"]] | None = None
+    allowed_types: (
+        list[Literal["semantic", "episodic", "procedural", "preference", "note"]]
+        | None
+    ) = None
     blocked_tags: list[str] = Field(default_factory=list)
 
 

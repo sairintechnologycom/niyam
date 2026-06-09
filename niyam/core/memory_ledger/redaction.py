@@ -10,29 +10,30 @@ def redact_memory_records(records: list[MemoryRecord]) -> tuple[list[MemoryRecor
     """Redact secrets from a list of memory records.
     Returns the redacted list and a count of how many records were actually modified.
     """
-    from niyam.governance.common.redaction import redact_text, redact_dict, contains_secret
+    from niyam.governance.common.redaction import redact_text, redact_dict
 
     redacted_records = []
     modified_count = 0
 
     for record in records:
+        redacted_record = record.model_copy(deep=True)
         modified = False
-        
-        new_content = redact_text(record.content, with_fingerprint=False)
-        if new_content != record.content:
-            record.content = new_content
+
+        new_content = redact_text(redacted_record.content, with_fingerprint=False)
+        if new_content != redacted_record.content:
+            redacted_record.content = new_content
             modified = True
-            
-        if record.summary:
-            new_summary = redact_text(record.summary, with_fingerprint=False)
-            if new_summary != record.summary:
-                record.summary = new_summary
+
+        if redacted_record.summary:
+            new_summary = redact_text(redacted_record.summary, with_fingerprint=False)
+            if new_summary != redacted_record.summary:
+                redacted_record.summary = new_summary
                 modified = True
-                
+
         # Check string metadata values
-        if record.metadata:
+        if redacted_record.metadata:
             new_metadata: dict[str, Any] = {}
-            for k, v in record.metadata.items():
+            for k, v in redacted_record.metadata.items():
                 if isinstance(v, str):
                     new_v = redact_text(v, with_fingerprint=False)
                     new_metadata[k] = new_v
@@ -47,9 +48,9 @@ def redact_memory_records(records: list[MemoryRecord]) -> tuple[list[MemoryRecor
                         modified = True
                 else:
                     new_metadata[k] = v
-            record.metadata = new_metadata
-            
-        redacted_records.append(record)
+            redacted_record.metadata = new_metadata
+
+        redacted_records.append(redacted_record)
         if modified:
             modified_count += 1
 

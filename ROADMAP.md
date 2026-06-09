@@ -190,6 +190,8 @@ pytest tests/test_redaction.py tests/test_evidence_extended.py tests/test_govern
 
 #### Phase C: Memory Policy, Redaction, and Lineage
 
+Status: complete as of 2026-06-09.
+
 Goal: make memory governable and auditable.
 
 Deliverables:
@@ -216,6 +218,13 @@ Acceptance:
 - Scope and retention policy tests.
 - Recall trace tests.
 - Evidence fixture includes memory findings.
+
+Validation:
+
+```bash
+pytest tests/test_memory_ledger.py tests/test_memory.py tests/test_cli.py tests/regression/test_existing_cli_compatibility.py tests/test_memory_policy.py tests/test_memory_redaction.py tests/test_memory_lineage.py tests/test_memory_recall.py tests/test_memory_evidence.py
+pytest tests/test_redaction.py tests/test_evidence_extended.py tests/test_governance_integration.py
+```
 
 #### Phase D: MCP-Compatible Memory Server
 

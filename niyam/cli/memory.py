@@ -256,27 +256,43 @@ def memory_redact() -> None:
 
     if modified_count > 0:
         store.replace_all(redacted_records)
-        
+
         lineage_path = get_memory_dir(repo_root) / "lineage" / "recall-events.jsonl"
         lineage_store = LocalMemoryLineageStore(lineage_path)
-        for r in redacted_records:
-            event = create_lineage_event(
-                event_type="redacted",
-                record_id=r.id,
-                reason="Redaction command executed",
-            )
-            lineage_store.append(event)
-            
-        console.print(f"[bold green]✓[/] Redacted secrets from {modified_count} memory record(s).")
+        for original, redacted in zip(records, redacted_records):
+            if original.model_dump() != redacted.model_dump():
+                event = create_lineage_event(
+                    event_type="redacted",
+                    record_id=redacted.id,
+                    reason="Redaction command executed",
+                )
+                lineage_store.append(event)
+
+        console.print(
+            f"[bold green]✓[/] Redacted secrets from {modified_count} "
+            "memory record(s)."
+        )
     else:
         console.print("[bold green]✓[/] No secrets found to redact.")
 
 
 @memory_app.command("policy-check")
 def memory_policy_check(
-    policy: Annotated[Path | None, typer.Option("--policy", help="Path to policy YAML file.")] = None,
-    output: Annotated[str, typer.Option("--output", help="Output format (text|json).")] = "text",
-    fail_on: Annotated[str, typer.Option("--fail-on", help="Severity level to fail on (info|low|medium|high|critical).")] = "high",
+    policy: Annotated[
+        Path | None,
+        typer.Option("--policy", help="Path to policy YAML file."),
+    ] = None,
+    output: Annotated[
+        str,
+        typer.Option("--output", help="Output format (text|json)."),
+    ] = "text",
+    fail_on: Annotated[
+        str,
+        typer.Option(
+            "--fail-on",
+            help="Severity level to fail on (info|low|medium|high|critical).",
+        ),
+    ] = "high",
 ) -> None:
     """Evaluate memory records against memory policies."""
     from niyam.core.config import find_niyam_root
@@ -289,6 +305,15 @@ def memory_policy_check(
     repo_root = find_niyam_root()
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
+
+    severity_levels = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+    if fail_on.lower() not in severity_levels:
+        console.print("[bold red]Invalid --fail-on severity.[/]")
+        raise typer.Exit(1)
+
+    if output not in {"text", "json"}:
+        console.print("[bold red]Invalid --output format. Use 'text' or 'json'.[/]")
+        raise typer.Exit(1)
 
     if policy is None:
         policy = get_memory_dir(repo_root) / "policies" / "memory-policy.yaml"
@@ -313,18 +338,21 @@ def memory_policy_check(
             console.print("[bold green]✓[/] No policy findings.")
         else:
             for f in findings:
-                console.print(f"[[bold red]{f.severity.upper()}[/]] [{f.record_id}] {f.code}: {f.message}")
+                record_id = escape(f"[{f.record_id}]")
+                console.print(
+                    f"[[bold red]{escape(f.severity.upper())}[/]] "
+                    f"{record_id} {escape(f.code)}: {escape(f.message)}"
+                )
 
-    severity_levels = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
-    threshold = severity_levels.get(fail_on.lower(), 3)
-    
+    threshold = severity_levels[fail_on.lower()]
+
     max_severity = -1
     for f in findings:
         max_severity = max(max_severity, severity_levels.get(f.severity, 0))
 
     if max_severity >= threshold:
         raise typer.Exit(2)
-        
+
 
 @memory_app.command("trace")
 def memory_trace(
@@ -349,7 +377,9 @@ def memory_trace(
         return
 
     for evt in events:
-        console.print(f"[{evt.timestamp.isoformat()}] {evt.event_type} - {evt.reason or 'No reason provided'}")
+        timestamp = escape(f"[{evt.timestamp.isoformat()}]")
+        reason = escape(evt.reason or "No reason provided")
+        console.print(f"{timestamp} {escape(evt.event_type)} - {reason}")
 
 
 @memory_app.command("recall")
@@ -391,5 +421,5 @@ def memory_recall(
         )
         lineage_store.append(event)
         
-        console.print(f"--- [{r.id}] {r.type} ---")
-        console.print(r.content)
+        console.print(f"--- {escape(f'[{r.id}]')} {escape(r.type)} ---")
+        console.print(escape(r.content))

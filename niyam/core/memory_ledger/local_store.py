@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import fcntl
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Iterator
 
@@ -37,20 +39,19 @@ class LocalMemoryLedgerStore:
     def replace_all(self, records: list[MemoryRecord]) -> None:
         """Replace all records in the ledger atomically."""
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
-        import tempfile
-        import os
-        
-        # Write to a temporary file in the same directory to ensure atomic os.replace works
-        fd, temp_path_str = tempfile.mkstemp(dir=self.index_path.parent, prefix="index.", suffix=".jsonl.tmp")
+
+        fd, temp_path_str = tempfile.mkstemp(
+            dir=self.index_path.parent,
+            prefix="index.",
+            suffix=".jsonl.tmp",
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 for record in records:
                     f.write(record.model_dump_json(exclude_none=True) + "\n")
-            
-            # Atomically replace the old index file with the new one
+
             os.replace(temp_path_str, self.index_path)
         except Exception:
-            # Clean up the temp file if something went wrong before the replace
             try:
                 os.remove(temp_path_str)
             except OSError:

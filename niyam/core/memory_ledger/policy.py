@@ -11,16 +11,24 @@ from niyam.core.memory_ledger.models import MemoryRecord, MemoryPolicy, MemoryPo
 
 def load_policy(policy_path: Path | None) -> MemoryPolicy:
     """Load memory policy from a YAML file, or return a default conservative policy."""
-    if policy_path and policy_path.exists():
-        try:
-            with open(policy_path, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
-                if data:
-                    return MemoryPolicy.model_validate(data)
-        except Exception:
-            pass
-    # Default conservative policy
-    return MemoryPolicy()
+    if not policy_path or not policy_path.exists():
+        return MemoryPolicy()
+
+    try:
+        with open(policy_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid memory policy YAML: {e}") from e
+    except OSError as e:
+        raise ValueError(f"Unable to read memory policy: {e}") from e
+
+    if not isinstance(data, dict):
+        raise ValueError("Memory policy must be a YAML mapping.")
+
+    try:
+        return MemoryPolicy.model_validate(data)
+    except Exception as e:
+        raise ValueError(f"Invalid memory policy: {e}") from e
 
 
 def check_record(record: MemoryRecord, policy: MemoryPolicy) -> list[MemoryPolicyFinding]:

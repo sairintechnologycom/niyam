@@ -80,7 +80,7 @@ Phased roadmap added to `ROADMAP.md`:
 | --- | --- | --- |
 | A | Documentation and release alignment | Done |
 | B | Memory Ledger core | Done |
-| C | Memory policy, redaction, and lineage | Pending |
+| C | Memory policy, redaction, and lineage | Done |
 | D | MCP-compatible memory server | Pending |
 | E | Control Room MVP on current mission/portal foundations | Pending |
 | F | Browser sandbox and human takeover | Pending |

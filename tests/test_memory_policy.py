@@ -1,10 +1,18 @@
 """Tests for Phase C Memory Ledger Policy."""
 
 import pytest
+import os
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typer.testing import CliRunner
 
 from niyam.core.memory_ledger.models import MemoryRecord, MemoryPolicy
-from niyam.core.memory_ledger.policy import check_record
+from niyam.core.memory_ledger.policy import check_record, load_policy
+from niyam.core.memory_ledger.local_store import LocalMemoryLedgerStore
+from niyam.core.memory import get_memory_dir
+from niyam.cli import app
+
+runner = CliRunner()
 
 
 def create_record(
@@ -84,3 +92,47 @@ def test_policy_detects_secret_in_content():
     policy = MemoryPolicy(redact_secrets=True)
     findings = check_record(record, policy)
     assert any(f.code == "MEM008" for f in findings)
+
+
+def test_load_policy_rejects_invalid_yaml_shape(tmp_path: Path):
+    policy_path = tmp_path / "memory-policy.yaml"
+    policy_path.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="YAML mapping"):
+        load_policy(policy_path)
+
+
+def test_memory_policy_check_cli_fail_on_and_json(niyam_repo: Path):
+    os.chdir(niyam_repo)
+    store = LocalMemoryLedgerStore(get_memory_dir(niyam_repo) / "index.jsonl")
+    store.replace_all(
+        [
+            MemoryRecord(
+                id="mem-policy-1",
+                type="note",
+                content="User scoped note",
+                scope="user",
+                created_at=datetime.now(timezone.utc),
+            )
+        ]
+    )
+
+    result = runner.invoke(
+        app, ["memory", "policy-check", "--output", "json", "--fail-on", "medium"]
+    )
+    assert result.exit_code == 2
+    assert "MEM001" in result.output
+
+
+def test_memory_policy_check_cli_rejects_invalid_options(niyam_repo: Path):
+    os.chdir(niyam_repo)
+
+    invalid_output = runner.invoke(
+        app, ["memory", "policy-check", "--output", "xml"]
+    )
+    assert invalid_output.exit_code == 1
+
+    invalid_fail_on = runner.invoke(
+        app, ["memory", "policy-check", "--fail-on", "severe"]
+    )
+    assert invalid_fail_on.exit_code == 1
