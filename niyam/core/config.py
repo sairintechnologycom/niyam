@@ -259,6 +259,9 @@ class TaskContract(BaseModel):
     healing_prompt: Optional[str] = None
     retry_count: int = 0
     max_retries: int = 2
+    retry_policy: Literal["auto", "manual", "none"] = "auto"
+    version: str = "1.0"
+    evidence_refs: list[str] = Field(default_factory=list)
 
 
 class MissionMeta(BaseModel):
@@ -267,6 +270,7 @@ class MissionMeta(BaseModel):
     model_config = {"extra": "allow"}
 
     id: str
+    schema_version: str = "1.0"
     requirement: str
     created: str
     status: Literal[

@@ -59,7 +59,14 @@ class TestMission:
             plan = yaml.safe_load(f)
         assert plan["mission"]["id"] == mission_id
         assert plan["mission"]["status"] == "planned"
+        assert plan["mission"].get("schema_version") == "1.0"
         assert len(plan["tasks"]) == 5
+
+        # Check task schema additions
+        task_0 = plan["tasks"][0]
+        assert task_0.get("version") == "1.0"
+        assert "evidence_refs" in task_0
+        assert task_0.get("retry_policy") == "auto"
 
         # Check task list
         assert (run_dir / "task-list.yaml").exists()

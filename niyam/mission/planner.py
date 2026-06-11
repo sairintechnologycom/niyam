@@ -884,6 +884,9 @@ def run_mission_plan(
                             "validation",
                             "approval_required",
                             "tdd_required",
+                            "retry_policy",
+                            "evidence_refs",
+                            "version"
                         ]:
                             if field in t:
                                 normalized_task[field] = t[field]
@@ -896,6 +899,7 @@ def run_mission_plan(
                     candidate_plan = {
                         "mission": {
                             "id": mission_id,
+                            "schema_version": "1.0",
                             "requirement": str(requirements_path),
                             "created": datetime.now(timezone.utc)
                             .isoformat()
