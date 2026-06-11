@@ -48,6 +48,10 @@ DEFAULT_PRICING = {
     },
     "claude-opus": {"input_cost_per_million": 15.00, "output_cost_per_million": 75.00},
     "claude-haiku": {"input_cost_per_million": 0.25, "output_cost_per_million": 1.25},
+    "gpt-5.5": {"input_cost_per_million": 5.00, "output_cost_per_million": 30.00},
+    "gpt-5.4": {"input_cost_per_million": 2.50, "output_cost_per_million": 15.00},
+    "gpt-5.4-mini": {"input_cost_per_million": 0.75, "output_cost_per_million": 4.50},
+    "gpt-5-codex": {"input_cost_per_million": 2.50, "output_cost_per_million": 15.00},
     "gpt-4o": {"input_cost_per_million": 5.00, "output_cost_per_million": 15.00},
     "gemini-pro": {"input_cost_per_million": 3.50, "output_cost_per_million": 10.50},
     "gemini-flash": {"input_cost_per_million": 0.075, "output_cost_per_million": 0.30},
@@ -66,13 +70,15 @@ def load_pricing(root: Path | None = None) -> dict:
     import urllib.error
 
     path = get_pricing_path(root)
-    pricing = DEFAULT_PRICING
+    pricing = dict(DEFAULT_PRICING)
 
     # 1. Load local pricing if it exists
     if path.exists():
         try:
             with open(path, encoding="utf-8") as f:
-                pricing = json.load(f)
+                local_pricing = json.load(f)
+                if isinstance(local_pricing, dict):
+                    pricing = {**DEFAULT_PRICING, **local_pricing}
         except Exception as e:
             logger.debug("Failed to load local pricing file %s: %s", path, e)
 

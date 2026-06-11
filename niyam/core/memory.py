@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -242,9 +243,15 @@ class CodebaseIndexer:
         try:
             if os.environ.get("NIYAM_DISABLE_CHROMA") == "1":
                 raise RuntimeError("Chroma disabled by environment")
+            os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+            logging.getLogger("chromadb.telemetry.product.posthog").disabled = True
             import chromadb
+            from chromadb.config import Settings
 
-            client = chromadb.PersistentClient(path=str(self.db_dir))
+            client = chromadb.PersistentClient(
+                path=str(self.db_dir),
+                settings=Settings(anonymized_telemetry=False),
+            )
             collection = client.get_or_create_collection(self.collection_name)
             ids: list[str] = []
             docs: list[str] = []
@@ -285,9 +292,15 @@ class CodebaseIndexer:
         try:
             if os.environ.get("NIYAM_DISABLE_CHROMA") == "1":
                 raise RuntimeError("Chroma disabled by environment")
+            os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+            logging.getLogger("chromadb.telemetry.product.posthog").disabled = True
             import chromadb
+            from chromadb.config import Settings
 
-            client = chromadb.PersistentClient(path=str(self.db_dir))
+            client = chromadb.PersistentClient(
+                path=str(self.db_dir),
+                settings=Settings(anonymized_telemetry=False),
+            )
             collection = client.get_or_create_collection(self.collection_name)
             result = collection.query(query_texts=[query], n_results=k)
             docs = result.get("documents", [[]])[0]

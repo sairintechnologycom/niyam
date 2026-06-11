@@ -152,5 +152,6 @@ def exception_list() -> None:
 @policy_app.command(name="validate")
 def validate() -> None:
     """Validate team-policy.yaml schema."""
-    from niyam.policies.validator import validate_policies
-    validate_policies()
+    from niyam.policies.validator import run_policy_validate
+
+    run_policy_validate(console=console)

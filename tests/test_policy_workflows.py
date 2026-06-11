@@ -14,7 +14,9 @@ from niyam.core.policy import (
     load_team_policy
 )
 from niyam.policies.guard import run_guard_run
+from niyam.cli import app
 from rich.console import Console
+from typer.testing import CliRunner
 
 def test_policy_exception_lifecycle(tmp_path: Path):
     """Test adding, loading, and matching policy exceptions."""
@@ -142,3 +144,18 @@ def test_guard_respects_exceptions(tmp_path: Path, monkeypatch):
     
     # Should NOT be 1 (blocked), but the exit code of echo hello (0)
     assert excinfo.value.code == 0
+
+
+def test_policy_validate_cli_uses_policy_validator(tmp_path: Path, monkeypatch):
+    """Top-level policy validate should call the real policy validator."""
+    monkeypatch.chdir(tmp_path)
+    niyam_dir = tmp_path / ".niyam"
+    policies_dir = niyam_dir / "policies"
+    policies_dir.mkdir(parents=True)
+    (niyam_dir / "niyam.yaml").write_text("version: 0.1.0\n", encoding="utf-8")
+    (policies_dir / "commands.yaml").write_text("deny: []\nwarn: []\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["policy", "validate"])
+
+    assert result.exit_code == 0
+    assert "All policies valid." in result.stdout

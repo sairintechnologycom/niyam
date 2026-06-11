@@ -95,6 +95,27 @@ def test_validation_commands_injected_from_project_yaml(niyam_repo: Path) -> Non
     assert "hatch build" in tasks[3]["validation"]["commands"]
 
 
+def test_default_fallback_security_review_uses_qa_when_security_agent_missing(
+    niyam_repo: Path,
+) -> None:
+    """Fallback planning should not assign security review to an arbitrary agent."""
+    os.chdir(niyam_repo)
+    security_agent_path = get_niyam_dir(niyam_repo) / "agents" / "security-reviewer.md"
+    security_agent_path.unlink()
+
+    req_file = niyam_repo / "requirements.md"
+    req_file.write_text("# Generic requirement\nDo some generic stuff", encoding="utf-8")
+
+    with patch.dict(os.environ, {"NIYAM_TEST": "1"}):
+        mission_id = run_mission_plan(str(req_file), console=Console(quiet=True))
+
+    plan_path = get_niyam_dir(niyam_repo) / "runs" / mission_id / "mission-plan.yaml"
+    plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+    review_task = next(task for task in plan["tasks"] if task["id"] == "T4")
+
+    assert review_task["agent"] == "qa-reviewer"
+
+
 @patch("subprocess.run")
 def test_planner_retry_on_bad_output(mock_run: MagicMock, niyam_repo: Path) -> None:
     """Should retry AI planning if first attempt returns garbage, and succeed on second attempt."""

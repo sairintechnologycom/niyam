@@ -568,13 +568,13 @@ def run_mission_plan(
         if "backend-specialist" in available_agents
         else available_agents[0]
     )
+    qa_agent = (
+        "qa-reviewer" if "qa-reviewer" in available_agents else available_agents[0]
+    )
     security_agent = (
         "security-reviewer"
         if "security-reviewer" in available_agents
-        else available_agents[0]
-    )
-    qa_agent = (
-        "qa-reviewer" if "qa-reviewer" in available_agents else available_agents[0]
+        else qa_agent if "qa-reviewer" in available_agents else backend_agent
     )
 
     plan_data = None
