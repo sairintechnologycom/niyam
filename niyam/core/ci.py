@@ -113,7 +113,7 @@ def run_ci_verify(
         console.print("[cyan]Verifying evidence report integrity...[/]")
         try:
             # We call run_verify_report which handles printing and exits on failure
-            run_verify_report(str(evidence_path), console, public_key_pem=public_key_pem)
+            run_verify_report(str(evidence_path), console, public_key_pem=public_key_pem, strict=strict)
             integrity_status = "passed"
         except SystemExit as e:
             if e.code != 0:

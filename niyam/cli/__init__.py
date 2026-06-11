@@ -277,30 +277,35 @@ def _harden_typer_parsing() -> None:
     Allows passing --approved and --requires-approval as either standalone flags
     or with explicit true/false values.
     """
+    import sys
     import typer.core
 
     original_command_main = typer.core.TyperCommand.main
 
+    def normalize_args(args):
+        normalized = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--no-approved":
+                normalized.append("--approved")
+                normalized.append("false")
+            elif arg == "--no-requires-approval":
+                normalized.append("--requires-approval")
+                normalized.append("false")
+            else:
+                normalized.append(arg)
+                if arg in ("--approved", "--requires-approval"):
+                    if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                        normalized.append("true")
+            i += 1
+        return normalized
+
     def custom_command_main(self, args=None, *args_rest, **kwargs):
-        if args is not None:
-            args = list(args)
-            i = 0
-            new_args = []
-            while i < len(args):
-                arg = args[i]
-                if arg == "--no-approved":
-                    new_args.append("--approved")
-                    new_args.append("false")
-                elif arg == "--no-requires-approval":
-                    new_args.append("--requires-approval")
-                    new_args.append("false")
-                else:
-                    new_args.append(arg)
-                    if arg in ("--approved", "--requires-approval"):
-                        if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                            new_args.append("true")
-                i += 1
-            args = new_args
+        if args is None:
+            args = normalize_args(sys.argv[1:])
+        else:
+            args = normalize_args(list(args))
         return original_command_main(self, args=args, *args_rest, **kwargs)
 
     typer.core.TyperCommand.main = custom_command_main
@@ -308,25 +313,10 @@ def _harden_typer_parsing() -> None:
     original_group_main = typer.core.TyperGroup.main
 
     def custom_group_main(self, args=None, *args_rest, **kwargs):
-        if args is not None:
-            args = list(args)
-            i = 0
-            new_args = []
-            while i < len(args):
-                arg = args[i]
-                if arg == "--no-approved":
-                    new_args.append("--approved")
-                    new_args.append("false")
-                elif arg == "--no-requires-approval":
-                    new_args.append("--requires-approval")
-                    new_args.append("false")
-                else:
-                    new_args.append(arg)
-                    if arg in ("--approved", "--requires-approval"):
-                        if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                            new_args.append("true")
-                i += 1
-            args = new_args
+        if args is None:
+            args = normalize_args(sys.argv[1:])
+        else:
+            args = normalize_args(list(args))
         return original_group_main(self, args=args, *args_rest, **kwargs)
 
     typer.core.TyperGroup.main = custom_group_main

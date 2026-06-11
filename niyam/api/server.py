@@ -5,14 +5,46 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from niyam.core.config import find_niyam_root, get_niyam_dir
 
 logger = logging.getLogger(__name__)
+
+def _get_auth_token() -> str:
+    """Get or generate a persistent authentication token for the portal."""
+    repo_root = find_niyam_root()
+    if not repo_root:
+        return ""
+    niyam_dir = get_niyam_dir(repo_root)
+    token_file = niyam_dir / "auth_token"
+
+    if token_file.exists():
+        return token_file.read_text(encoding="utf-8").strip()
+
+    # Generate new token
+    import secrets
+    token = secrets.token_hex(24)
+    token_file.write_text(token, encoding="utf-8")
+    return token
+
+async def verify_token(x_niyam_token: str = Header(None)):
+    """Dependency to verify the authentication token."""
+    expected = _get_auth_token()
+    if not expected:
+        return # Not in a workspace, allow for now (or maybe strictly deny?)
+
+    if x_niyam_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Niyam-Token header")
+
+app = FastAPI(
+    title="Niyam Portal API",
+    description="Backend for AI Development Orchestration Dashboard",
+    version="1.0.0",
+)
+
 from niyam.mission.utils import load_plan
 from niyam.mission.dashboard import get_task_durations
 from niyam.api.models import (
@@ -48,11 +80,17 @@ def get_repo_context() -> tuple[Path, Path]:
 
 @app.get("/", response_class=HTMLResponse)
 def get_portal():
-    """Serve the Niyam Portal web interface."""
+    """Serve the Niyam Portal web interface with injected auth token."""
     template_path = Path(__file__).parent.parent / "templates" / "portal" / "index.html"
     if not template_path.exists():
         return "<h1>Niyam Portal</h1><p>Template not found.</p>"
-    return template_path.read_text(encoding="utf-8")
+    
+    content = template_path.read_text(encoding="utf-8")
+    token = _get_auth_token()
+    # Inject token into a global JS variable
+    injection = f"<script>window.NIYAM_AUTH_TOKEN = '{token}';</script>"
+    content = content.replace("</head>", f"{injection}\n</head>")
+    return content
 
 
 @app.get("/health")
@@ -367,7 +405,7 @@ def get_task_logs(mission_id: str, task_id: str):
     return {"content": log_path.read_text(encoding="utf-8")}
 
 
-@app.post("/missions/{mission_id}/action", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/action", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def mission_action(mission_id: str, action: str):
     """Perform a control action on the mission (pause, resume, cancel)."""
     _, niyam_dir = get_repo_context()
@@ -416,7 +454,7 @@ def mission_action(mission_id: str, action: str):
         raise HTTPException(status_code=400, detail=f"Unsupported action: {action}")
 
 
-@app.post("/missions/{mission_id}/approve", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def approve_mission(mission_id: str, role: str = "default"):
     """Approve a planned mission, supporting multi-party role-based approvals."""
     from rich.console import Console
@@ -469,7 +507,7 @@ def approve_mission(mission_id: str, role: str = "default"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/missions/{mission_id}/tasks/{task_id}/approve", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/tasks/{task_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def approve_task(mission_id: str, task_id: str):
     """Approve a task that is blocked waiting for manual human approval."""
     _, niyam_dir = get_repo_context()
@@ -501,7 +539,7 @@ def approve_task(mission_id: str, task_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/missions/{mission_id}/tasks/{task_id}/deny", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/tasks/{task_id}/deny", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def deny_task(mission_id: str, task_id: str):
     """Deny a task that is blocked waiting for manual human approval."""
     _, niyam_dir = get_repo_context()

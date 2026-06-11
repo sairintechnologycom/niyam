@@ -153,6 +153,15 @@ def validate_command(cmd: str, repo_root: Path | None = None) -> list[str]:
                         f"Command '{executable}' is blocked from targeting the repository root directly."
                     )
 
+        # 2. Block inline code execution for interpreters
+        if executable in {"python", "python3", "node", "bun", "ruby", "perl", "bash", "sh"}:
+            for arg in parts[1:]:
+                if arg in {"-c", "-e", "--eval"}:
+                    raise CommandSecurityError(
+                        f"Inline code execution flag '{arg}' is blocked for '{executable}'. "
+                        "Execute existing script files instead."
+                    )
+
         # 2. Check Git commands
         elif executable == "git":
             blocked_git_args = {"--force", "-f", "--mirror", "--delete"}

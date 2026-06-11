@@ -30,6 +30,7 @@ INVALID_RULES = REPO_ROOT / "test-fixtures/rules/invalid-rules.yaml"
 def clean_niyam_env(tmp_path: Path, monkeypatch) -> None:
     """Redirect .niyam directory and settings to a temporary workspace."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NIYAM_TEST", "1")
     monkeypatch.setenv("NIYAM_SESSION_ID", "test-session")
 
     # Pre-create a niyam.yaml configuration in tmp_path

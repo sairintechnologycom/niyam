@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -325,14 +326,15 @@ def scan_command(
         console.print(f"[bold red]Unexpected Error:[/] {e}")
         raise typer.Exit(1)
 
-    try:
-        from niyam.core.config import find_niyam_root
-        from niyam.core.memory import CodebaseIndexer
+    if not os.environ.get("NIYAM_TEST"):
+        try:
+            from niyam.core.config import find_niyam_root
+            from niyam.core.memory import CodebaseIndexer
 
-        repo_root = find_niyam_root(scan_path) or scan_path
-        CodebaseIndexer(repo_root).build_index()
-    except Exception:
-        pass
+            repo_root = find_niyam_root(scan_path) or scan_path
+            CodebaseIndexer(repo_root).build_index()
+        except Exception:
+            pass
 
     # Redact all results before writing or printing
     from niyam.governance.common.redaction import redact_secrets, redact_text

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import pytest
 from typer.testing import CliRunner
 
@@ -72,6 +75,35 @@ def test_mcp_register_tool(tmp_path: Path) -> None:
     assert tool["capabilities"] == ["read_file", "write_file"]
     assert tool["data_access"] == "local files"
     assert tool["notes"] == "Access to local workspace files."
+
+
+def test_mcp_register_no_approved_subprocess(tmp_path: Path) -> None:
+    """Direct CLI invocation should accept the --no-approved compatibility alias."""
+    env = os.environ.copy()
+    env["NIYAM_TEST"] = "1"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "niyam",
+            "mcp",
+            "register",
+            "subprocess-tool",
+            "--type",
+            "api",
+            "--no-approved",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    registry_file = tmp_path / ".niyam" / "mcp-registry.json"
+    data = json.loads(registry_file.read_text(encoding="utf-8"))
+    assert data["tools"]["subprocess-tool"]["approved"] is False
 
 
 def test_mcp_register_duplicate(tmp_path: Path) -> None:

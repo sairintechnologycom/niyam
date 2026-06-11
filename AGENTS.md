@@ -127,29 +127,17 @@ Ask for human approval before making changes in these areas:
 <claude-mem-context>
 # Memory Context
 
-# [sutra] recent context, 2026-06-09 5:34pm GMT+5:30
+# [sutra] recent context, 2026-06-10 2:52pm GMT+5:30
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (21,340t read) | 928,630t work | 98% savings
+Stats: 50 obs (19,663t read) | 685,859t work | 97% savings
 
 ### Jun 9, 2026
-7210 10:09a 🔵 Niyam CLI Architecture — Full Command Surface and Module Map Confirmed
-7213 10:12a 🟣 Niyam E2E Test Fixtures Created — Four Realistic Project Archetypes at /private/tmp/niyam-e2e-review/
-7214 10:14a 🟣 Niyam E2E Test Fixture Projects Created
-7215 " 🔵 Niyam Full Test Suite — 488/488 Tests Pass in 4m42s
-7217 10:16a 🔵 Niyam False Positive — SEC002 Fires on .env.example Values
-7218 " 🔵 Niyam False Negative — TST001 Fires on enterprise-mixed Despite Tests in Subdirectory
-7219 " 🔵 Niyam Enterprise Profile Rule Definitions — 10 Rules with 5 Match Types Confirmed
 7221 10:20a 🔵 Niyam Installed Binary vs Source Version Mismatch — 0.3.9 vs 0.5.0
 7222 " 🔵 Niyam Rule Engine Error Handling — Three Failure Modes All Return Exit 3
-7223 " 🔵 Niyam HLT001 False Negative — Health Route Present But Finding Still Fires
-7224 " 🔵 Niyam Malformed niyam.yaml Silently Ignored — Scan Proceeds with Default Profile
-7225 " 🔵 Niyam Baseline Race Condition — --create-baseline Output Not Written in Same Invocation
-7226 " 🔵 Niyam Evidence Pack — Rich JSON with Guard Logs, MCP Registry, Cost, and Audit Trail
-7227 " 🔵 Niyam init + doctor — 32 Files Written, 31 Doctor Checks Pass, 4 External Scanner Warnings
 7229 10:21a 🔵 Niyam E2E Developer Test — Enterprise Evaluation Scope Established
 7230 10:22a 🔵 Niyam Guard Mode — All Four Policy Modes Verified Working
 7231 " 🔵 Niyam Guard Secret Redaction — --capture-output Redacts Secrets in Logs
@@ -186,6 +174,19 @@ Stats: 50 obs (21,340t read) | 928,630t work | 98% savings
 7289 " 🔵 MCP Tool Registry MVP — Phase 4A Detailed Implementation Plan Exists
 7290 " 🔵 Niyam Long-Term Orchestration Roadmap — 4 MVP Phases + Product-Grade Phases
 7296 " 🔵 Niyam Token Budget Rules and Evidence Pack Spec — Sections 10 & 11 of ROADMAP.md
+### Jun 10, 2026
+7326 6:05a 🔵 Niyam E2E and Integration Test Suite Structure Mapped
+7327 " 🔵 Niyam E2E and Governance Integration Tests Begin Passing
+7328 " 🔵 Niyam E2E Core Test Scenarios All Passing at 76%
+7330 6:06a 🔵 Niyam Scanner Detection Tests All Passing in Integration Suite
+7332 " 🔵 E2E Scan Tests Failing — Clean App and Risky App Scan Assertions
+7335 6:07a 🔴 E2E Scan Tests Fail Due to 30-Second Subprocess Timeout — niyam scan Hangs
+7338 6:10a 🔵 Root Cause Identified: niyam scan Hang Traced to CodebaseIndexer and External Scanner subprocess Calls
+7339 6:12a 🔴 niyam scan Timeout Fixed — CodebaseIndexer Skipped Under NIYAM_TEST and Governance Integration Tests Accelerated
+7349 6:22a 🔵 Niyam Full Test Suite — 540 Tests Launched, All Passing at Mid-Run
+7350 " 🔴 Niyam Test Suite — Three Fixes Applied to Stabilize E2E and Governance Tests
+7351 6:24a 🔵 Niyam Full Test Suite — 540/540 Tests Passed in 324 Seconds
+7352 " 🔴 niyam/cli/scan.py — CodebaseIndexer Gated Behind NIYAM_TEST Environment Variable
 
-Access 929k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 686k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

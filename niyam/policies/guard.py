@@ -515,26 +515,34 @@ def _match_command_pattern(cmd_args: list[str], pattern: str) -> bool:
     return bool(re.search(pattern_regex, command_str_normalized, re.IGNORECASE))
 
 
-def _is_protected_file_match(cmd_args: list[str], protected_files: list[str]) -> bool:
-    """Determines if any file path operand in the command points to a protected file."""
+def _is_protected_file_match(cmd_args: list[str], protected_files: list[str], root: Path | None = None) -> bool:
+    """Determines if any file path operand in the command points to a protected file or directory."""
     if not cmd_args or not protected_files:
         return False
+        
+    root_path = root or Path.cwd()
 
     for arg in cmd_args[1:]:
         # Skip options/flags
         if arg.startswith("-"):
             continue
 
-        arg_path = Path(arg)
+        try:
+            # Resolve the argument path relative to the root
+            arg_resolved = (root_path / arg).resolve()
+        except Exception:
+            continue
+
         for f in protected_files:
-            f_path = Path(f)
-            # Exact match
-            if arg == f:
-                return True
-            # Subpath match
-            if len(f_path.parts) <= len(arg_path.parts):
-                if arg_path.parts[-len(f_path.parts) :] == f_path.parts:
+            try:
+                # Resolve the protected file path relative to the root
+                f_resolved = (root_path / f).resolve()
+                
+                # Check if the argument is the protected file itself or inside it
+                if arg_resolved == f_resolved or arg_resolved.is_relative_to(f_resolved):
                     return True
+            except Exception:
+                continue
     return False
 
 
@@ -661,6 +669,13 @@ def run_guard_run(
             if sec_policy_path.exists():
                 sec_data = safe_load_yaml(sec_policy_path) or {}
                 protected_files = sec_data.get("deny_write_patterns", [])
+        
+        # Merge frozen paths from legacy guard config
+        if config and config.guard and config.guard.frozen_paths:
+            # Avoid duplicates
+            for fp in config.guard.frozen_paths:
+                if fp not in protected_files:
+                    protected_files.append(fp)
     except Exception:
         pass
 
@@ -692,7 +707,7 @@ def run_guard_run(
 
     if not matched_rule:
         for pattern in protected_files:
-            if _is_protected_file_match(cmd_args, [pattern]):
+            if _is_protected_file_match(cmd_args, [pattern], root=root):
                 matched_rule = f"protected_file:{pattern}"
                 reason = f"Command references protected file: '{pattern}'"
                 policy_decision = "block"
