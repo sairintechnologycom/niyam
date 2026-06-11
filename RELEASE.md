@@ -44,12 +44,19 @@ This release introduces a suite of local-first governance and observability capa
 - **Unified Evidence Report (`niyam evidence generate`):** Synthesizes scan outputs, command history, tool registry risks, and costs into a standardized sign-off markdown/HTML document.
 - **CI/CD Usage:** Full support for running in CI pipelines. The `niyam scan` command supports a `--fail-on` flag (e.g., `--fail-on critical`) that exits with code 2 to automatically block builds/deploys when policy violations or critical issues are detected.
 
-### 2. Backward Compatibility Statement
+### 2. Security and Governance Hardening
+This release also incorporates major security fixes identified during a comprehensive governance security audit:
+- **API Portal Authentication:** The FastAPI dashboard (`niyam portal`) now enforces mandatory token-based authentication (`X-Niyam-Token`) for all control-plane actions (approvals, denying tasks, actioning missions), generated and stored safely in `.niyam/auth_token`.
+- **Interpreter Hardening:** Command validation restricts unsafe flags (`-c`, `-e`, `--eval`) on open-ended interpreters (`python`, `node`, `ruby`), enforcing that agents only execute safe, existing validation scripts.
+- **Strict Path Freezing:** The `niyam guard freeze` functionality now performs rigorous absolute path resolution and prefix verification to prevent bypasses via traversal vectors.
+- **Strict Cryptographic Integrity:** `niyam ci verify --strict` enforces strict verification of the digital signature inside the evidence markdown to prevent manifest tampering.
+
+### 3. Backward Compatibility Statement
 - **Runtimes & Missions:** All core mission execution paths, slash commands (`/implement`, `/review`, `/ship`), and runtime projections remain fully backward-compatible.
 - **Migration Path:** Legacy configuration setups using `.sutra/` are migrated seamlessly via `niyam migrate`.
 - **Zero-Block Observability:** `niyam guard run` executes wrapped commands without modifying environmental behavior or blocking execution streams.
 
-### 3. Known Limitations
+### 4. Known Limitations
 - **External Scanner Adapters:** External scanner integrations (e.g., Snyk, SonarQube, Checkov, Gitleaks, etc.) are defined but not yet enabled for runtime execution; the framework currently relies on its fast internal local-first checkers.
 - **SaaS Dashboard:** A central SaaS or web dashboard is not included in this MVP. All reports and metrics are generated locally as markdown, JSON, or HTML.
 - **MCP Auto-Discovery:** Automatic discovery of local MCP servers or agent tool configurations is not yet included. All tools must be registered manually via `niyam mcp register`.
