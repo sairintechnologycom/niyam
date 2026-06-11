@@ -162,6 +162,58 @@ def get_policies():
     }
 
 
+@app.get("/mcp")
+def get_mcp_registry():
+    """Get the MCP tool registry state."""
+    repo_root, _ = get_repo_context()
+    try:
+        from niyam.core.mcp import load_mcp_registry
+        return load_mcp_registry(repo_root).model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load MCP registry: {e}")
+
+
+@app.get("/fleet")
+def get_fleet_config():
+    """Get the Fleet configuration."""
+    try:
+        from niyam.core.fleet import load_fleet_config
+        return load_fleet_config().model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load Fleet config: {e}")
+
+
+@app.get("/swarm")
+def get_swarm_state():
+    """Get the current Swarm state."""
+    repo_root, _ = get_repo_context()
+    try:
+        from niyam.core.swarm import load_swarm_state
+        return load_swarm_state(repo_root).model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load Swarm state: {e}")
+
+
+@app.get("/guard")
+def get_guard_logs():
+    """Get the recent guard action logs."""
+    _, niyam_dir = get_repo_context()
+    log_path = niyam_dir / "logs" / "guard-actions.jsonl"
+    if not log_path.exists():
+        return []
+    
+    logs = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            for line in reversed(lines[-100:]): # Get last 100 entries, newest first
+                if line.strip():
+                    logs.append(json.loads(line))
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load guard logs: {e}")
+
+
 @app.get("/audits/prompts")
 def get_prompt_audits():
     """Get a log of prompts used across missions for auditing."""

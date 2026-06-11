@@ -31,11 +31,15 @@
                 <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">NIYAM PORTAL</h1>
                 <p class="text-slate-400 mt-2">AI Governance & Orchestration Control Plane</p>
             </div>
-            <nav class="flex gap-4">
+            <nav class="flex flex-wrap gap-2 md:gap-4">
                 <button id="nav-missions" onclick="showMissions()" class="px-4 py-2 rounded font-bold text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-lg shadow-cyan-500/20">Missions</button>
                 <button id="nav-analytics" onclick="showAnalytics()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Analytics</button>
                 <button id="nav-policies" onclick="showPolicies()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Policies</button>
                 <button id="nav-audits" onclick="showAudits()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Audits</button>
+                <button id="nav-guard" onclick="showGuard()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Guard</button>
+                <button id="nav-mcp" onclick="showMcp()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">MCP</button>
+                <button id="nav-swarm" onclick="showSwarm()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Swarm</button>
+                <button id="nav-fleet" onclick="showFleet()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Fleet</button>
             </nav>
             <div id="connection-status" class="text-sm flex items-center">
                 <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Connected
@@ -78,6 +82,42 @@
             <div id="audits-view" class="hidden">
                 <h2 class="text-2xl font-bold mb-8 text-cyan-400">Prompt & Version Audits</h2>
                 <div id="audits-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="guard-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Guard Action Logs</h2>
+                <div id="guard-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mcp-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">MCP Tool Registry</h2>
+                <div id="mcp-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="swarm-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Swarm State</h2>
+                <div id="swarm-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fleet-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Fleet Operations</h2>
+                <div id="fleet-content">
                     <div class="py-20 text-center">
                         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
                     </div>
@@ -163,8 +203,20 @@
             `;
         }
 
+        function hideAllViews() {
+            document.getElementById('missions-view').classList.add('hidden');
+            document.getElementById('analytics-view').classList.add('hidden');
+            document.getElementById('policies-view').classList.add('hidden');
+            document.getElementById('audits-view').classList.add('hidden');
+            document.getElementById('details-view').classList.add('hidden');
+            document.getElementById('guard-view').classList.add('hidden');
+            document.getElementById('mcp-view').classList.add('hidden');
+            document.getElementById('swarm-view').classList.add('hidden');
+            document.getElementById('fleet-view').classList.add('hidden');
+        }
+
         function setActiveNav(activeId) {
-            const navIds = ['nav-missions', 'nav-analytics', 'nav-policies', 'nav-audits'];
+            const navIds = ['nav-missions', 'nav-analytics', 'nav-policies', 'nav-audits', 'nav-guard', 'nav-mcp', 'nav-swarm', 'nav-fleet'];
             navIds.forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -179,11 +231,8 @@
 
         function showMissions() {
             setActiveNav('nav-missions');
+            hideAllViews();
             document.getElementById('missions-view').classList.remove('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
-            document.getElementById('audits-view').classList.add('hidden');
-            document.getElementById('details-view').classList.add('hidden');
             currentMissionId = null;
             fetchMissions();
         }
@@ -374,10 +423,7 @@
         
         async function showAudits() {
             setActiveNav('nav-audits');
-            document.getElementById('missions-view').classList.add('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
-            document.getElementById('details-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
+            hideAllViews();
             document.getElementById('audits-view').classList.remove('hidden');
             
             const content = document.getElementById('audits-content');
@@ -466,10 +512,8 @@
 
         async function viewMission(id) {
             currentMissionId = id;
-            document.getElementById('missions-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
-            document.getElementById('audits-view').classList.add('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
+            setActiveNav('');
+            hideAllViews();
             document.getElementById('details-view').classList.remove('hidden');
 
             const content = document.getElementById('mission-details-content');
