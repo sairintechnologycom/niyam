@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 import yaml
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,7 @@ class FleetRepo(BaseModel):
     path: str
     alias: str
     tags: List[str] = Field(default_factory=list)
+    depends_on: List[str] = Field(default_factory=list)
 
 
 class FleetConfig(BaseModel):
@@ -73,27 +74,32 @@ def save_fleet_config(config: FleetConfig, config_path: Optional[Path] = None) -
         )
 
 
-def register_repo(path: Path, alias: Optional[str] = None, tags: Optional[List[str]] = None) -> FleetRepo:
+def register_repo(
+    path: Path,
+    alias: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    depends_on: Optional[List[str]] = None,
+) -> FleetRepo:
     """Register a repository in the fleet."""
     config = load_fleet_config()
-    
+
     abs_path = str(path.absolute())
     # Check if already registered
     for repo in config.repos:
         if repo.path == abs_path:
-            # Update alias and tags if provided
+            # Update alias, tags, and depends_on if provided
             if alias:
                 repo.alias = alias
             if tags is not None:
                 repo.tags = tags
+            if depends_on is not None:
+                repo.depends_on = depends_on
             save_fleet_config(config)
             return repo
-            
+
     # New registration
     new_repo = FleetRepo(
-        path=abs_path,
-        alias=alias or path.name,
-        tags=tags or []
+        path=abs_path, alias=alias or path.name, tags=tags or [], depends_on=depends_on or []
     )
     config.repos.append(new_repo)
     save_fleet_config(config)
@@ -121,6 +127,45 @@ def discover_repos(root_path: Path, max_depth: int = 3) -> List[FleetRepo]:
             dirs[:] = []
             
     return discovered
+
+
+def resolve_fleet_dependencies(repos: List[FleetRepo]) -> List[List[FleetRepo]]:
+    """Group repositories into execution waves based on their dependencies (topological sort)."""
+    alias_to_repo = {r.alias: r for r in repos}
+    all_aliases = set(alias_to_repo.keys())
+
+    # Build adjacency list and in-degree map
+    # We only care about dependencies within the provided repos list
+    adj = {alias: set() for alias in all_aliases}
+    in_degree = {alias: 0 for alias in all_aliases}
+
+    for repo in repos:
+        for dep in repo.depends_on:
+            if dep in all_aliases:
+                adj[dep].add(repo.alias)
+                in_degree[repo.alias] += 1
+
+    # Kahn's algorithm for topological sort, but grouping by waves
+    waves = []
+    current_wave_aliases = [alias for alias in all_aliases if in_degree[alias] == 0]
+
+    while current_wave_aliases:
+        waves.append([alias_to_repo[alias] for alias in current_wave_aliases])
+        next_wave_aliases = []
+        for alias in current_wave_aliases:
+            for neighbor in adj[alias]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    next_wave_aliases.append(neighbor)
+        current_wave_aliases = next_wave_aliases
+
+    # Detect cycles
+    flattened_waves = [r.alias for wave in waves for r in wave]
+    if len(flattened_waves) < len(repos):
+        remaining = all_aliases - set(flattened_waves)
+        raise ValueError(f"Circular dependency detected in fleet among: {', '.join(remaining)}")
+
+    return waves
 
 
 def sync_fleet_policies(source_repo: FleetRepo, target_repos: List[FleetRepo]) -> List[str]:
@@ -167,28 +212,63 @@ def dispatch_fleet_mission(
     requirement: str,
     target_repos: List[FleetRepo],
     runtime: Optional[str] = None,
-    auto_approve: bool = False
-) -> List[str]:
-    """Dispatch a mission to multiple repositories."""
+    auto_approve: bool = False,
+    max_workers: int = 4
+) -> dict[str, Any]:
+    """Dispatch a mission to multiple repositories in parallel waves."""
     import subprocess
     import sys
-    
-    dispatched = []
-    
-    for target in target_repos:
-        # Run 'niyam run' in each repo
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    waves = resolve_fleet_dependencies(target_repos)
+    results = {
+        "waves": [],
+        "success": [],
+        "failed": [],
+        "summary": {}
+    }
+
+    def _run_mission(repo: FleetRepo) -> tuple[str, bool, str]:
         cmd = [sys.executable, "-m", "niyam.cli", "run", requirement]
         if runtime:
             cmd.extend(["--runtime", runtime])
         if auto_approve:
             cmd.append("--auto-approve")
-            
+
         try:
-            # We run it in a subprocess to keep the fleet command running
-            # In a real scenario, we might want to run these in parallel
-            subprocess.run(cmd, cwd=target.path, check=True)
-            dispatched.append(target.alias)
-        except subprocess.CalledProcessError:
-            pass # Continue to next repo even if one fails
-            
-    return dispatched
+            # We use subprocess.run with capture_output to keep the UI clean
+            res = subprocess.run(cmd, cwd=repo.path, capture_output=True, text=True, check=True)
+            return repo.alias, True, res.stdout
+        except subprocess.CalledProcessError as e:
+            return repo.alias, False, e.stderr + e.stdout
+        except Exception as e:
+            return repo.alias, False, str(e)
+
+    for i, wave in enumerate(waves):
+        wave_results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_repo = {executor.submit(_run_mission, repo): repo for repo in wave}
+            for future in as_completed(future_to_repo):
+                alias, success, output = future.result()
+                wave_results.append({
+                    "alias": alias,
+                    "success": success,
+                    "output_preview": output[:500] + "..." if len(output) > 500 else output
+                })
+                if success:
+                    results["success"].append(alias)
+                else:
+                    results["failed"].append(alias)
+        
+        results["waves"].append({
+            "wave_index": i + 1,
+            "results": wave_results
+        })
+
+        # Stop if any repo in a wave fails? 
+        # For now, we continue within the wave, but could stop next waves.
+        if any(not r["success"] for r in wave_results):
+            # If a dependency fails, we should probably stop subsequent waves
+            break
+
+    return results

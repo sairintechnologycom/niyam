@@ -66,10 +66,10 @@ References:
 | P1 | Dashboard and operator evidence UX | Governance data exists but needs one coherent operator surface for review and audit. | Local dashboard/API views for scan, guard, MCP, cost, evidence, mission, swarm, fleet, and PR evidence. | API tests, dashboard smoke tests, generated evidence fixture review. |
 | P1 | CI/CD and supply-chain hardening | Evidence gates need to travel with GitHub Actions, Azure DevOps, packages, and release artifacts. | Hardened `niyam ci verify` templates, artifact upload examples, package provenance plan, SBOM/signing plan, OpenSSF Scorecard/SLSA alignment notes. | CI template tests, artifact integrity tests, package provenance smoke where available. |
 | P1 | Task-contract canonical model | Task contracts are the control plane; they must be consistent across plan/run/validate/review/retry/evidence. | Versioned task contract schema, contract validation, persisted task state, risk and approval fields, retry policy, evidence embedding. | Contract schema tests, mission lifecycle tests, boundary enforcement tests. |
-| P2 | Agent skill/tool governance | Agent skills are now a major execution-layer risk; Niyam should govern skills like tools. | Skill registry, permission manifests, version pinning, provenance metadata, approval gates, network/filesystem restrictions, skill scan rules. | Registry tests, policy tests, redaction tests, malicious/over-privileged skill fixtures. |
-| P2 | Enterprise policy workflows | Teams need explicit review authority, exception handling, and audit trails. | Team policies, approval roles, policy exception records, prompt/version audit, risk acceptance workflow. | Policy evaluation tests, approval workflow tests, evidence output tests. |
-| P3 | Fleet-level mission dispatch | Fleet discovery and policy sync exist; dispatch closes the multi-repo operations loop. | Cross-repo mission dispatch, dependency-aware ordering, fleet dashboard, repo-level evidence rollups. | Fleet e2e tests, failure isolation tests, dashboard/API tests. |
-| P3 | Agent performance analytics | Cost tracking exists; next step is usefulness, failure rate, retry rate, and validation quality. | Agent/runtime scorecards, cost per accepted task, retry/failure analytics, regression trend views. | Analytics aggregation tests, fixture reports, dashboard/API tests. |
+| P2 | Agent skill/tool governance | Complete | `tests/test_skills_governance.py` |
+| P2 | Enterprise policy workflows | Complete | `tests/test_policy_workflows.py` |
+| P3 | Fleet-level mission dispatch | Complete | `tests/test_fleet_dispatch.py` |
+| P3 | Agent performance analytics | Complete | `tests/test_performance_analytics.py` |
 
 ### AgentOps strategic roadmap aligned to current structure
 

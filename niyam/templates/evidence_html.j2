@@ -137,6 +137,8 @@
         <p>This report documents the security checks and compliance validation status for production release. Included sections:
         {%- if "scan" in include %} Production Readiness;{% endif %}
         {%- if "guard" in include %} Agent Governance;{% endif %}
+        {%- if "skills" in include %} Agent Skill Posture;{% endif %}
+        {%- if "policy" in include %} Policy Exceptions;{% endif %}
         {%- if "mcp" in include %} Tool/MCP Risk Posture;{% endif %}
         {%- if "cost" in include %} Cost Tracking MVP;{% endif %}
         </p>
@@ -220,6 +222,78 @@
             <p>✓ No recent observed actions logged.</p>
         {% endif %}
         {% endif %}
+        {% endif %}
+
+        {% if "skills" in include %}
+        <h2>Agent Skill Posture</h2>
+        {% if skills.exists %}
+        <ul>
+            <li><strong>Total Registered Skills:</strong> {{ skills.total }}</li>
+            <li><strong>Approved Skills:</strong> {{ skills.approved }}</li>
+            <li><strong>Unapproved Skills:</strong> {{ skills.unapproved }}</li>
+            <li><strong>High-risk Skills:</strong> {{ skills.high_risk }}</li>
+            <li><strong>Critical-risk Skills:</strong> {{ skills.critical_risk }}</li>
+        </ul>
+        {% if skills.skills %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Version</th>
+                        <th>Risk Level</th>
+                        <th>Approved</th>
+                        <th>Registered At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in skills.skills %}
+                        <tr>
+                            <td>{{ s.manifest.name }}</td>
+                            <td>{{ s.manifest.version }}</td>
+                            <td><strong>{{ s.risk_level.upper() }}</strong></td>
+                            <td>{{ 'Yes' if s.approved else 'No' }}</td>
+                            <td>{{ s.registered_at[:10] }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        {% if skills.recommended_actions %}
+            <h3>Recommended Skill Actions</h3>
+            <ul>
+                {% for action in skills.recommended_actions %}
+                    <li>{{ action }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% else %}
+        <p><em>Skill registry does not exist. Skipping skill governance posture.</em></p>
+        {% endif %}
+        {% endif %}
+
+        {% if "policy" in include and policy.exceptions %}
+        <h2>Policy Exceptions (Risk Acceptance)</h2>
+        <p>The following policy violations have been formally reviewed and accepted by authorized personnel.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Pattern</th>
+                    <th>Accepted By</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ex in policy.exceptions %}
+                    <tr>
+                        <td>{{ ex.id }}</td>
+                        <td><code>{{ ex.pattern }}</code></td>
+                        <td>{{ ex.accepted_by }}</td>
+                        <td>{{ ex.reason }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% endif %}
 
         {% if "mcp" in include %}
@@ -404,13 +478,41 @@
         {% endif %}
 
         {% if "cost" in include %}
-        <h2>5. AI Engineering Cost Summary</h2>
+        <h2>5. Cost & Performance Analytics</h2>
         <ul>
-            <li><strong>Total Estimated Cost:</strong> ${{ "%.4f"|format(cost.total_cost) }}</li>
-            <li><strong>Total Input Tokens:</strong> {{ "{:,}".format(cost.total_input_tokens) }}</li>
-            <li><strong>Total Output Tokens:</strong> {{ "{:,}".format(cost.total_output_tokens) }}</li>
+            <li><strong>Total Estimated Cost:</strong> ${{ "%.4f"|format(cost.total_cost_usd or cost.total_cost) }}</li>
+            <li><strong>Total Tokens Consumed:</strong> {{ cost.total_input_tokens + cost.total_output_tokens }}</li>
+            <li><strong>Fleet Success Rate:</strong> {{ cost.avg_success_rate | round(1) }}%</li>
         </ul>
+
+        <h3>Agent Performance Scorecard</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Agent</th>
+                    <th>Tasks</th>
+                    <th>Usefulness</th>
+                    <th>Avg Retries</th>
+                    <th>Val Fails</th>
+                    <th>Cost / Success</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent, stats in cost.agent_performance.items() %}
+                    <tr>
+                        <td>{{ agent }}</td>
+                        <td>{{ stats.completed }}/{{ stats.tasks }}</td>
+                        <td><strong>{{ stats.success_rate | round(1) }}%</strong></td>
+                        <td>{{ stats.avg_retries | round(2) }}</td>
+                        <td>{{ stats.val_fails }}</td>
+                        <td>${{ stats.cost_per_success | round(4) }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
         {% if cost.by_day %}
+            <h3>Daily Cost Breakdown</h3>
             <table>
                 <thead>
                     <tr>

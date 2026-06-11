@@ -698,8 +698,18 @@ def run_guard_run(
     reason = None
     policy_decision = "allow"
 
+    from niyam.core.policy import is_exception_active
+
     for pattern in blocked_commands:
         if _match_command_pattern(cmd_args, pattern):
+            # Check for active exception (Risk Acceptance)
+            exception = is_exception_active(pattern, root)
+            if exception:
+                matched_rule = f"blocked_command:{pattern}"
+                reason = f"Command matches blocked pattern '{pattern}' but has active Risk Acceptance: {exception.id} ({exception.reason})"
+                policy_decision = "allow"
+                break
+            
             matched_rule = f"blocked_command:{pattern}"
             reason = f"Command matches blocked command pattern: '{pattern}'"
             policy_decision = "block"
@@ -708,6 +718,14 @@ def run_guard_run(
     if not matched_rule:
         for pattern in protected_files:
             if _is_protected_file_match(cmd_args, [pattern], root=root):
+                # Check for active exception (Risk Acceptance)
+                exception = is_exception_active(pattern, root)
+                if exception:
+                    matched_rule = f"protected_file:{pattern}"
+                    reason = f"Command references protected file '{pattern}' but has active Risk Acceptance: {exception.id} ({exception.reason})"
+                    policy_decision = "allow"
+                    break
+
                 matched_rule = f"protected_file:{pattern}"
                 reason = f"Command references protected file: '{pattern}'"
                 policy_decision = "block"
@@ -716,6 +734,14 @@ def run_guard_run(
     if not matched_rule:
         for pattern in approval_required:
             if _match_command_pattern(cmd_args, pattern):
+                # Check for active exception (Risk Acceptance)
+                exception = is_exception_active(pattern, root)
+                if exception:
+                    matched_rule = f"approval_required:{pattern}"
+                    reason = f"Command requires approval pattern '{pattern}' but has active Risk Acceptance: {exception.id} ({exception.reason})"
+                    policy_decision = "allow"
+                    break
+
                 matched_rule = f"approval_required:{pattern}"
                 reason = f"Command requires approval pattern: '{pattern}'"
                 policy_decision = "approval_required"

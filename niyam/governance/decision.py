@@ -44,13 +44,15 @@ def evaluate_decision(
         # Blocker 1: critical secrets finding
         if severity == "critical" and (
             category == "secrets"
+            or category == "ai_risk"
             or "GITLEAKS" in fid
             or "SEC" in fid
+            or "SKILL" in fid
             or "secret" in title
         ):
             has_critical_secret = True
             triggered_blockers.append(
-                "Critical secrets finding detected in repository."
+                f"Critical security finding detected ({fid if fid else title})."
             )
 
         # Also look for .env file secrets using our existing code logic

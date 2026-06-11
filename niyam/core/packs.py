@@ -135,6 +135,18 @@ def add_pack(
         config.packs.append(name)
         save_niyam_config(config, repo_root)
 
+    # 5. Auto-register skills
+    try:
+        from niyam.core.skills import register_skill
+        skills_dir = niyam_dir / "skills"
+        if skills_dir.is_dir():
+            for skill_file in skills_dir.rglob("SKILL.md"):
+                # Register the skill (auto-approves low/medium risk)
+                register_skill(skill_file, root=repo_root)
+    except Exception as e:
+        if console:
+            console.print(f"[yellow]Warning:[/] Failed to auto-register skills for pack '{name}': {e}")
+
 
 def remove_pack(repo_root: Path, name: str, console: Console | None = None) -> None:
     """Remove a pack from the .niyam/ directory."""

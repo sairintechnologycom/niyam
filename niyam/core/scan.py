@@ -599,6 +599,50 @@ def run_scanner_checks(
     except Exception:
         pass
 
+    # Skill Governance Check
+    try:
+        from niyam.core.skills import load_skill_registry
+        skill_registry = load_skill_registry(root)
+        for skill_name, skill in skill_registry.skills.items():
+            if not skill.approved:
+                fp_src = f"SKILL-001::{skill_name}"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                findings.append({
+                    "schema_version": "1.0.0",
+                    "id": "SKILL-001",
+                    "title": "Unapproved Agent Skill",
+                    "category": "ai_risk",
+                    "severity": "high" if skill.risk_level != "critical" else "critical",
+                    "confidence": "high",
+                    "file_path": f".niyam/skills/{skill_name}/SKILL.md",
+                    "line_number": None,
+                    "description": f"The agent skill '{skill_name}' is registered but has not been approved by an operator.",
+                    "recommendation": f"Review the skill and run 'niyam skills approve {skill_name}' if it is safe.",
+                    "remediation_effort": "low",
+                    "tags": ["ai", "governance", "skills"],
+                    "fingerprint": fingerprint,
+                })
+            elif skill.risk_level == "critical":
+                fp_src = f"SKILL-002::{skill_name}"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                findings.append({
+                    "schema_version": "1.0.0",
+                    "id": "SKILL-002",
+                    "title": "Critical Risk Agent Skill",
+                    "category": "ai_risk",
+                    "severity": "medium", # Informational unless unapproved
+                    "confidence": "high",
+                    "file_path": f".niyam/skills/{skill_name}/SKILL.md",
+                    "line_number": None,
+                    "description": f"The agent skill '{skill_name}' has critical-level capabilities (e.g. shell execution).",
+                    "recommendation": "Ensure this skill is only used by trusted agents in a sandboxed environment.",
+                    "remediation_effort": "medium",
+                    "tags": ["ai", "governance", "skills"],
+                    "fingerprint": fingerprint,
+                })
+    except Exception:
+        pass
+
     # 3b. Apply/Create Baseline
     from niyam.core.baseline import load_baseline, apply_baseline, save_baseline
 

@@ -29,7 +29,11 @@ class PerformanceMetrics:
             "total_wasted_cost_usd": 0.0,
             "total_duration_s": 0.0,
             "task_count": 0,
+            "completed_count": 0,
+            "failed_count": 0,
             "success_rate": 0.0,
+            "total_retries": 0,
+            "validation_failures": 0,
             "savings_percent": 0.0,
             "by_agent": {},
         }
@@ -50,7 +54,10 @@ class PerformanceMetrics:
                     for event in ledger.get("events", []):
                         agent = event.get("agent", "unknown")
                         if agent not in metrics["by_agent"]:
-                            metrics["by_agent"][agent] = {"count": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
+                            metrics["by_agent"][agent] = {
+                                "count": 0, "completed": 0, "failed": 0, "cost": 0.0, 
+                                "wasted": 0.0, "tokens": 0, "retries": 0, "val_fails": 0
+                            }
                         
                         metrics["by_agent"][agent]["cost"] += event.get("cost_usd", 0.0)
                         metrics["by_agent"][agent]["tokens"] += event.get("total_tokens", 0)
@@ -59,33 +66,71 @@ class PerformanceMetrics:
             except Exception:
                 pass
 
-        # 2. Walk tasks
+        # 2. Walk tasks for validation quality
         tasks_dir = run_dir / "tasks"
-        completed = 0
         if tasks_dir.exists():
             for task_dir in tasks_dir.iterdir():
                 if not task_dir.is_dir():
                     continue
-                metrics["task_count"] += 1
+                
+                # Check validation failures
+                val_path = task_dir / "validation.json"
+                if val_path.exists():
+                    try:
+                        with open(val_path, encoding="utf-8") as f:
+                            results = json.load(f)
+                            # If any validation check failed in this task
+                            if any(not r.get("success", True) for r in results):
+                                metrics["validation_failures"] += 1
+                                # We'll map this to an agent later when loading the plan
+                    except Exception:
+                        pass
 
-        # 3. Load mission plan for accurate status
+        # 3. Load mission plan for status, retries, and mapping val_fails
         from niyam.mission.utils import load_plan
         try:
             plan = load_plan(run_dir)
             tasks = plan.get("tasks", [])
             metrics["task_count"] = len(tasks)
-            completed = sum(1 for t in tasks if t.get("status") == "completed")
+            metrics["completed_count"] = sum(1 for t in tasks if t.get("status") == "completed")
+            metrics["failed_count"] = sum(1 for t in tasks if t.get("status") == "failed")
+            
             if metrics["task_count"] > 0:
-                metrics["success_rate"] = (completed / metrics["task_count"]) * 100
+                metrics["success_rate"] = (metrics["completed_count"] / metrics["task_count"]) * 100
 
-            # Aggregate task counts by agent
+            # Aggregate task counts, retries, and val_fails by agent
             for t in tasks:
                 agent = t.get("agent", "unknown")
                 if agent not in metrics["by_agent"]:
-                    metrics["by_agent"][agent] = {"count": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
+                    metrics["by_agent"][agent] = {
+                        "count": 0, "completed": 0, "failed": 0, "cost": 0.0, 
+                        "wasted": 0.0, "tokens": 0, "retries": 0, "val_fails": 0
+                    }
                 metrics["by_agent"][agent]["count"] += 1
+                
+                retries = t.get("retry_count", 0)
+                metrics["by_agent"][agent]["retries"] += retries
+                metrics["total_retries"] += retries
+                
                 if t.get("status") == "completed":
                     metrics["by_agent"][agent]["completed"] += 1
+                elif t.get("status") == "failed":
+                    metrics["by_agent"][agent]["failed"] += 1
+
+                # If this task had a val fail record
+                # (This is imprecise because we don't know which agent failed validation in multi-agent waves,
+                # but it's a good heuristic)
+                task_id = t["id"]
+                val_path = tasks_dir / task_id / "validation.json"
+                if val_path.exists():
+                    try:
+                        with open(val_path, encoding="utf-8") as f:
+                            results = json.load(f)
+                            if any(not r.get("success", True) for r in results):
+                                metrics["by_agent"][agent]["val_fails"] += 1
+                    except Exception:
+                        pass
+
         except Exception:
             pass
 
@@ -102,6 +147,8 @@ class PerformanceMetrics:
             "total_cost_usd": 0.0,
             "avg_success_rate": 0.0,
             "avg_savings_percent": 0.0,
+            "total_retries": 0,
+            "total_val_fails": 0,
             "agent_performance": {},
         }
 
@@ -123,23 +170,33 @@ class PerformanceMetrics:
             summary["total_cost_usd"] += m["total_cost_usd"]
             total_success += m["success_rate"]
             total_savings += m["savings_percent"]
+            summary["total_retries"] += m["total_retries"]
+            summary["total_val_fails"] += m["validation_failures"]
 
             # Aggregate agent stats
             for agent, stats in m["by_agent"].items():
                 if agent not in summary["agent_performance"]:
-                    summary["agent_performance"][agent] = {"tasks": 0, "completed": 0, "cost": 0.0, "wasted": 0.0, "tokens": 0}
+                    summary["agent_performance"][agent] = {
+                        "tasks": 0, "completed": 0, "failed": 0, "cost": 0.0, 
+                        "wasted": 0.0, "tokens": 0, "retries": 0, "val_fails": 0
+                    }
                 summary["agent_performance"][agent]["tasks"] += stats.get("count", 0)
                 summary["agent_performance"][agent]["completed"] += stats.get("completed", 0)
+                summary["agent_performance"][agent]["failed"] += stats.get("failed", 0)
                 summary["agent_performance"][agent]["cost"] += stats.get("cost", 0.0)
                 summary["agent_performance"][agent]["wasted"] += stats.get("wasted", 0.0)
                 summary["agent_performance"][agent]["tokens"] += stats.get("tokens", 0)
+                summary["agent_performance"][agent]["retries"] += stats.get("retries", 0)
+                summary["agent_performance"][agent]["val_fails"] += stats.get("val_fails", 0)
 
         summary["avg_success_rate"] = total_success / len(mission_metrics)
         summary["avg_savings_percent"] = total_savings / len(mission_metrics)
 
-        # Calculate agent success rates
+        # Calculate calculated metrics per agent
         for agent in summary["agent_performance"]:
             stats = summary["agent_performance"][agent]
             stats["success_rate"] = (stats["completed"] / stats["tasks"]) * 100 if stats["tasks"] > 0 else 0
+            stats["avg_retries"] = stats["retries"] / stats["tasks"] if stats["tasks"] > 0 else 0
+            stats["cost_per_success"] = stats["cost"] / stats["completed"] if stats["completed"] > 0 else stats["cost"]
 
         return summary

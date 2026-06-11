@@ -101,6 +101,47 @@ Remediation actions are recommended below:
 {% endfor %}
 {% endif %}
 {%- endif %}
+{% if "policy" in include -%}
+{% if policy.exceptions %}
+* **Policy Exceptions (Risk Acceptance):** {{ policy.total }} active exceptions.
+
+### Active Risk Acceptances
+| ID | Pattern | Accepted By | Reason |
+| --- | --- | --- | --- |
+{% for ex in policy.exceptions -%}
+| {{ ex.id }} | `{{ ex.pattern }}` | {{ ex.accepted_by }} | {{ ex.reason }} |
+{% endfor %}
+{% endif %}
+{%- endif %}
+
+{% if "skills" in include -%}
+{% if skills.exists %}
+* **Agent Skill Approval Posture:** {{ skills.approved }}/{{ skills.total }} skills approved.
+  * **Total Registered Skills:** {{ skills.total }}
+  * **Approved Skills:** {{ skills.approved }}
+  * **Unapproved Skills:** {{ skills.unapproved }}
+  * **High-risk Skills:** {{ skills.high_risk }}
+  * **Critical-risk Skills:** {{ skills.critical_risk }}
+
+{% if skills.skills %}
+### Registered Agent Skills
+| Name | Version | Risk Level | Approved | Registered At |
+| --- | --- | --- | --- | --- |
+{% for s in skills.skills -%}
+| {{ s.manifest.name }} | {{ s.manifest.version }} | **{{ s.risk_level.upper() }}** | {{ 'Yes' if s.approved else 'No' }} | {{ s.registered_at[:10] }} |
+{% endfor %}
+{% endif %}
+
+{% if skills.recommended_actions %}
+### Recommended Skill Actions
+{% for action in skills.recommended_actions -%}
+* {{ action }}
+{% endfor %}
+{% endif %}
+{% else %}
+* **Agent Skill Approval Posture:** Skill Registry not found. Skipping skill governance posture.
+{% endif %}
+{%- endif %}
 {%- if "mcp" in include -%}
 {% if mcp.exists %}
 * **MCP / Tool Approval Posture:** {{ mcp.approved }}/{{ mcp.total }} tools approved.
@@ -211,11 +252,30 @@ Remediation actions are recommended below:
 * **Control Room Posture:** No workspace sessions found.
 {% endif %}
 {%- endif %}
-{%- if "cost" in include and cost.total_cost is not none -%}
-* **AI Engineering Cost Summary:** Estimated Cost: ${{ "%.4f"|format(cost.total_cost) }} (Input tokens: {{ cost.total_input_tokens }}, Output tokens: {{ cost.total_output_tokens }})
+{%- if "cost" in include -%}
+## 10. Cost & Performance Analytics
+* **Total Estimated Cost:** ${{ "%.4f"|format(cost.total_cost_usd or cost.total_cost) }}
+* **Total Tokens Consumed:** {{ cost.total_input_tokens + cost.total_output_tokens }}
+* **Fleet Success Rate:** {{ cost.avg_success_rate | round(1) }}%
+
+### Agent Performance Scorecard
+| Agent | Tasks | Usefulness | Avg Retries | Val Fails | Cost / Success |
+| --- | --- | --- | --- | --- | --- |
+{% for agent, stats in cost.agent_performance.items() -%}
+| {{ agent }} | {{ stats.completed }}/{{ stats.tasks }} | **{{ stats.success_rate | round(1) }}%** | {{ stats.avg_retries | round(2) }} | {{ stats.val_fails }} | ${{ stats.cost_per_success | round(4) }} |
+{% endfor %}
+
+{% if cost.top_tasks -%}
+### Top 5 Most Expensive Tasks
+| Task ID | Cost (USD) |
+| --- | --- |
+{% for task in cost.top_tasks -%}
+| {{ task.id }} | ${{ task.cost | round(4) }} |
+{% endfor %}
+{% endif %}
 {%- endif %}
 
-## 10. Appendix Summary
+## 11. Appendix Summary
 * **Redaction Status:** Redacted: {{ redaction_status.redacted }} (Engine: {{ redaction_status.engine }})
 * **Branch:** `{{ metadata.branch }}`
 * **Commit SHA:** `{{ metadata.commit_sha }}`

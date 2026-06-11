@@ -106,6 +106,20 @@ rules_app = typer.Typer(
 )
 app.add_typer(rules_app)
 
+skills_app = typer.Typer(
+    name="skills",
+    help="Manage and govern AI agent skills.",
+    no_args_is_help=True,
+)
+app.add_typer(skills_app)
+
+policy_app = typer.Typer(
+    name="policy",
+    help="Manage enterprise governance policies and risk acceptance.",
+    no_args_is_help=True,
+)
+app.add_typer(policy_app)
+
 cost_app = typer.Typer(
     name="cost",
     help="Track AI engineering token usage and costs.",
@@ -263,6 +277,8 @@ from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
 from niyam.cli import rules  # noqa: F401
+from niyam.cli import skills  # noqa: F401
+from niyam.cli import policy  # noqa: F401
 from niyam.cli import evidence  # noqa: F401
 from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401
