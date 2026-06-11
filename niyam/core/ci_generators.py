@@ -14,6 +14,11 @@ on:
   push:
     branches: [ "main", "master" ]
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
 jobs:
   niyam-verification:
     name: Verify AI Development Evidence
@@ -25,19 +30,41 @@ jobs:
           fetch-depth: 0 # Need full history for git diff against target branch
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           
-      - name: Install Niyam CLI
+      - name: Install Niyam CLI and SBOM Tool
         run: |
           pip install niyam
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Run Niyam Verification
+        id: verify
         run: |
           niyam ci verify --target ${{ github.base_ref || 'main' }} --strict
         env:
           NIYAM_PUBLIC_KEY: ${{ secrets.NIYAM_PUBLIC_KEY }}
+
+      - name: Generate SBOM
+        run: |
+          syft . -o spdx-json=sbom.spdx.json
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'sbom.spdx.json'
+
+      - name: Upload Evidence Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: niyam-evidence
+          path: |
+            .niyam/runs/**/evidence.md
+            .niyam/runs/**/mission-plan.yaml
+            sbom.spdx.json
+          retention-days: 14
 """
 
 AZURE_DEVOPS_TEMPLATE = """trigger:
@@ -76,6 +103,14 @@ steps:
   displayName: 'Run Niyam Verification'
   env:
     NIYAM_PUBLIC_KEY: $(NIYAM_PUBLIC_KEY)
+
+- task: PublishPipelineArtifact@1
+  condition: always()
+  inputs:
+    targetPath: '$(System.DefaultWorkingDirectory)/.niyam/runs'
+    artifact: 'NiyamEvidence'
+    publishLocation: 'pipeline'
+  displayName: 'Publish Niyam Evidence Artifacts'
 """
 
 GITLAB_CI_TEMPLATE = """stages:
