@@ -127,56 +127,16 @@ Ask for human approval before making changes in these areas:
 <claude-mem-context>
 # Memory Context
 
-# [sutra] recent context, 2026-06-10 2:52pm GMT+5:30
+# [sutra] recent context, 2026-06-11 2:15pm GMT+5:30
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,663t read) | 685,859t work | 97% savings
+Stats: 50 obs (22,942t read) | 883,791t work | 97% savings
 
-### Jun 9, 2026
-7221 10:20a 🔵 Niyam Installed Binary vs Source Version Mismatch — 0.3.9 vs 0.5.0
-7222 " 🔵 Niyam Rule Engine Error Handling — Three Failure Modes All Return Exit 3
-7229 10:21a 🔵 Niyam E2E Developer Test — Enterprise Evaluation Scope Established
-7230 10:22a 🔵 Niyam Guard Mode — All Four Policy Modes Verified Working
-7231 " 🔵 Niyam Guard Secret Redaction — --capture-output Redacts Secrets in Logs
-7232 " 🔵 Niyam Guard Audit Log — JSONL Schema with Full Action Context
-7233 " 🔵 Niyam MCP Registry — Registration, Validation, Risk Auto-Classification Working
-7234 " 🔵 Niyam MCP Registry Bug — Re-register Silently Overwrites Metadata with Nulls
-7235 10:55a 🔵 Niyam baseline.py — Hard Blocker Logic and Risk Acceptance Architecture
-7236 " 🔵 Niyam Evidence Pack — Exact 10-Section Markdown Schema and 11-Key JSON Schema
-7237 " 🔵 Niyam MCP Registry — CLI Commands, Heuristic Risk Classification, and Storage Location
-7238 " 🔵 Niyam Config Root Discovery — find_niyam_root() with .sutra/ Legacy Fallback
-7243 10:56a 🟣 Niyam scan.py — New content_missing Match Type Added
-7244 " 🟣 Niyam scan.py — Two-Pass File Scanning: Content Files vs Existence Files
-7245 " 🔴 Niyam evidence.py — Fake "GO" Fallback Replaced with Honest NOT_SCANNED State
-7250 10:57a ✅ Niyam Version Bumped to 1.0.0-rc1 — SARIF Report Uses Dynamic Version
-7251 " 🔴 Niyam cost CLI — Negative Token Count Validation Added
-7252 " 🔴 Niyam MCP Registry — Atomic Writes via FileLock + Temp File + os.replace
-7256 10:58a 🔄 Niyam mcp register — Optimistic Pre-Check + Locked Commit Pattern for Concurrent Safety
-7258 " ✅ Niyam MCP CLI — ValueError Propagation Added to All Five Remaining Commands
-7260 " 🔴 Niyam MCP Registry — save_mcp_registry() gains locked=True to prevent double-lock deadlock
-7262 10:59a 🔴 Niyam scan.py — Config Load Error Handling Distinguishes Missing vs Corrupt Config
-7263 " 🔵 Niyam security.py — ALLOWED_VALIDATION_EXECUTABLES Allowlist and safe_load_yaml at Line 283
-7266 " ✅ Niyam SEC001 Secret Scan Rule — File Scope Filter Added to All Four Profiles
-7268 " 🔴 Niyam SEC001 — .env.* Glob Replaced with Explicit .env.local/.env.production/.env.development
-7269 11:02a ✅ Niyam evidence.py — MCP Registry Load Errors Captured in Evidence Output
-7270 " 🟣 Niyam 1.0.0-rc1 — All 133 Tests Green After Enhancement Wave
-7272 " 🔵 Niyam E2E Scan Results — Four Fixture Projects Verified Against Enterprise Profile
-7274 11:04a 🔵 Niyam MCP Registry E2E — Concurrent Registrations Preserved, Corrupt Registry Surfaced with Exit 1
-7276 11:08a 🟣 Niyam 1.0.0-rc1 — Full 488/488 Test Suite Green Including New Security and Scan Tests
-7279 11:10a ✅ Niyam 1.0.0-rc1 — Pre-Commit Diff Summary: 12 Files, 261 Insertions, 44 Deletions
-7284 11:13a ✅ Niyam 1.0.0-rc1 Changes Staged for Commit on main Branch
-7285 11:14a ✅ Niyam 1.0.0-rc1 Fixes Committed and Pushed to GitHub main
-7287 11:28a 🔵 Niyam Roadmap — Current State and Next Phase Planning
-7288 11:30a 🔵 Niyam Swarm Mode Design — Concurrent Agent File Coordination Architecture
-7289 " 🔵 MCP Tool Registry MVP — Phase 4A Detailed Implementation Plan Exists
-7290 " 🔵 Niyam Long-Term Orchestration Roadmap — 4 MVP Phases + Product-Grade Phases
-7296 " 🔵 Niyam Token Budget Rules and Evidence Pack Spec — Sections 10 & 11 of ROADMAP.md
 ### Jun 10, 2026
 7326 6:05a 🔵 Niyam E2E and Integration Test Suite Structure Mapped
-7327 " 🔵 Niyam E2E and Governance Integration Tests Begin Passing
 7328 " 🔵 Niyam E2E Core Test Scenarios All Passing at 76%
 7330 6:06a 🔵 Niyam Scanner Detection Tests All Passing in Integration Suite
 7332 " 🔵 E2E Scan Tests Failing — Clean App and Risky App Scan Assertions
@@ -187,6 +147,46 @@ Stats: 50 obs (19,663t read) | 685,859t work | 97% savings
 7350 " 🔴 Niyam Test Suite — Three Fixes Applied to Stabilize E2E and Governance Tests
 7351 6:24a 🔵 Niyam Full Test Suite — 540/540 Tests Passed in 324 Seconds
 7352 " 🔴 niyam/cli/scan.py — CodebaseIndexer Gated Behind NIYAM_TEST Environment Variable
+### Jun 11, 2026
+7843 1:02p 🔵 Niyam Feature Testing and Flow Diagram — Sutra Project Scope Established
+7844 1:03p 🔵 Niyam CLI — Full Command Surface Enumerated
+7845 " 🔵 Sutra Project Test Suite — 90+ Test Files Across Unit, E2E, and Regression Tiers
+7863 1:35p 🔵 Niyam CLI Repository Structure — Full File Surface Mapped
+7864 1:36p 🔵 Niyam CLI Full Command Surface — 50+ Commands Across 15 Subgroups
+7865 " 🔵 Niyam Test Suite — 554 Tests Collected on Python 3.13.13 with pytest
+7870 1:37p 🔵 Niyam Test Suite — 1 Failing Test Found: Evidence Schema Key Count Mismatch
+7871 1:39p 🔵 Second Test Failure Found — test_scoring_critical_secret_no_go in Readiness Scoring
+7873 1:42p 🔵 Niyam Full Test Suite Results — 552 Passed, 2 Failed with Root Causes Identified
+7875 " 🔵 Niyam Test Failures — Precise Root Causes: Section Numbering Drift and Reason String Wording Mismatch
+7876 1:45p 🔴 niyam policy validate — ImportError Bug: validate_policies Not Found in niyam.policies.validator
+7877 " 🔵 Niyam Developer Workflow Live Test — init + scan + guard on complex-risky-app Fixture
+7878 1:46p 🔵 Niyam Guard Live Functional Test — Secret Redaction, Block Mode Dry-Run, and Audit Logging Verified
+7881 " 🔵 Niyam Memory, MCP, and Cost Commands Live Test — recall works, mcp approve --approved-by option missing
+7882 1:49p 🔵 Niyam Mission Plan + Workspace Control Room Full Lifecycle — AI Fallback Plan, 5-Task Pipeline, Multi-Role Approval
+7889 1:50p 🟣 Niyam Combined Evidence Report Generated — 196-Line Markdown, 887-Line JSON with All 6 Sections
+7890 " ✅ niyam-governance-testing.md Rewritten as Formal Developer Evaluation with Flow Diagram and 8 Issues
+7895 1:53p ✅ niyam-governance-testing.md Committed to Git — Full Evaluation Rewrite Pending Commit
+7903 1:58p 🔵 Niyam Governance Decision Engine — Full Blocker Logic Mapped
+7904 " 🔵 Niyam Governance Scoring Engine — 4 Profiles, 8 Dimensions, Deterministic Deductions
+7905 " 🔵 Niyam Cost Module — Pricing Lookup Order and gpt-5-codex Zero-Cost Bug
+7906 " 🔵 Niyam Mission Planner — AI Fallback Chain and security-reviewer Agent Resolution
+7907 " 🔵 Niyam Policy CLI and Validator — validate_policies() Wraps run_policy_validate()
+7908 " 🔵 Niyam CodebaseIndexer — Chroma Primary with JSONL Keyword Fallback
+7909 " 🔵 Niyam Policy Exception System — Lifecycle Contract and Guard Integration
+7914 1:59p 🔴 Fixed ImportError in `niyam policy validate` — Wrong Function Name
+7915 " 🔄 decision.py — Extracted _finding_label() for Category-Aware Blocker Messages
+7921 2:01p 🔴 chromadb Telemetry Disabled in CodebaseIndexer — Both build_index() and search()
+7922 " 🔴 Mission Planner security_agent Fallback — Prefers qa-reviewer Over backend-specialist
+7923 " 🔴 Cost Module — gpt-5-codex Zero-Cost Bug Fixed + Local Pricing Merges With Defaults
+7924 " ✅ Evidence Report Section Count Updated — 11 Sections Including New "Cost & Performance Analytics"
+7925 " 🟣 Three New Tests Added — gpt-5-codex Pricing, Policy Validate CLI, Security Agent Fallback
+7928 2:05p ✅ Niyam Test Suite Running — All Tests Passing at 59% Through 554-Test Collection
+7929 2:06p ✅ All New Regression Tests Confirmed Passing at 75% Test Suite Completion
+7930 2:08p ✅ Niyam Full Test Suite — 557 Passed, 0 Failed in 6m53s After All Bug Fixes
+7933 2:11p 🔴 chromadb Telemetry Logger Explicitly Disabled — Eliminates ERROR-Level Log Noise During Scans
+7934 " 🔵 Live Smoke Test — complex-risky-app Scan Produces NO_GO Score 27 with 12 Findings
+7936 2:13p ✅ Niyam Governance Testing Doc Updated — Full Issue/Fix Record and Mermaid Flow Diagram Added
+7937 " ✅ Niyam Bug-Fix Session Complete — 6 Issues Fixed, 557 Tests Passing, 11 Files Changed
 
-Access 686k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 884k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
