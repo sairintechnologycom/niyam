@@ -1,59 +1,51 @@
 # Integrating Niyam with GitHub Actions
 
-This guide explains how to set up `niyam scan` as a pull request quality gate and static analysis reporting tool in GitHub Actions.
+This guide explains how to set up Niyam as a quality and evidence gate in GitHub Actions.
 
-## 1. Using the Official Niyam GitHub Action
+## 1. Using the Hardened Verification Template
 
-The easiest way to integrate Niyam is using the official action. This automatically handles Python setup, Niyam installation, and readiness scoring.
+The recommended way to integrate Niyam is by generating the hardened workflow. This template enforces Niyam policies, performs OpenSSF Scorecard analysis, generates an SBOM, signs the evidence cryptographically, and attests SLSA provenance.
 
-```yaml
-name: Niyam Governance Verify
-
-on:
-  pull_request:
-    branches: [ main, dev ]
-
-jobs:
-  niyam-verify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Niyam Governance Verify
-        uses: sairintechnology/niyam@main  # Or use a specific version tag
-        with:
-          target-branch: 'main'
-          min-score: 70
-          strict: true
-          public-key: ${{ secrets.NIYAM_PUBLIC_KEY }}
+To generate the template, run:
+```bash
+niyam ci generate github
 ```
 
-## 2. Basic Pull Request Gate (Manual Script)
+This will create `.github/workflows/niyam-verification.yml`. 
 
-If you prefer to run the CLI manually, you can use the following steps:
+### Key Features of the Hardened Template:
+- **Niyam Verification:** Runs `niyam ci verify --strict` against the target branch.
+- **Scorecard Analysis:** Runs `ossf/scorecard-action` and uploads results.
+- **SBOM Generation:** Uses `syft` to create an `sbom.spdx.json`.
+- **Cryptographic Signing:** Uses Sigstore's `cosign` to keyless-sign the Niyam Evidence Pack and SBOM.
+- **SLSA Provenance:** Uses `actions/attest-build-provenance` to guarantee artifact integrity.
 
-## 2. Using Baselines to Prevent Failure on Legacy Code
+## 2. GitHub Security Upload (SARIF)
 
-For existing repositories with known legacy issues, run with a baseline so only new findings trigger build failures:
+If you are using GitHub Advanced Security, Niyam outputs findings in SARIF format, which integrates directly with the GitHub Security tab:
+
+```yaml
+      - name: Run OpenSSF Scorecard Analysis
+        uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+          
+      # Upload SARIF file
+      - name: "Upload to code-scanning"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.sarif
+```
+
+## 3. Legacy Support: Manual Script Gates
+
+If you prefer to run the CLI manually for backward compatibility, you can use the following steps:
 
 ```yaml
       - name: Run Niyam scan with Baseline
         run: |
+          pip install niyam
           niyam scan . --profile enterprise --baseline .niyam/baseline.json --fail-on high
-```
-
-## 3. GitHub Security Upload (SARIF)
-
-If you are using GitHub Advanced Security, you can output findings in SARIF format and upload them to the GitHub Security tab:
-
-```yaml
-      - name: Run Niyam scan (SARIF)
-        run: |
-          niyam scan . --output sarif --report-file niyam-findings.sarif
-
-      - name: Upload SARIF report
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: niyam-findings.sarif
 ```
