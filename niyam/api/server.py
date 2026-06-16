@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from niyam.core.config import find_niyam_root, get_niyam_dir
 
@@ -55,12 +56,6 @@ from niyam.api.models import (
     ActionResponse,
 )
 
-app = FastAPI(
-    title="Niyam Portal API",
-    description="Backend for AI Development Orchestration Dashboard",
-    version="1.0.0",
-)
-
 # Enable CORS for local dev
 app.add_middleware(
     CORSMiddleware,
@@ -77,6 +72,18 @@ def get_repo_context() -> tuple[Path, Path]:
         raise HTTPException(status_code=500, detail="Not a Niyam workspace.")
     return repo_root, get_niyam_dir(repo_root)
 
+# Mount artifacts directory for serving screenshots
+def setup_artifact_mount():
+    try:
+        repo_root, niyam_dir = get_repo_context()
+        artifacts_dir = niyam_dir / "workspace" / "artifacts"
+        if not artifacts_dir.exists():
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+        app.mount("/artifacts", StaticFiles(directory=str(artifacts_dir)), name="artifacts")
+    except Exception as e:
+        logger.warning(f"Could not mount artifacts directory: {e}")
+
+setup_artifact_mount()
 
 @app.get("/", response_class=HTMLResponse)
 def get_portal():
@@ -253,6 +260,117 @@ def get_prompt_audits():
                     pass
 
     return prompts
+
+
+@app.get("/workspace/sessions")
+def list_workspace_sessions():
+    """List all Control Room workspace sessions."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceStore
+    store = WorkspaceStore(niyam_dir / "workspace")
+    sessions = store.list_sessions()
+    return [s.model_dump() for s in sessions]
+
+@app.get("/workspace/sessions/{session_id}")
+def get_workspace_session(session_id: str):
+    """Get details of a specific Control Room session."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceStore
+    store = WorkspaceStore(niyam_dir / "workspace")
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
+
+@app.get("/workspace/sessions/{session_id}/timeline")
+def get_workspace_timeline(session_id: str):
+    """Get the action timeline for a Control Room session, including browser actions."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceTimeline
+    from niyam.core.workspace.browser import BrowserStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    w_timeline = WorkspaceTimeline(workspace_dir)
+    b_store = BrowserStore(workspace_dir)
+    
+    # Merge and sort timeline actions
+    w_actions = [a.model_dump() for a in w_timeline.get_actions(session_id)]
+    b_actions = [a.model_dump() for a in b_store.get_actions(session_id)]
+    
+    merged = sorted(w_actions + b_actions, key=lambda x: x.get('timestamp') or x.get('recorded_at'))
+    return merged
+
+@app.get("/workspace/sessions/{session_id}/approvals")
+def get_workspace_approvals(session_id: str):
+    """Get approvals for a Control Room session."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals
+    approvals = WorkspaceApprovals(niyam_dir / "workspace")
+    return [a.model_dump() for a in approvals.get_approvals(session_id)]
+
+@app.post("/workspace/approvals/{approval_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
+def approve_workspace_action(approval_id: str, session_id: str):
+    """Approve a pending workspace action."""
+    from datetime import datetime, timezone
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals, WorkspaceStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    approvals = WorkspaceApprovals(workspace_dir)
+    store = WorkspaceStore(workspace_dir)
+    
+    appr = None
+    for a in approvals.get_approvals(session_id):
+        if a.id == approval_id:
+            appr = a
+            break
+            
+    if not appr:
+        raise HTTPException(status_code=404, detail="Approval not found")
+        
+    appr.status = "approved"
+    appr.decided_at = datetime.now(timezone.utc)
+    appr.decided_by = "Portal User"
+    approvals.update_approval(appr)
+    
+    session = store.get_session(session_id)
+    if session:
+        session.status = "running"
+        store.update_session(session)
+        
+    return ActionResponse(success=True, message=f"Approval {approval_id} granted.", new_status="running")
+
+@app.post("/workspace/approvals/{approval_id}/reject", response_model=ActionResponse, dependencies=[Depends(verify_token)])
+def reject_workspace_action(approval_id: str, session_id: str):
+    """Reject a pending workspace action."""
+    from datetime import datetime, timezone
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals, WorkspaceStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    approvals = WorkspaceApprovals(workspace_dir)
+    store = WorkspaceStore(workspace_dir)
+    
+    appr = None
+    for a in approvals.get_approvals(session_id):
+        if a.id == approval_id:
+            appr = a
+            break
+            
+    if not appr:
+        raise HTTPException(status_code=404, detail="Approval not found")
+        
+    appr.status = "rejected"
+    appr.decided_at = datetime.now(timezone.utc)
+    appr.decided_by = "Portal User"
+    approvals.update_approval(appr)
+    
+    session = store.get_session(session_id)
+    if session:
+        session.status = "running"
+        store.update_session(session)
+        
+    return ActionResponse(success=True, message=f"Approval {approval_id} rejected.", new_status="running")
 
 
 @app.get("/missions", response_model=list[MissionSummary])

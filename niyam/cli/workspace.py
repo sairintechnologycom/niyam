@@ -19,6 +19,7 @@ from niyam.core.workspace import (
     WorkspaceEvidence,
 )
 from niyam.core.workspace.browser import BrowserStore, RecorderBrowserBackend
+from niyam.core.workspace.playwright_backend import PlaywrightBrowserBackend
 from niyam.core.errors import NiyamError
 from niyam.core.config import find_niyam_root
 
@@ -38,6 +39,11 @@ def _get_timeline() -> WorkspaceTimeline:
 
 def _get_approvals() -> WorkspaceApprovals:
     return WorkspaceApprovals(_get_workspace_dir())
+
+def _get_browser_backend(session_id: str, store: BrowserStore, backend_type: str):
+    if backend_type == "playwright":
+        return PlaywrightBrowserBackend(session_id, store)
+    return RecorderBrowserBackend(session_id, store)
 
 @workspace_app.command("create")
 def create_session(
@@ -292,8 +298,6 @@ def export_evidence(
     format: str = typer.Option("markdown", help="Export format (markdown or json)"),
 ) -> None:
     """Export evidence for a workspace session."""
-    # Note: we need to pass BrowserStore for evidence if we want to include browser data
-    # We will update WorkspaceEvidence to accept BrowserStore shortly
     browser_store = BrowserStore(_get_workspace_dir())
     evidence = WorkspaceEvidence(_get_store(), _get_timeline(), _get_approvals(), browser_store)
     if format == "json":
@@ -309,6 +313,7 @@ def export_evidence(
 def browser_start(
     session_id: str = typer.Argument(..., help="Session ID"),
     url: Optional[str] = typer.Option(None, "--url", help="Start URL"),
+    backend_type: str = typer.Option("recorder", "--backend", help="Browser backend (recorder or playwright)"),
 ) -> None:
     """Start a sandboxed browser session."""
     store = _get_store()
@@ -316,8 +321,11 @@ def browser_start(
         raise NiyamError(f"Session {session_id} not found.")
 
     b_store = BrowserStore(_get_workspace_dir())
-    backend = RecorderBrowserBackend(session_id, b_store)
+    backend = _get_browser_backend(session_id, b_store, backend_type)
     backend.start(url)
+    
+    if backend_type == "playwright":
+        backend.close() # Close immediately after starting since CLI exits
 
     # Log timeline event
     action = WorkspaceAction(
@@ -345,6 +353,7 @@ def browser_action(
         help="Action target (URL or selector)",
     ),
     input: Optional[str] = typer.Option(None, "--input", help="Action input text"),
+    backend_type: str = typer.Option("recorder", "--backend", help="Browser backend (recorder or playwright)"),
 ) -> None:
     """Log a browser action to the workspace timeline and backend."""
     store = _get_store()
@@ -357,7 +366,7 @@ def browser_action(
     if not b_session:
         raise NiyamError(f"Browser session for {session_id} not found.")
 
-    backend = RecorderBrowserBackend(session_id, b_store)
+    backend = _get_browser_backend(session_id, b_store, backend_type)
 
     valid_action_types = {
         "navigate",
@@ -391,6 +400,9 @@ def browser_action(
         b_action = backend.screenshot(output_path)
     else:
         b_action = backend._create_action(type, "low", target=target, input=input)
+        
+    if backend_type == "playwright":
+        backend.close()
 
     # Check if high risk and requires approval
     if b_action.risk in ["high", "critical"]:
