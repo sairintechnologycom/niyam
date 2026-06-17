@@ -1,0 +1,64 @@
+apiVersion: niyam.dev/v1
+kind: LoopSpec
+metadata:
+  name: basic-code-change
+  owner: platform-engineering
+  riskTier: medium
+
+goal:
+  type: code_change
+  description: Implement the requested code changes safely with validation
+
+actors:
+  planner: claude
+  implementer: codex
+  reviewer: gemini
+  approver: human
+
+steps:
+  - name: understand
+    action: inspect_repository
+    requiredEvidence:
+      - repo_tree
+      - relevant_files
+
+  - name: plan
+    action: generate_implementation_plan
+    maxAttempts: 2
+
+  - name: implement
+    action: modify_code
+    policy:
+      requireBranch: true
+      blockSecrets: true
+      maxFilesChanged: 20
+
+  - name: validate
+    action: run_tests
+    requiredEvidence:
+      - test_output
+      - lint_output
+
+  - name: review
+    action: ai_review
+    evaluator: gemini
+
+  - name: decide
+    action: policy_decision
+    gates:
+      - no_critical_vulnerabilities
+      - tests_passed
+      - cost_under_budget
+      - no_secret_leakage
+
+budgets:
+  maxIterations: 5
+  maxTokens: 150000
+  maxCostUsd: 3.00
+  maxRuntimeMinutes: 30
+
+stopConditions:
+  - repeatedFailureCount >= 3
+  - sameErrorRepeated >= 2
+  - policyViolation == critical
+  - humanApprovalRequired == true

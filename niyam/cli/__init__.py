@@ -226,6 +226,13 @@ workspace_app = typer.Typer(
 )
 app.add_typer(workspace_app)
 
+loop_app = typer.Typer(
+    name="loop",
+    help="Governed AI agent feedback loops (LoopOps).",
+    no_args_is_help=True,
+)
+app.add_typer(loop_app)
+
 
 @app.callback()
 def main_callback(
@@ -285,6 +292,7 @@ from niyam.cli import saas  # noqa: F401
 from niyam.cli import fleet  # noqa: F401
 from niyam.cli import swarm  # noqa: F401
 from niyam.cli import workspace  # noqa: F401
+from niyam.cli import loop  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:
