@@ -65,7 +65,7 @@ References:
 | P0 | `1.0.0-rc1` release readiness | Core capability is implemented; the next risk is shipping stale docs or unverified packages. | Full-suite validation, release notes, refreshed CLI reference, package/install smoke tests, known-warning log, examples refresh. | `pytest`, package build/install smoke, CLI help smoke, example commands. |
 | P1 | Dashboard and operator evidence UX | Governance data exists but needs one coherent operator surface for review and audit. | Local dashboard/API views for scan, guard, MCP, cost, evidence, mission, swarm, fleet, and PR evidence. | API tests, dashboard smoke tests, generated evidence fixture review. |
 | P1 | CI/CD and supply-chain hardening | Complete | `tests/test_ci_generators.py` |
-| P1 | Task-contract canonical model | Task contracts are the control plane; they must be consistent across plan/run/validate/review/retry/evidence. | Versioned task contract schema, contract validation, persisted task state, risk and approval fields, retry policy, evidence embedding. | Contract schema tests, mission lifecycle tests, boundary enforcement tests. |
+| P1 | Task-contract canonical model | Complete | `tests/test_contract_schema.py` |
 | P2 | Agent skill/tool governance | Complete | `tests/test_skills_governance.py` |
 | P2 | Enterprise policy workflows | Complete | `tests/test_policy_workflows.py` |
 | P3 | Fleet-level mission dispatch | Complete | `tests/test_fleet_dispatch.py` |

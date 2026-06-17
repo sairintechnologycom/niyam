@@ -1274,6 +1274,33 @@ def mission_approve_task(
     console.print(f"[bold green]✓[/] Task [cyan]{task_id}[/] approved. If the mission is running, it will proceed shortly.")
 
 
+@mission_app.command("contract-schema")
+def mission_contract_schema(
+    output: Annotated[
+        Optional[str],
+        typer.Option("--output", "-o", help="File to write the JSON schema to."),
+    ] = None,
+) -> None:
+    """Export the canonical JSON Schema for Niyam Task Contracts."""
+    import json
+    from niyam.core.config import TaskContract
+
+    schema = TaskContract.model_json_schema()
+    json_str = json.dumps(schema, indent=2)
+
+    if output:
+        try:
+            from pathlib import Path
+            out_path = Path(output).resolve()
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json_str, encoding="utf-8")
+            console.print(f"[bold green]✓[/] Task Contract JSON schema exported to [cyan]{out_path}[/]")
+        except Exception as e:
+            console.print(f"[bold red]Error exporting schema:[/] {e}")
+            raise typer.Exit(1)
+    else:
+        console.print_json(json_str)
+
 @mission_app.command("reject-task")
 def mission_reject_task(
     task_id: Annotated[str, typer.Argument(help="ID of the task to reject.")],

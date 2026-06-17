@@ -5,7 +5,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
+try:
+    from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page, Playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    Playwright = None
+    Browser = None
+    BrowserContext = None
+    Page = None
 
 from .models import BrowserAction, BrowserSession
 from .browser import BrowserBackend, BrowserStore
@@ -15,6 +23,9 @@ class PlaywrightBrowserBackend(BrowserBackend):
     """A real browser backend using Playwright."""
 
     def __init__(self, workspace_session_id: str, store: BrowserStore):
+        if not PLAYWRIGHT_AVAILABLE:
+            raise NiyamError("Playwright is not installed. Run 'pip install playwright' to use this backend.")
+        
         self.workspace_session_id = workspace_session_id
         self.store = store
         self.session_id = f"BROWSER-{uuid.uuid4().hex[:8].upper()}"
@@ -27,6 +38,7 @@ class PlaywrightBrowserBackend(BrowserBackend):
         # Determine if we should run headful or headless based on environment
         import os
         self.headless = os.environ.get("NIYAM_BROWSER_HEADLESS", "true").lower() == "true"
+
 
     def _get_or_create_session(self) -> BrowserSession:
         session = self.store.get_session(self.workspace_session_id)
