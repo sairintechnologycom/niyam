@@ -29,32 +29,42 @@ def _print_command_suggestion(cli: typer.Typer) -> None:
     """Print a best-effort suggestion for mistyped top-level commands."""
     if len(sys.argv) < 2:
         return
-    command = sys.argv[1]
+    command = " ".join(sys.argv[1:])
     if command.startswith("-"):
         return
 
-    known = [
-        cmd.name
-        if isinstance(cmd.name, str)
-        else cmd.callback.__name__.replace("_", "-")
-        for cmd in cli.registered_commands
-        if cmd.callback is not None
+    from niyam.suggestions.registry import registry
+    from niyam.suggestions.engine import SuggestionEngine
+
+    # Check if exact command is known (simple heuristic for top-level)
+    known_commands = [
+        cmd.name if isinstance(cmd.name, str) else cmd.callback.__name__.replace("_", "-")
+        for cmd in cli.registered_commands if cmd.callback is not None
     ]
-    known.extend(
-        group.name
-        if isinstance(group.name, str)
-        else group.typer_instance.info.name
-        for group in cli.registered_groups
-        if isinstance(group.name, str)
-        or isinstance(group.typer_instance.info.name, str)
+    known_commands.extend(
+        group.name if isinstance(group.name, str) else group.typer_instance.info.name
+        for group in cli.registered_groups if isinstance(group.name, str) or isinstance(group.typer_instance.info.name, str)
     )
-    known = [name for name in known if isinstance(name, str)]
-    if command in known:
+    known_commands = [name for name in known_commands if isinstance(name, str)]
+    
+    if sys.argv[1] in known_commands:
         return
 
-    matches = get_close_matches(command, known, n=1, cutoff=0.68)
-    if matches:
-        console.print(f"[yellow]Unknown command '{command}'. Did you mean '{matches[0]}'?[/]")
+    engine = SuggestionEngine(registry)
+    suggestions = engine.suggest(command)
+    
+    if suggestions:
+        console.print(f"[bold red]Error:[/] Unknown command '{sys.argv[1]}'.")
+        console.print(f"[yellow]Did you mean:[/] {', '.join(suggestions[:3])}?")
+        console.print("Example usage:")
+        console.print(f"  [cyan]niyam {suggestions[0]}[/]")
+    else:
+        # Fallback to the old logic if no suggestions
+        matches = get_close_matches(sys.argv[1], known_commands, n=1, cutoff=0.68)
+        if matches:
+            console.print(f"[bold red]Error:[/] Unknown command '{sys.argv[1]}'.")
+            console.print(f"[yellow]Did you mean '{matches[0]}'?[/]")
+
 
 
 app = NiyamTyper(
@@ -233,6 +243,13 @@ loop_app = typer.Typer(
 )
 app.add_typer(loop_app)
 
+from niyam.cli.suggest import suggest_app
+app.add_typer(suggest_app)
+
+from niyam.cli.completion import completion_app
+app.add_typer(completion_app)
+
+
 
 @app.callback()
 def main_callback(
@@ -293,6 +310,8 @@ from niyam.cli import fleet  # noqa: F401
 from niyam.cli import swarm  # noqa: F401
 from niyam.cli import workspace  # noqa: F401
 from niyam.cli import loop  # noqa: F401
+from niyam.cli import suggest  # noqa: F401
+from niyam.cli import completion  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:
