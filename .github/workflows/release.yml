@@ -44,6 +44,10 @@ jobs:
   build-binaries:
     name: Build Standalone Binaries
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -67,6 +71,26 @@ jobs:
       - name: Build with PyInstaller
         run: |
           uv run pyinstaller --onefile --name niyam niyam/__main__.py
+
+      - name: Install Syft (Unix)
+        if: matrix.os != 'windows-latest'
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Install Syft (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.ps1 | pwsh -Command -
+
+      - name: Generate SBOM
+        run: |
+          syft dist/ -o spdx-json=dist/sbom-${{ matrix.os }}.spdx.json
+        continue-on-error: true
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'dist/niyam*'
+        continue-on-error: true
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

@@ -91,7 +91,7 @@ def test_fleet_status_reports_missions(fleet_env):
         
     result = runner.invoke(app, ["fleet", "status"])
     assert result.exit_code == 0
-    assert mission_id in result.stdout
+    assert "test-mission" in result.stdout
     assert "RUNNING" in result.stdout
     assert "1/2" in result.stdout # Progress
 

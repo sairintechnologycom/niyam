@@ -11,6 +11,40 @@ from niyam.mission.utils import save_plan
 client = TestClient(app)
 
 
+def test_new_dashboard_endpoints(niyam_repo: Path):
+    """Should return valid responses for the new portal evidence endpoints."""
+    from unittest.mock import patch
+    niyam_dir = niyam_repo / ".niyam"
+    niyam_dir.mkdir(exist_ok=True)
+    
+    # Create dummy guard log
+    logs_dir = niyam_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    (logs_dir / "guard-actions.jsonl").write_text('{"timestamp":"2026-06-10T12:00:00Z","actor":"test","command":"ls","exit_code":0}\n', encoding="utf-8")
+
+    with patch("niyam.api.server.find_niyam_root", return_value=niyam_repo), \
+         patch("niyam.core.config.find_niyam_root", return_value=niyam_repo):
+         
+        # Test /guard
+        response = client.get("/guard")
+        assert response.status_code == 200
+        assert len(response.json()) >= 1
+        
+        # Test /mcp
+        response = client.get("/mcp")
+        assert response.status_code == 200
+        assert "tools" in response.json()
+        
+        # Test /swarm
+        response = client.get("/swarm")
+        assert response.status_code == 200
+        assert "agents" in response.json()
+        
+        # Test /fleet
+        response = client.get("/fleet")
+        assert response.status_code == 200
+        assert "repos" in response.json()
+
 def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
@@ -107,7 +141,11 @@ def test_mission_action(niyam_repo: Path):
 
     with patch("niyam.api.server.find_niyam_root", return_value=niyam_repo), \
          patch("niyam.core.config.find_niyam_root", return_value=niyam_repo):
-        response = client.post(f"/missions/{mission_id}/action?action=pause")
+        with patch("niyam.api.server._get_auth_token", return_value="test_token"):
+            response = client.post(
+                f"/missions/{mission_id}/action?action=pause",
+                headers={"X-Niyam-Token": "test_token"}
+            )
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["new_status"] == "paused"
@@ -165,13 +203,20 @@ def test_approve_deny_task(niyam_repo: Path):
     with patch("niyam.api.server.find_niyam_root", return_value=niyam_repo), \
          patch("niyam.core.config.find_niyam_root", return_value=niyam_repo):
         # Approve task
-        response = client.post(f"/missions/{mission_id}/tasks/{task_id}/approve")
+        with patch("niyam.api.server._get_auth_token", return_value="test_token"):
+            response = client.post(
+                f"/missions/{mission_id}/tasks/{task_id}/approve",
+                headers={"X-Niyam-Token": "test_token"}
+            )
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert (task_dir / "approval.json").exists()
         
-        # Deny task
-        response = client.post(f"/missions/{mission_id}/tasks/{task_id}/deny")
+        with patch("niyam.api.server._get_auth_token", return_value="test_token"):
+            response = client.post(
+                f"/missions/{mission_id}/tasks/{task_id}/deny",
+                headers={"X-Niyam-Token": "test_token"}
+            )
         assert response.status_code == 200
         assert response.json()["success"] is True
         
@@ -207,7 +252,11 @@ def test_approve_mission_via_api(niyam_repo: Path):
 
     with patch("niyam.api.server.find_niyam_root", return_value=niyam_repo), \
          patch("niyam.core.config.find_niyam_root", return_value=niyam_repo):
-        response = client.post(f"/missions/{mission_id}/approve?role=default")
+        with patch("niyam.api.server._get_auth_token", return_value="test_token"):
+            response = client.post(
+                f"/missions/{mission_id}/approve?role=default",
+                headers={"X-Niyam-Token": "test_token"}
+            )
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["new_status"] == "approved"
@@ -216,3 +265,4 @@ def test_approve_mission_via_api(niyam_repo: Path):
         from niyam.mission.utils import load_plan
         updated_plan = load_plan(run_dir)
         assert updated_plan["mission"]["status"] == "approved"
+

@@ -7,10 +7,14 @@ import json
 from pathlib import Path
 import pytest
 from rich.console import Console
+from typer.testing import CliRunner
 
 from niyam.core.config import get_niyam_dir
 from niyam.mission.planner import run_mission_plan
 from niyam.mission.executor import run_mission_start, load_plan
+from niyam.cli import app
+
+runner = CliRunner()
 
 
 def test_non_interactive_fails_unapproved(niyam_repo: Path) -> None:
@@ -237,3 +241,30 @@ def test_ci_verify_write_violation(niyam_repo: Path) -> None:
         assert any(
             "protected/secrets.json" in failure for failure in report["failures"]
         )
+
+def test_cli_ci_generate_github(niyam_repo: Path) -> None:
+    """Should generate GitHub Actions template via CLI."""
+    os.chdir(niyam_repo)
+    result = runner.invoke(app, ["ci", "generate", "github"])
+    
+    assert result.exit_code == 0
+    assert "Generated Hardened GitHub Actions workflow" in result.stdout
+    assert (niyam_repo / ".github" / "workflows" / "niyam-verification.yml").exists()
+
+def test_cli_ci_generate_azure(niyam_repo: Path) -> None:
+    """Should generate Azure DevOps template via CLI."""
+    os.chdir(niyam_repo)
+    result = runner.invoke(app, ["ci", "generate", "azure"])
+    
+    assert result.exit_code == 0
+    assert "Generated Hardened Azure DevOps pipeline" in result.stdout
+    assert (niyam_repo / "azure-pipelines.yml").exists()
+
+def test_cli_ci_generate_gitlab(niyam_repo: Path) -> None:
+    """Should generate GitLab CI template via CLI."""
+    os.chdir(niyam_repo)
+    result = runner.invoke(app, ["ci", "generate", "gitlab"])
+    
+    assert result.exit_code == 0
+    assert "Generated GitLab CI pipeline" in result.stdout
+    assert (niyam_repo / ".gitlab-ci.yml").exists()

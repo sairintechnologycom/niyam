@@ -1,50 +1,27 @@
 # Integrating Niyam with Azure DevOps Pipelines
 
-This guide explains how to set up `niyam scan` as a pull request quality gate and static analysis reporting tool in Azure Pipelines (`azure-pipelines.yml`).
+This guide explains how to set up Niyam as a quality and evidence gate in Azure Pipelines.
 
-## 1. Using the Official Niyam Azure DevOps Task
+## 1. Using the Hardened Verification Template
 
-The easiest way to integrate Niyam is using the official extension. This automatically handles Niyam installation and readiness score verification.
+The recommended way to integrate Niyam is by generating the hardened workflow. This template installs Niyam, generates an SBOM, signs the evidence cryptographically using Cosign, and publishes the pipeline artifacts.
 
-```yaml
-trigger: none
-pr:
-  branches:
-    include:
-      - main
-
-jobs:
-- job: GovernanceVerify
-  displayName: 'Niyam Governance Verify'
-  pool:
-    vmImage: 'ubuntu-latest'
-  steps:
-  - task: NiyamVerify@0
-    inputs:
-      targetBranch: 'main'
-      minScore: 70
-      strict: true
-      publicKey: $(NIYAM_PUBLIC_KEY)
-    displayName: 'Run Niyam Governance Verify'
+To generate the template, run:
+```bash
+niyam ci generate azure
 ```
 
-## 2. Basic Pull Request Gate (Manual Script)
+This will create `azure-pipelines.yml`.
 
-If you prefer to run the CLI manually, you can use the following steps:
+### Key Features of the Hardened Template:
+- **Niyam Verification:** Runs `niyam ci verify --strict` against the target branch.
+- **SBOM Generation:** Uses `syft` to create an `sbom.spdx.json`.
+- **Cryptographic Signing:** Uses `cosign` (with environment variables `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD`) to sign the Niyam Evidence Pack and SBOM.
+- **Artifact Publishing:** Automatically attaches the signed Evidence Pack and SBOM to the Azure Pipeline run.
 
-## 2. Using Baselines to Prevent Failure on Legacy Code
+## 2. Azure DevOps Security Tab / SARIF Integration
 
-For existing repositories with known legacy issues, run with a baseline so only new findings trigger build failures:
-
-```yaml
-  - script: |
-      niyam scan . --profile enterprise --baseline .niyam/baseline.json --fail-on high
-    displayName: 'Run Niyam Scan with Baseline'
-```
-
-## 3. Azure DevOps Security Tab / SARIF Integration
-
-If you have GitHub Advanced Security for Azure DevOps enabled, you can output findings in SARIF format and upload them to the code analysis tab:
+If you have GitHub Advanced Security for Azure DevOps enabled, Niyam outputs findings in SARIF format, which can be uploaded to the code analysis tab:
 
 ```yaml
   - script: |
@@ -56,4 +33,14 @@ If you have GitHub Advanced Security for Azure DevOps enabled, you can output fi
     inputs:
       SarifFile: '$(Build.ArtifactStagingDirectory)/niyam-findings.sarif'
     displayName: 'Publish SARIF findings'
+```
+
+## 3. Legacy Support: Manual Script Gates
+
+If you prefer to run the CLI manually with baselines for backward compatibility:
+
+```yaml
+  - script: |
+      niyam scan . --profile enterprise --baseline .niyam/baseline.json --fail-on high
+    displayName: 'Run Niyam Scan with Baseline'
 ```

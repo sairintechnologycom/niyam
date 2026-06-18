@@ -290,11 +290,11 @@ def test_evidence_redacts_secrets(sample_scan_json: Path, tmp_path: Path) -> Non
     assert "sb-1234567890abcdef" not in report
 
 
-def test_evidence_reports_exact_10_sections_and_11_schema_keys(
+def test_evidence_reports_exact_11_sections_and_11_schema_keys(
     sample_scan_json: Path,
 ) -> None:
-    """Verify that the generated report has the 10 standard sections and JSON has the 11 schema keys."""
-    # Generate markdown and verify the 10 sections
+    """Verify that the generated report has the 11 standard sections and JSON has the 11 schema keys."""
+    # Generate markdown and verify the 11 sections
     report_md = run_generate_evidence(
         from_scan_json=str(sample_scan_json), fmt="markdown"
     )
@@ -308,7 +308,8 @@ def test_evidence_reports_exact_10_sections_and_11_schema_keys(
         "7. Risk Register",
         "8. Recommended Remediation Plan",
         "9. AI-Assisted Development Governance Notes",
-        "10. Appendix Summary",
+        "10. Cost & Performance Analytics",
+        "11. Appendix Summary",
     ]
     for section in expected_sections:
         assert section in report_md

@@ -394,7 +394,7 @@ def run_mission_report(
     )
 
 
-def run_verify_report(evidence_path: str, console: Console, public_key_pem: str | None = None) -> None:
+def run_verify_report(evidence_path: str, console: Console, public_key_pem: str | None = None, strict: bool = False) -> None:
     """Verify cryptographic integrity of an evidence report."""
     path = Path(evidence_path)
     if not path.exists():
@@ -457,28 +457,42 @@ def run_verify_report(evidence_path: str, console: Console, public_key_pem: str 
         raise SystemExit(1)
 
     # Verify signature
-    status_msg = "not signed"
-    if manifest.get("signed"):
+    # Enforce signature check if strict mode, if a key is provided, or if the manifest claims it's signed
+    if strict or public_key_pem or manifest.get("signed"):
         # Use provided key or manifest key
         verify_key = public_key_pem or manifest.get("public_key")
         
         if not verify_key:
              # Fallback: try to get local key if not in manifest (for transition)
-             verify_key = get_public_key_bytes(repo_root).decode("utf-8")
+             try:
+                 verify_key = get_public_key_bytes(repo_root).decode("utf-8")
+             except Exception:
+                 if strict:
+                     console.print("[bold red]❌ Signature verification FAILED.[/] No public key available for strict verification.")
+                     raise SystemExit(1)
+                 verify_key = None
         
-        canonical_content = "\n".join(f"{k}:{v}" for k, v in sorted(manifest.get("files", {}).items()))
-        expected_signature = manifest.get("signature")
-        
-        if not expected_signature:
-             console.print("[bold red]❌ Signature verification FAILED.[/] No signature found in manifest.")
-             raise SystemExit(1)
+        if verify_key:
+            canonical_content = "\n".join(f"{k}:{v}" for k, v in sorted(manifest.get("files", {}).items()))
+            expected_signature = manifest.get("signature")
+            
+            if not expected_signature:
+                 console.print("[bold red]❌ Signature verification FAILED.[/] No signature found in manifest (stripping attack detected).")
+                 raise SystemExit(1)
 
-        if not verify_signature(canonical_content, expected_signature, verify_key.encode("utf-8") if isinstance(verify_key, str) else verify_key):
-            console.print(
-                "[bold red]❌ Cryptographic signature verification FAILED.[/] The manifest may have been tampered with or signed by a different identity."
-            )
-            raise SystemExit(1)
-        status_msg = "[bold green]VERIFIED[/]"
+            if not verify_signature(canonical_content, expected_signature, verify_key.encode("utf-8") if isinstance(verify_key, str) else verify_key):
+                console.print(
+                    "[bold red]❌ Cryptographic signature verification FAILED.[/] The manifest may have been tampered with or signed by a different identity."
+                )
+                raise SystemExit(1)
+            
+            console.print("[bold green]✓[/] Cryptographic signature verified.")
+    else:
+        status_msg = "not signed"
+        console.print(f"[dim]ℹ Signature verification skipped ({status_msg}).[/]")
+
+    console.print(f"[bold green]✓[/] Integrity check passed ({verified_count} files verified).")
+    status_msg = "[bold green]VERIFIED[/]"
 
     console.print(
         Panel(

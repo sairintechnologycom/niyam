@@ -31,11 +31,16 @@
                 <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">NIYAM PORTAL</h1>
                 <p class="text-slate-400 mt-2">AI Governance & Orchestration Control Plane</p>
             </div>
-            <nav class="flex gap-4">
+            <nav class="flex flex-wrap gap-2 md:gap-4">
                 <button id="nav-missions" onclick="showMissions()" class="px-4 py-2 rounded font-bold text-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-lg shadow-cyan-500/20">Missions</button>
                 <button id="nav-analytics" onclick="showAnalytics()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Analytics</button>
                 <button id="nav-policies" onclick="showPolicies()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Policies</button>
                 <button id="nav-audits" onclick="showAudits()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Audits</button>
+                <button id="nav-guard" onclick="showGuard()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Guard</button>
+                <button id="nav-mcp" onclick="showMcp()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">MCP</button>
+                <button id="nav-workspace" onclick="showWorkspace()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Control Room</button>
+                <button id="nav-swarm" onclick="showSwarm()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Swarm</button>
+                <button id="nav-fleet" onclick="showFleet()" class="px-4 py-2 rounded font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all">Fleet</button>
             </nav>
             <div id="connection-status" class="text-sm flex items-center">
                 <span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span> Connected
@@ -84,6 +89,88 @@
                 </div>
             </div>
 
+            <div id="guard-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Guard Action Logs</h2>
+                <div id="guard-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mcp-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">MCP Tool Registry</h2>
+                <div id="mcp-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="workspace-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Control Room</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <h3 class="text-lg font-bold mb-4">Active Sessions</h3>
+                        <div id="workspace-sessions" class="space-y-4">
+                            <div class="py-10 text-center"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500 mx-auto"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-span-2 hidden" id="workspace-detail">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold" id="workspace-detail-title">Session Details</h3>
+                            <span id="workspace-detail-status" class="status-badge"></span>
+                        </div>
+                        <div id="workspace-approvals" class="mb-6"></div>
+                        <div class="card">
+                            <h3 class="text-lg font-bold mb-4 text-cyan-400">Action Timeline</h3>
+                            <div id="workspace-timeline" class="space-y-6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="workspace-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Control Room</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <h3 class="text-lg font-bold mb-4">Active Sessions</h3>
+                        <div id="workspace-sessions" class="space-y-4">
+                            <div class="py-10 text-center"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500 mx-auto"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-span-2 hidden" id="workspace-detail">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold" id="workspace-detail-title">Session Details</h3>
+                            <span id="workspace-detail-status" class="status-badge"></span>
+                        </div>
+                        <div id="workspace-approvals" class="mb-6"></div>
+                        <div class="card">
+                            <h3 class="text-lg font-bold mb-4 text-cyan-400">Action Timeline</h3>
+                            <div id="workspace-timeline" class="space-y-6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="swarm-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Swarm State</h2>
+                <div id="swarm-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fleet-view" class="hidden">
+                <h2 class="text-2xl font-bold mb-8 text-cyan-400">Fleet Operations</h2>
+                <div id="fleet-content">
+                    <div class="py-20 text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mx-auto"></div>
+                    </div>
+                </div>
+            </div>
+
             <div id="details-view" class="hidden">
                 <button onclick="showMissions()" class="mb-6 text-sm font-semibold flex items-center text-cyan-400 hover:text-cyan-300">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -100,9 +187,19 @@
     <script>
         let currentMissionId = null;
 
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (window.NIYAM_AUTH_TOKEN) {
+                headers['X-Niyam-Token'] = window.NIYAM_AUTH_TOKEN;
+            }
+            return headers;
+        }
+
         async function fetchMissions() {
             try {
-                const response = await fetch('/missions');
+                const response = await fetch('/missions', { headers: getHeaders() });
                 const missions = await response.json();
                 renderStats(missions);
                 renderMissions(missions);
@@ -153,8 +250,21 @@
             `;
         }
 
+        function hideAllViews() {
+            document.getElementById('missions-view').classList.add('hidden');
+            document.getElementById('analytics-view').classList.add('hidden');
+            document.getElementById('policies-view').classList.add('hidden');
+            document.getElementById('audits-view').classList.add('hidden');
+            document.getElementById('details-view').classList.add('hidden');
+            document.getElementById('guard-view').classList.add('hidden');
+            document.getElementById('mcp-view').classList.add('hidden');
+            document.getElementById('swarm-view').classList.add('hidden');
+            document.getElementById('fleet-view').classList.add('hidden');
+            document.getElementById('workspace-view').classList.add('hidden');
+        }
+
         function setActiveNav(activeId) {
-            const navIds = ['nav-missions', 'nav-analytics', 'nav-policies', 'nav-audits'];
+            const navIds = ['nav-missions', 'nav-analytics', 'nav-policies', 'nav-audits', 'nav-guard', 'nav-mcp', 'nav-swarm', 'nav-fleet', 'nav-workspace'];
             navIds.forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -169,11 +279,8 @@
 
         function showMissions() {
             setActiveNav('nav-missions');
+            hideAllViews();
             document.getElementById('missions-view').classList.remove('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
-            document.getElementById('audits-view').classList.add('hidden');
-            document.getElementById('details-view').classList.add('hidden');
             currentMissionId = null;
             fetchMissions();
         }
@@ -364,10 +471,7 @@
         
         async function showAudits() {
             setActiveNav('nav-audits');
-            document.getElementById('missions-view').classList.add('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
-            document.getElementById('details-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
+            hideAllViews();
             document.getElementById('audits-view').classList.remove('hidden');
             
             const content = document.getElementById('audits-content');
@@ -421,7 +525,8 @@
             if (!confirm(`Are you sure you want to approve task ${taskId}?`)) return;
             try {
                 const response = await fetch(`/missions/${missionId}/tasks/${taskId}/approve`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: getHeaders()
                 });
                 const result = await response.json();
                 if (result.success) {
@@ -455,10 +560,8 @@
 
         async function viewMission(id) {
             currentMissionId = id;
-            document.getElementById('missions-view').classList.add('hidden');
-            document.getElementById('policies-view').classList.add('hidden');
-            document.getElementById('audits-view').classList.add('hidden');
-            document.getElementById('analytics-view').classList.add('hidden');
+            setActiveNav('');
+            hideAllViews();
             document.getElementById('details-view').classList.remove('hidden');
 
             const content = document.getElementById('mission-details-content');
@@ -469,7 +572,7 @@
             `;
 
             try {
-                const response = await fetch(`/missions/${id}`);
+                const response = await fetch(`/missions/${id}`, { headers: getHeaders() });
                 const m = await response.json();
                 
                 let metricsHtml = '';
@@ -654,7 +757,7 @@
 
         async function viewEvidence(id) {
              try {
-                const response = await fetch(`/missions/${id}/evidence`);
+                const response = await fetch(`/missions/${id}/evidence`, { headers: getHeaders() });
                 if (!response.ok) throw new Error('Evidence not found');
                 const data = await response.json();
                 showModal(`Evidence Report: ${id}`, data.content);
@@ -727,7 +830,8 @@
             
             try {
                 const response = await fetch(`/missions/${missionId}/action?action=${action}`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: getHeaders()
                 });
                 const result = await response.json();
                 if (result.success) {
@@ -744,6 +848,155 @@
         // Auto-refresh every 5 seconds
         fetchMissions();
         setInterval(fetchMissions, 5000);
+
+        async function showWorkspace() {
+            setActiveNav('nav-workspace');
+            hideAllViews();
+            document.getElementById('workspace-view').classList.remove('hidden');
+            
+            const listContent = document.getElementById('workspace-sessions');
+            listContent.innerHTML = '<div class="py-10 text-center"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500 mx-auto"></div></div>';
+            document.getElementById('workspace-detail').classList.add('hidden');
+            
+            try {
+                const response = await fetch('/workspace/sessions', { headers: getHeaders() });
+                const sessions = await response.json();
+                
+                if (sessions.length === 0) {
+                    listContent.innerHTML = '<div class="text-center text-slate-500 py-8">No control room sessions found.</div>';
+                    return;
+                }
+                
+                listContent.innerHTML = sessions.map(s => `
+                    <div class="card p-4 cursor-pointer hover:bg-slate-800 transition-colors" onclick="viewWorkspaceSession('${s.id}')">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-cyan-400 text-sm">${s.id}</span>
+                            <span class="status-badge status-${s.status.toLowerCase()}">${s.status}</span>
+                        </div>
+                        <p class="text-sm font-semibold">${s.title}</p>
+                        <p class="text-xs text-slate-400 mt-2">Agent: ${s.agent_type}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                listContent.innerHTML = `<div class="text-red-400">Error loading sessions: ${error}</div>`;
+            }
+        }
+        
+        async function viewWorkspaceSession(id) {
+            document.getElementById('workspace-detail').classList.remove('hidden');
+            const timelineContent = document.getElementById('workspace-timeline');
+            const approvalContent = document.getElementById('workspace-approvals');
+            const titleEl = document.getElementById('workspace-detail-title');
+            const statusEl = document.getElementById('workspace-detail-status');
+            
+            timelineContent.innerHTML = '<div class="py-10 text-center"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500 mx-auto"></div></div>';
+            approvalContent.innerHTML = '';
+            
+            try {
+                // Fetch details, timeline, approvals
+                const [sessionRes, timelineRes, approvalsRes] = await Promise.all([
+                    fetch(`/workspace/sessions/${id}`, { headers: getHeaders() }),
+                    fetch(`/workspace/sessions/${id}/timeline`, { headers: getHeaders() }),
+                    fetch(`/workspace/sessions/${id}/approvals`, { headers: getHeaders() })
+                ]);
+                
+                const session = await sessionRes.json();
+                const timeline = await timelineRes.json();
+                const approvals = await approvalsRes.json();
+                
+                titleEl.textContent = session.title;
+                statusEl.textContent = session.status;
+                statusEl.className = `status-badge status-${session.status.toLowerCase()}`;
+                
+                // Render Approvals if pending
+                const pending = approvals.filter(a => a.status === 'pending');
+                if (pending.length > 0) {
+                    approvalContent.innerHTML = `
+                        <div class="border border-yellow-500/30 bg-yellow-950/20 p-4 rounded-lg">
+                            <h4 class="text-yellow-400 font-bold mb-3 flex items-center">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                Action Requires Approval
+                            </h4>
+                            ${pending.map(a => `
+                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900 p-3 rounded mb-2">
+                                    <div>
+                                        <p class="font-mono text-sm">${a.action}</p>
+                                        <p class="text-xs text-slate-400 mt-1">Risk: <span class="${a.risk === 'critical' || a.risk === 'high' ? 'text-red-400' : 'text-yellow-400'}">${a.risk.toUpperCase()}</span></p>
+                                    </div>
+                                    <div class="flex gap-2 mt-3 sm:mt-0">
+                                        <button onclick="resolveWorkspaceAction('${a.id}', '${id}', 'approve')" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded text-xs font-bold transition-colors">Approve</button>
+                                        <button onclick="resolveWorkspaceAction('${a.id}', '${id}', 'reject')" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-xs font-bold transition-colors">Reject</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
+                // Render Timeline
+                if (timeline.length === 0) {
+                    timelineContent.innerHTML = '<p class="text-slate-500">No actions recorded.</p>';
+                    return;
+                }
+                
+                timelineContent.innerHTML = timeline.map(t => {
+                    const time = new Date(t.timestamp || t.recorded_at).toLocaleTimeString();
+                    
+                    let details = '';
+                    if (t.action_type === 'screenshot' && t.output) {
+                        const fname = t.output.split('/').pop();
+                        details = `<img src="/artifacts/${id}/screenshots/${fname}" class="mt-3 rounded border border-slate-700 max-h-64 object-contain" alt="Screenshot"/>`;
+                    } else if (t.input || t.output) {
+                        details = `<p class="mt-2 text-sm text-slate-300 bg-slate-900 p-2 rounded font-mono break-all">${t.output || t.input}</p>`;
+                    }
+                    
+                    let riskBadge = '';
+                    if (t.risk && t.risk !== 'low') {
+                        riskBadge = `<span class="ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${t.risk === 'critical' ? 'border-red-500 text-red-500' : (t.risk === 'high' ? 'border-orange-500 text-orange-500' : 'border-yellow-500 text-yellow-500')}">${t.risk}</span>`;
+                    }
+                    
+                    return `
+                        <div class="relative pl-6 border-l-2 border-slate-700 pb-6 last:pb-0">
+                            <div class="absolute w-3 h-3 bg-cyan-500 rounded-full -left-[7px] top-1.5 shadow-[0_0_8px_rgba(6,182,212,0.6)]"></div>
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="font-bold text-slate-200 capitalize">${t.action_type}</span>
+                                    <span class="text-xs text-cyan-400 ml-2 border border-cyan-800 bg-cyan-950/30 px-1.5 py-0.5 rounded">${t.actor}</span>
+                                    ${riskBadge}
+                                </div>
+                                <span class="text-xs text-slate-500">${time}</span>
+                            </div>
+                            ${t.target ? `<p class="text-sm mt-1 text-slate-400 font-mono">Target: ${t.target}</p>` : ''}
+                            ${details}
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                timelineContent.innerHTML = `<div class="text-red-400">Error loading session details: ${error}</div>`;
+            }
+        }
+        
+        async function resolveWorkspaceAction(approvalId, sessionId, action) {
+            try {
+                const response = await fetch(`/workspace/approvals/${approvalId}/${action}?session_id=${sessionId}`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                const result = await response.json();
+                if (result.success) {
+                    viewWorkspaceSession(sessionId); // refresh
+                } else {
+                    alert(`Failed to ${action}: ` + result.message);
+                }
+            } catch (error) {
+                alert(`Error: ` + error);
+            }
+        }
+
+
     </script>
+</body>
+</html>
 </body>
 </html>

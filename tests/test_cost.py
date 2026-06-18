@@ -76,6 +76,35 @@ def test_cost_log_event(tmp_path: Path) -> None:
     assert "branch" in event
 
 
+def test_cost_log_gpt_5_codex_uses_default_pricing(tmp_path: Path) -> None:
+    """Should estimate cost for gpt-5-codex instead of falling back to unknown."""
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "cost",
+            "log",
+            "--tool",
+            "codex",
+            "--model",
+            "gpt-5-codex",
+            "--input-tokens",
+            "24000",
+            "--output-tokens",
+            "5200",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "gpt-5-codex" in result.stdout
+    assert "$0.1380" in result.stdout
+
+    log_file = tmp_path / ".niyam" / "logs" / "cost-events.jsonl"
+    event = json.loads(log_file.read_text(encoding="utf-8").strip())
+    assert event["estimated_cost"] == 0.138
+
+
 def test_cost_summary(tmp_path: Path) -> None:
     """Should display cost summary aggregates."""
     runner = CliRunner()

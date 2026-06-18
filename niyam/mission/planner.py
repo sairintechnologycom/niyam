@@ -568,13 +568,13 @@ def run_mission_plan(
         if "backend-specialist" in available_agents
         else available_agents[0]
     )
+    qa_agent = (
+        "qa-reviewer" if "qa-reviewer" in available_agents else available_agents[0]
+    )
     security_agent = (
         "security-reviewer"
         if "security-reviewer" in available_agents
-        else available_agents[0]
-    )
-    qa_agent = (
-        "qa-reviewer" if "qa-reviewer" in available_agents else available_agents[0]
+        else qa_agent if "qa-reviewer" in available_agents else backend_agent
     )
 
     plan_data = None
@@ -884,6 +884,9 @@ def run_mission_plan(
                             "validation",
                             "approval_required",
                             "tdd_required",
+                            "retry_policy",
+                            "evidence_refs",
+                            "version"
                         ]:
                             if field in t:
                                 normalized_task[field] = t[field]
@@ -896,6 +899,7 @@ def run_mission_plan(
                     candidate_plan = {
                         "mission": {
                             "id": mission_id,
+                            "schema_version": "1.0",
                             "requirement": str(requirements_path),
                             "created": datetime.now(timezone.utc)
                             .isoformat()

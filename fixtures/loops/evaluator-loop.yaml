@@ -1,0 +1,50 @@
+apiVersion: niyam.dev/v1
+kind: LoopSpec
+metadata:
+  name: evaluator-demo-loop
+  owner: platform-engineering
+  riskTier: medium
+
+goal:
+  type: code_change
+  description: Implement feature with AI and command evaluators
+
+actors:
+  planner: claude
+  implementer: codex
+  reviewer: gemini
+
+steps:
+  - name: implement
+    action: modify_code
+    actor: codex
+
+  - name: validate
+    action: run_tests
+    requiredEvidence:
+      - test_output
+
+budgets:
+  maxIterations: 5
+  maxTokens: 100000
+  maxCostUsd: 3.00
+  maxRuntimeMinutes: 30
+
+stopConditions:
+  - repeatedFailureCount >= 3
+  - policyViolation == critical
+
+evaluators:
+  - name: security-review
+    type: ai_critic
+    actor: gemini
+    required: true
+    criteria: "Check for security vulnerabilities and auth issues"
+  - name: test-suite
+    type: command
+    command: npm test
+    required: true
+  - name: style-check
+    type: command
+    command: npx eslint .
+    required: false

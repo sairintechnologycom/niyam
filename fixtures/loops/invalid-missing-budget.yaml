@@ -1,0 +1,18 @@
+apiVersion: niyam.dev/v1
+kind: LoopSpec
+metadata:
+  name: invalid-missing-budget
+  owner: platform-engineering
+  riskTier: medium
+
+goal:
+  type: code_change
+  description: Implement the requested code changes safely with validation
+
+actors:
+  planner: claude
+  implementer: codex
+
+steps:
+  - name: understand
+    action: inspect_repository

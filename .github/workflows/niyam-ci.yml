@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
 jobs:
   niyam-verify:
     runs-on: ubuntu-latest
@@ -21,10 +26,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies
+      - name: Install dependencies and SBOM Tool
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
       - name: Run Tests
         run: |
@@ -42,3 +48,24 @@ jobs:
       - name: Run Niyam CI Verification
         run: |
           niyam ci verify --target main --strict
+
+      - name: Generate SBOM
+        run: |
+          syft . -o spdx-json=sbom.spdx.json
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'sbom.spdx.json'
+
+      - name: Upload Evidence Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: niyam-evidence
+          path: |
+            niyam-readiness-report.md
+            .niyam/runs/**/evidence.md
+            .niyam/runs/**/mission-plan.yaml
+            sbom.spdx.json
+          retention-days: 14

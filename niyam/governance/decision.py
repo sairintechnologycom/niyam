@@ -11,6 +11,25 @@ from niyam.governance.common.redaction import contains_secret
 logger = logging.getLogger(__name__)
 
 
+def _finding_label(finding: dict[str, Any]) -> str:
+    """Return a concise, category-aware label for decision reasons."""
+    category = str(finding.get("category", "")).lower().strip()
+    fid = str(finding.get("id", "")).upper().strip()
+    title = str(finding.get("title", "")).strip()
+
+    if category in ("secrets", "secret"):
+        label = "Critical secrets finding detected"
+    elif category == "ai_risk":
+        label = "Critical AI-risk finding detected"
+    elif category:
+        label = f"Critical {category.replace('_', ' ')} finding detected"
+    else:
+        label = "Critical security finding detected"
+
+    identifier = fid or title
+    return f"{label} ({identifier})." if identifier else f"{label}."
+
+
 def evaluate_decision(
     findings: list[dict[str, Any]],
     score: int,
@@ -44,14 +63,14 @@ def evaluate_decision(
         # Blocker 1: critical secrets finding
         if severity == "critical" and (
             category == "secrets"
+            or category == "ai_risk"
             or "GITLEAKS" in fid
             or "SEC" in fid
+            or "SKILL" in fid
             or "secret" in title
         ):
             has_critical_secret = True
-            triggered_blockers.append(
-                "Critical secrets finding detected in repository."
-            )
+            triggered_blockers.append(_finding_label(f))
 
         # Also look for .env file secrets using our existing code logic
         if fid == "SEC001" or (fpath and Path(fpath).name.startswith(".env")):

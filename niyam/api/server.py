@@ -5,14 +5,47 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from niyam.core.config import find_niyam_root, get_niyam_dir
 
 logger = logging.getLogger(__name__)
+
+def _get_auth_token() -> str:
+    """Get or generate a persistent authentication token for the portal."""
+    repo_root = find_niyam_root()
+    if not repo_root:
+        return ""
+    niyam_dir = get_niyam_dir(repo_root)
+    token_file = niyam_dir / "auth_token"
+
+    if token_file.exists():
+        return token_file.read_text(encoding="utf-8").strip()
+
+    # Generate new token
+    import secrets
+    token = secrets.token_hex(24)
+    token_file.write_text(token, encoding="utf-8")
+    return token
+
+async def verify_token(x_niyam_token: str = Header(None)):
+    """Dependency to verify the authentication token."""
+    expected = _get_auth_token()
+    if not expected:
+        return # Not in a workspace, allow for now (or maybe strictly deny?)
+
+    if x_niyam_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Niyam-Token header")
+
+app = FastAPI(
+    title="Niyam Portal API",
+    description="Backend for AI Development Orchestration Dashboard",
+    version="1.0.0",
+)
+
 from niyam.mission.utils import load_plan
 from niyam.mission.dashboard import get_task_durations
 from niyam.api.models import (
@@ -21,12 +54,6 @@ from niyam.api.models import (
     TaskInfo,
     TokenMetrics,
     ActionResponse,
-)
-
-app = FastAPI(
-    title="Niyam Portal API",
-    description="Backend for AI Development Orchestration Dashboard",
-    version="1.0.0",
 )
 
 # Enable CORS for local dev
@@ -45,14 +72,32 @@ def get_repo_context() -> tuple[Path, Path]:
         raise HTTPException(status_code=500, detail="Not a Niyam workspace.")
     return repo_root, get_niyam_dir(repo_root)
 
+# Mount artifacts directory for serving screenshots
+def setup_artifact_mount():
+    try:
+        repo_root, niyam_dir = get_repo_context()
+        artifacts_dir = niyam_dir / "workspace" / "artifacts"
+        if not artifacts_dir.exists():
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+        app.mount("/artifacts", StaticFiles(directory=str(artifacts_dir)), name="artifacts")
+    except Exception as e:
+        logger.warning(f"Could not mount artifacts directory: {e}")
+
+setup_artifact_mount()
 
 @app.get("/", response_class=HTMLResponse)
 def get_portal():
-    """Serve the Niyam Portal web interface."""
+    """Serve the Niyam Portal web interface with injected auth token."""
     template_path = Path(__file__).parent.parent / "templates" / "portal" / "index.html"
     if not template_path.exists():
         return "<h1>Niyam Portal</h1><p>Template not found.</p>"
-    return template_path.read_text(encoding="utf-8")
+    
+    content = template_path.read_text(encoding="utf-8")
+    token = _get_auth_token()
+    # Inject token into a global JS variable
+    injection = f"<script>window.NIYAM_AUTH_TOKEN = '{token}';</script>"
+    content = content.replace("</head>", f"{injection}\n</head>")
+    return content
 
 
 @app.get("/health")
@@ -124,6 +169,58 @@ def get_policies():
     }
 
 
+@app.get("/mcp")
+def get_mcp_registry():
+    """Get the MCP tool registry state."""
+    repo_root, _ = get_repo_context()
+    try:
+        from niyam.core.mcp import load_mcp_registry
+        return load_mcp_registry(repo_root).model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load MCP registry: {e}")
+
+
+@app.get("/fleet")
+def get_fleet_config():
+    """Get the Fleet configuration."""
+    try:
+        from niyam.core.fleet import load_fleet_config
+        return load_fleet_config().model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load Fleet config: {e}")
+
+
+@app.get("/swarm")
+def get_swarm_state():
+    """Get the current Swarm state."""
+    repo_root, _ = get_repo_context()
+    try:
+        from niyam.core.swarm import load_swarm_state
+        return load_swarm_state(repo_root).model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load Swarm state: {e}")
+
+
+@app.get("/guard")
+def get_guard_logs():
+    """Get the recent guard action logs."""
+    _, niyam_dir = get_repo_context()
+    log_path = niyam_dir / "logs" / "guard-actions.jsonl"
+    if not log_path.exists():
+        return []
+    
+    logs = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            for line in reversed(lines[-100:]): # Get last 100 entries, newest first
+                if line.strip():
+                    logs.append(json.loads(line))
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load guard logs: {e}")
+
+
 @app.get("/audits/prompts")
 def get_prompt_audits():
     """Get a log of prompts used across missions for auditing."""
@@ -163,6 +260,117 @@ def get_prompt_audits():
                     pass
 
     return prompts
+
+
+@app.get("/workspace/sessions")
+def list_workspace_sessions():
+    """List all Control Room workspace sessions."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceStore
+    store = WorkspaceStore(niyam_dir / "workspace")
+    sessions = store.list_sessions()
+    return [s.model_dump() for s in sessions]
+
+@app.get("/workspace/sessions/{session_id}")
+def get_workspace_session(session_id: str):
+    """Get details of a specific Control Room session."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceStore
+    store = WorkspaceStore(niyam_dir / "workspace")
+    session = store.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
+
+@app.get("/workspace/sessions/{session_id}/timeline")
+def get_workspace_timeline(session_id: str):
+    """Get the action timeline for a Control Room session, including browser actions."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceTimeline
+    from niyam.core.workspace.browser import BrowserStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    w_timeline = WorkspaceTimeline(workspace_dir)
+    b_store = BrowserStore(workspace_dir)
+    
+    # Merge and sort timeline actions
+    w_actions = [a.model_dump() for a in w_timeline.get_actions(session_id)]
+    b_actions = [a.model_dump() for a in b_store.get_actions(session_id)]
+    
+    merged = sorted(w_actions + b_actions, key=lambda x: x.get('timestamp') or x.get('recorded_at'))
+    return merged
+
+@app.get("/workspace/sessions/{session_id}/approvals")
+def get_workspace_approvals(session_id: str):
+    """Get approvals for a Control Room session."""
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals
+    approvals = WorkspaceApprovals(niyam_dir / "workspace")
+    return [a.model_dump() for a in approvals.get_approvals(session_id)]
+
+@app.post("/workspace/approvals/{approval_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
+def approve_workspace_action(approval_id: str, session_id: str):
+    """Approve a pending workspace action."""
+    from datetime import datetime, timezone
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals, WorkspaceStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    approvals = WorkspaceApprovals(workspace_dir)
+    store = WorkspaceStore(workspace_dir)
+    
+    appr = None
+    for a in approvals.get_approvals(session_id):
+        if a.id == approval_id:
+            appr = a
+            break
+            
+    if not appr:
+        raise HTTPException(status_code=404, detail="Approval not found")
+        
+    appr.status = "approved"
+    appr.decided_at = datetime.now(timezone.utc)
+    appr.decided_by = "Portal User"
+    approvals.update_approval(appr)
+    
+    session = store.get_session(session_id)
+    if session:
+        session.status = "running"
+        store.update_session(session)
+        
+    return ActionResponse(success=True, message=f"Approval {approval_id} granted.", new_status="running")
+
+@app.post("/workspace/approvals/{approval_id}/reject", response_model=ActionResponse, dependencies=[Depends(verify_token)])
+def reject_workspace_action(approval_id: str, session_id: str):
+    """Reject a pending workspace action."""
+    from datetime import datetime, timezone
+    _, niyam_dir = get_repo_context()
+    from niyam.core.workspace import WorkspaceApprovals, WorkspaceStore
+    
+    workspace_dir = niyam_dir / "workspace"
+    approvals = WorkspaceApprovals(workspace_dir)
+    store = WorkspaceStore(workspace_dir)
+    
+    appr = None
+    for a in approvals.get_approvals(session_id):
+        if a.id == approval_id:
+            appr = a
+            break
+            
+    if not appr:
+        raise HTTPException(status_code=404, detail="Approval not found")
+        
+    appr.status = "rejected"
+    appr.decided_at = datetime.now(timezone.utc)
+    appr.decided_by = "Portal User"
+    approvals.update_approval(appr)
+    
+    session = store.get_session(session_id)
+    if session:
+        session.status = "running"
+        store.update_session(session)
+        
+    return ActionResponse(success=True, message=f"Approval {approval_id} rejected.", new_status="running")
 
 
 @app.get("/missions", response_model=list[MissionSummary])
@@ -367,7 +575,7 @@ def get_task_logs(mission_id: str, task_id: str):
     return {"content": log_path.read_text(encoding="utf-8")}
 
 
-@app.post("/missions/{mission_id}/action", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/action", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def mission_action(mission_id: str, action: str):
     """Perform a control action on the mission (pause, resume, cancel)."""
     _, niyam_dir = get_repo_context()
@@ -416,7 +624,7 @@ def mission_action(mission_id: str, action: str):
         raise HTTPException(status_code=400, detail=f"Unsupported action: {action}")
 
 
-@app.post("/missions/{mission_id}/approve", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def approve_mission(mission_id: str, role: str = "default"):
     """Approve a planned mission, supporting multi-party role-based approvals."""
     from rich.console import Console
@@ -469,7 +677,7 @@ def approve_mission(mission_id: str, role: str = "default"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/missions/{mission_id}/tasks/{task_id}/approve", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/tasks/{task_id}/approve", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def approve_task(mission_id: str, task_id: str):
     """Approve a task that is blocked waiting for manual human approval."""
     _, niyam_dir = get_repo_context()
@@ -501,7 +709,7 @@ def approve_task(mission_id: str, task_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/missions/{mission_id}/tasks/{task_id}/deny", response_model=ActionResponse)
+@app.post("/missions/{mission_id}/tasks/{task_id}/deny", response_model=ActionResponse, dependencies=[Depends(verify_token)])
 def deny_task(mission_id: str, task_id: str):
     """Deny a task that is blocked waiting for manual human approval."""
     _, niyam_dir = get_repo_context()

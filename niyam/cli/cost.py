@@ -262,5 +262,58 @@ def cost_pricing(
                 f"${rates.get('output_cost_per_million', 0.0):.2f}"
             )
         
-        console.print(table)
-        console.print(f"[dim]Pricing source: {get_pricing_path(root)}[/]")
+@cost_app.command("scorecard")
+def cost_scorecard() -> None:
+    """Display an agent performance scorecard with usefulness, retries, and efficiency."""
+    from niyam.core.analytics import PerformanceMetrics
+    from rich.table import Table
+    from rich.panel import Panel
+
+    root = find_niyam_root() or Path.cwd()
+    metrics_engine = PerformanceMetrics(root)
+    summary = metrics_engine.get_fleet_summary()
+
+    if not summary or not summary.get("agent_performance"):
+        console.print("[yellow]No agent performance data found. Run some missions first.[/]")
+        return
+
+    table = Table(title="Agent Performance Scorecard")
+    table.add_column("Agent", style="cyan")
+    table.add_column("Tasks", justify="center")
+    table.add_column("Usefulness", justify="center")
+    table.add_column("Avg Retries", justify="center")
+    table.add_column("Val Fails", justify="center")
+    table.add_column("Cost (USD)", justify="right", style="green")
+    table.add_column("Cost / Success", justify="right", style="bold green")
+
+    for agent, stats in sorted(summary["agent_performance"].items(), key=lambda x: x[1]["success_rate"], reverse=True):
+        usefulness = stats["success_rate"]
+        u_color = "green" if usefulness >= 80 else "yellow" if usefulness >= 50 else "red"
+        
+        avg_retries = stats["avg_retries"]
+        r_color = "green" if avg_retries < 0.2 else "yellow" if avg_retries < 0.5 else "red"
+
+        table.add_row(
+            agent,
+            f"{stats['completed']}/{stats['tasks']}",
+            f"[{u_color}]{usefulness:.1f}%[/]",
+            f"[{r_color}]{avg_retries:.2f}[/]",
+            str(stats["val_fails"]),
+            f"${stats['cost']:.2f}",
+            f"${stats['cost_per_success']:.4f}"
+        )
+
+    console.print(table)
+
+    # Fleet summary
+    avg_success = summary["avg_success_rate"]
+    total_cost = summary["total_cost_usd"]
+    total_retries = summary["total_retries"]
+    
+    summary_text = (
+        f"Total Missions: [bold]{summary['total_missions']}[/]\n"
+        f"Avg Fleet Success Rate: [bold green]{avg_success:.1f}%[/]\n"
+        f"Total Fleet Cost: [bold green]${total_cost:.2f}[/]\n"
+        f"Total Retries/Heals: [bold yellow]{total_retries}[/]"
+    )
+    console.print(Panel(summary_text, title="Fleet Efficiency Summary", border_style="cyan"))

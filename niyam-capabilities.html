@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niyam Capability Map</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card-bg: #16161a;
+            --border: #2d2d33;
+            --text: #ececed;
+            --text-dim: #94949e;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.2);
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            max-width: 800px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, var(--text-dim));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid var(--accent);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .category {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .category::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--accent);
+        }
+
+        .category-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .feature {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .feature:hover {
+            transform: translateX(4px);
+            border-color: var(--accent);
+        }
+
+        .feature-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+            color: var(--text);
+        }
+
+        .feature-desc {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        .status {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 8px;
+            display: inline-block;
+            color: var(--success);
+        }
+
+        footer {
+            margin-top: 60px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <span class="badge">AGENTOPS CONTROL PLANE</span>
+        <h1>Niyam Capability Map</h1>
+        <p style="color: var(--text-dim)">Governing autonomous development from Planning to Production.</p>
+    </header>
+
+    <div class="grid">
+        <!-- Governance -->
+        <div class="category">
+            <div class="category-title">🛡️ Governance & Safety</div>
+            <div class="feature-list">
+                <div class="feature">
+                    <div class="feature-name">Command Guardrails</div>
+                    <div class="feature-desc">Active interception and policy validation for shell commands.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Path Freezing</div>
+                    <div class="feature-desc">Restrict agent access to sensitive files and infrastructure directories.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Redaction Engine</div>
+                    <div class="feature-desc">Real-time removal of secrets and PII from all agent outputs.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orchestration -->
+        <div class="category">
+            <div class="category-title">🧠 Orchestration & Swarm</div>
+            <div class="feature-list">
+                <div class="feature">
+                    <div class="feature-name">Mission Planner</div>
+                    <div class="feature-desc">Decomposes goals into deterministic Task Contracts with quality gates.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Worktree Isolation</div>
+                    <div class="feature-desc">Runs multiple agents in parallel using isolated Git worktrees.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Swarm Coordination</div>
+                    <div class="feature-desc">Distributed state for heartbeats, locking, and recovery.</div>
+                    <div class="status" style="color: var(--warning)">● PREVIEW</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AgentOps -->
+        <div class="category">
+            <div class="category-title">📊 AgentOps & FinOps</div>
+            <div class="feature-list">
+                <div class="feature">
+                    <div class="feature-name">Memory Ledger</div>
+                    <div class="feature-desc">Portable, inspectable agent memory with an MCP server interface.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">FinOps Cost Tracking</div>
+                    <div class="feature-desc">Real-time token usage and USD spend ledger per repository.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Control Room</div>
+                    <div class="feature-desc">Supervised workspaces with browser action recording and takeover.</div>
+                    <div class="status" style="color: var(--warning)">● PREVIEW</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compliance -->
+        <div class="category">
+            <div class="category-title">🚀 Compliance & Delivery</div>
+            <div class="feature-list">
+                <div class="feature">
+                    <div class="feature-name">Readiness Scoring</div>
+                    <div class="feature-desc">Numerical GO / NO-GO scoring (0-100) based on repo audits.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">CI/CD Verification</div>
+                    <div class="feature-desc">Native verification gates for GitHub Actions and Azure DevOps.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-name">Fleet Management</div>
+                    <div class="feature-desc">Multi-repo policy sync and discovery for enterprise teams.</div>
+                    <div class="status">● STABLE</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>Niyam Framework v1.0.0-rc1 | Built for Governed Autonomous Development</p>
+    </footer>
+</body>
+</html>

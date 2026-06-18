@@ -29,32 +29,42 @@ def _print_command_suggestion(cli: typer.Typer) -> None:
     """Print a best-effort suggestion for mistyped top-level commands."""
     if len(sys.argv) < 2:
         return
-    command = sys.argv[1]
+    command = " ".join(sys.argv[1:])
     if command.startswith("-"):
         return
 
-    known = [
-        cmd.name
-        if isinstance(cmd.name, str)
-        else cmd.callback.__name__.replace("_", "-")
-        for cmd in cli.registered_commands
-        if cmd.callback is not None
+    from niyam.suggestions.registry import registry
+    from niyam.suggestions.engine import SuggestionEngine
+
+    # Check if exact command is known (simple heuristic for top-level)
+    known_commands = [
+        cmd.name if isinstance(cmd.name, str) else cmd.callback.__name__.replace("_", "-")
+        for cmd in cli.registered_commands if cmd.callback is not None
     ]
-    known.extend(
-        group.name
-        if isinstance(group.name, str)
-        else group.typer_instance.info.name
-        for group in cli.registered_groups
-        if isinstance(group.name, str)
-        or isinstance(group.typer_instance.info.name, str)
+    known_commands.extend(
+        group.name if isinstance(group.name, str) else group.typer_instance.info.name
+        for group in cli.registered_groups if isinstance(group.name, str) or isinstance(group.typer_instance.info.name, str)
     )
-    known = [name for name in known if isinstance(name, str)]
-    if command in known:
+    known_commands = [name for name in known_commands if isinstance(name, str)]
+    
+    if sys.argv[1] in known_commands:
         return
 
-    matches = get_close_matches(command, known, n=1, cutoff=0.68)
-    if matches:
-        console.print(f"[yellow]Unknown command '{command}'. Did you mean '{matches[0]}'?[/]")
+    engine = SuggestionEngine(registry)
+    suggestions = engine.suggest(command)
+    
+    if suggestions:
+        console.print(f"[bold red]Error:[/] Unknown command '{sys.argv[1]}'.")
+        console.print(f"[yellow]Did you mean:[/] {', '.join(suggestions[:3])}?")
+        console.print("Example usage:")
+        console.print(f"  [cyan]niyam {suggestions[0]}[/]")
+    else:
+        # Fallback to the old logic if no suggestions
+        matches = get_close_matches(sys.argv[1], known_commands, n=1, cutoff=0.68)
+        if matches:
+            console.print(f"[bold red]Error:[/] Unknown command '{sys.argv[1]}'.")
+            console.print(f"[yellow]Did you mean '{matches[0]}'?[/]")
+
 
 
 app = NiyamTyper(
@@ -105,6 +115,20 @@ rules_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(rules_app)
+
+skills_app = typer.Typer(
+    name="skills",
+    help="Manage and govern AI agent skills.",
+    no_args_is_help=True,
+)
+app.add_typer(skills_app)
+
+policy_app = typer.Typer(
+    name="policy",
+    help="Manage enterprise governance policies and risk acceptance.",
+    no_args_is_help=True,
+)
+app.add_typer(policy_app)
 
 cost_app = typer.Typer(
     name="cost",
@@ -205,6 +229,27 @@ swarm_app = typer.Typer(
 )
 app.add_typer(swarm_app)
 
+workspace_app = typer.Typer(
+    name="workspace",
+    help="Manage supervised Control Room task sessions.",
+    no_args_is_help=True,
+)
+app.add_typer(workspace_app)
+
+loop_app = typer.Typer(
+    name="loop",
+    help="Governed AI agent feedback loops (LoopOps).",
+    no_args_is_help=True,
+)
+app.add_typer(loop_app)
+
+from niyam.cli.suggest import suggest_app
+app.add_typer(suggest_app)
+
+from niyam.cli.completion import completion_app
+app.add_typer(completion_app)
+
+
 
 @app.callback()
 def main_callback(
@@ -256,11 +301,17 @@ from niyam.cli import pr  # noqa: F401
 from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
 from niyam.cli import rules  # noqa: F401
+from niyam.cli import skills  # noqa: F401
+from niyam.cli import policy  # noqa: F401
 from niyam.cli import evidence  # noqa: F401
 from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401
 from niyam.cli import fleet  # noqa: F401
 from niyam.cli import swarm  # noqa: F401
+from niyam.cli import workspace  # noqa: F401
+from niyam.cli import loop  # noqa: F401
+from niyam.cli import suggest  # noqa: F401
+from niyam.cli import completion  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:
@@ -269,30 +320,35 @@ def _harden_typer_parsing() -> None:
     Allows passing --approved and --requires-approval as either standalone flags
     or with explicit true/false values.
     """
+    import sys
     import typer.core
 
     original_command_main = typer.core.TyperCommand.main
 
+    def normalize_args(args):
+        normalized = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--no-approved":
+                normalized.append("--approved")
+                normalized.append("false")
+            elif arg == "--no-requires-approval":
+                normalized.append("--requires-approval")
+                normalized.append("false")
+            else:
+                normalized.append(arg)
+                if arg in ("--approved", "--requires-approval"):
+                    if i + 1 >= len(args) or args[i + 1].startswith("-"):
+                        normalized.append("true")
+            i += 1
+        return normalized
+
     def custom_command_main(self, args=None, *args_rest, **kwargs):
-        if args is not None:
-            args = list(args)
-            i = 0
-            new_args = []
-            while i < len(args):
-                arg = args[i]
-                if arg == "--no-approved":
-                    new_args.append("--approved")
-                    new_args.append("false")
-                elif arg == "--no-requires-approval":
-                    new_args.append("--requires-approval")
-                    new_args.append("false")
-                else:
-                    new_args.append(arg)
-                    if arg in ("--approved", "--requires-approval"):
-                        if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                            new_args.append("true")
-                i += 1
-            args = new_args
+        if args is None:
+            args = normalize_args(sys.argv[1:])
+        else:
+            args = normalize_args(list(args))
         return original_command_main(self, args=args, *args_rest, **kwargs)
 
     typer.core.TyperCommand.main = custom_command_main
@@ -300,25 +356,10 @@ def _harden_typer_parsing() -> None:
     original_group_main = typer.core.TyperGroup.main
 
     def custom_group_main(self, args=None, *args_rest, **kwargs):
-        if args is not None:
-            args = list(args)
-            i = 0
-            new_args = []
-            while i < len(args):
-                arg = args[i]
-                if arg == "--no-approved":
-                    new_args.append("--approved")
-                    new_args.append("false")
-                elif arg == "--no-requires-approval":
-                    new_args.append("--requires-approval")
-                    new_args.append("false")
-                else:
-                    new_args.append(arg)
-                    if arg in ("--approved", "--requires-approval"):
-                        if i + 1 >= len(args) or args[i + 1].startswith("-"):
-                            new_args.append("true")
-                i += 1
-            args = new_args
+        if args is None:
+            args = normalize_args(sys.argv[1:])
+        else:
+            args = normalize_args(list(args))
         return original_group_main(self, args=args, *args_rest, **kwargs)
 
     typer.core.TyperGroup.main = custom_group_main
