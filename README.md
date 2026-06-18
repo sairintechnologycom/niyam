@@ -33,6 +33,13 @@ niyam run "migrate all API endpoints to v2"
 ```
 *Niyam plans the mission, executes dependency-aware task layers, can isolate write tasks in **Git worktrees**, and records validation evidence.*
 
+### 3. Governed LoopOps (Agentic Loops)
+Define strict execution budgets and let agents iterate autonomously until success or intervention:
+```bash
+niyam loop run loops/security-audit.yaml --require-approval-on high-risk
+```
+*Niyam orchestrates the planner, implementer, and evaluator agents, tracking cost and risk at every iteration.*
+
 ---
 
 ## Key Features
@@ -61,6 +68,15 @@ niyam run "migrate all API endpoints to v2"
 *   **Memory Ledger:** Portable, inspectable, policy-governed agent memory with structured records, import/export, diffing, redaction, recall lineage, policy checks, and an MCP-compatible memory server.
 *   **Control Room:** Local-first supervised human-agent task rooms with workspace sessions, append-only timelines, approval gates, browser-action recording, takeover state, and task evidence exports.
 *   **FinOps Cost Tracking:** A local ledger that logs every token consumed and estimates USD spend against customizable pricing tables.
+
+### LoopOps & Fleet Execution
+*   **Governed AI Feedback Loops:** Use `niyam loop run` to execute multi-step AI tasks with deterministic budgets, automated evaluation, and explicit human-in-the-loop approval gates.
+*   **Fleet-Wide Missions:** Run loops concurrently across an entire portfolio of repositories via `niyam loop run --fleet`, automatically resolving dependency DAGs between repos.
+*   **Audit-Ready Loop Reports:** Generate evidence and visual HTML reports for every loop execution.
+
+### Enhanced CLI UX
+*   **Smart Autosuggestion:** Integrated suggestion engine offering typo correction ("Did you mean?"), context-aware flags, and alias resolution.
+*   **Shell Autocompletion:** Native `<TAB>` completion support for Bash, Zsh, Fish, and PowerShell (`niyam completion install`).
 
 ---
 
