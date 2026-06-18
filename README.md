@@ -17,6 +17,30 @@ Niyam is an AgentOps control plane for teams that need to govern what agents do,
 
 ---
 
+## Installation & Setup
+
+**Global Install (Recommended)**
+```bash
+pipx install niyam
+```
+
+**Upgrade to the latest version:**
+```bash
+pipx upgrade niyam
+```
+
+**Run on the fly (No install)**
+```bash
+uvx --from niyam niyam --help
+```
+
+**Enable Smart Autocomplete (Bash/Zsh/Fish/PowerShell)**
+```bash
+niyam completion install
+```
+
+---
+
 ## Niyam in Action
 
 ### 1. Interactive Development (Day-to-Day)
@@ -99,20 +123,6 @@ niyam portal
 *   **Policy Analytics:** Visual cards detailing Active Guardrails, Command Filters, Security Isolation, and active Path Freezing.
 *   **Interactive Approval Center:** Review pending tasks/missions and authorize execution by role directly from the Web UI.
 *   **FinOps & Agent Metrics:** Monitor token consumption, cost breakdowns, and agent success rates.
-
----
-
-## Installation
-
-**Global Install (Recommended)**
-```bash
-pipx install niyam
-```
-
-**Run on the fly (No install)**
-```bash
-uvx --from niyam niyam --help
-```
 
 ---
 
