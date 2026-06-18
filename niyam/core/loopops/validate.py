@@ -120,3 +120,63 @@ def validate_loop_spec(data: Any) -> list[str]:
 
     return errors
 
+
+def check_runtime_drift(root: Path) -> list[str]:
+    """Check for CLAUDE.md/GEMINI.md configuration drift.
+
+    Generates the expected content in memory and compares it to the file on disk.
+    """
+    from pathlib import Path
+    warnings = []
+
+    # Check CLAUDE.md
+    claude_md = root / "CLAUDE.md"
+    if claude_md.exists():
+        try:
+            from niyam.runtimes.claude import ClaudeAdapter
+            from rich.console import Console
+
+            captured_content = None
+            def mock_write(target_path, content, console):
+                nonlocal captured_content
+                if target_path.name == "CLAUDE.md":
+                    captured_content = content
+
+            adapter = ClaudeAdapter(root, dry_run=True)
+            adapter._write_file = mock_write
+            adapter._generate_claude_md(Console())
+
+            if captured_content is not None:
+                actual_content = claude_md.read_text(encoding="utf-8")
+                if actual_content != captured_content:
+                    warnings.append("CLAUDE.md configuration drift detected. File on disk does not match Niyam source of truth. Run `niyam sync` to update.")
+        except Exception:
+            pass
+
+    # Check GEMINI.md
+    gemini_md = root / "GEMINI.md"
+    if gemini_md.exists():
+        try:
+            from niyam.runtimes.gemini import GeminiAdapter
+            from rich.console import Console
+
+            captured_content = None
+            def mock_write(target_path, content, console):
+                nonlocal captured_content
+                if target_path.name == "GEMINI.md":
+                    captured_content = content
+
+            adapter = GeminiAdapter(root, dry_run=True)
+            adapter._write_file = mock_write
+            adapter._generate_gemini_md(Console())
+
+            if captured_content is not None:
+                actual_content = gemini_md.read_text(encoding="utf-8")
+                if actual_content != captured_content:
+                    warnings.append("GEMINI.md configuration drift detected. File on disk does not match Niyam source of truth. Run `niyam sync` to update.")
+        except Exception:
+            pass
+
+    return warnings
+
+

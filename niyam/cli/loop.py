@@ -78,6 +78,12 @@ def loop_validate(
             console.print(f"  • {err}")
         raise typer.Exit(1)
 
+    # Check for configuration drift
+    from niyam.core.loopops.validate import check_runtime_drift
+    drift_warnings = check_runtime_drift(find_niyam_root() or Path.cwd())
+    for warning in drift_warnings:
+        console.print(f"[bold yellow]WARNING:[/] {warning}")
+
     # Valid specification print summary
     spec_name = data.get("metadata", {}).get("name", "Unknown")
     owner = data.get("metadata", {}).get("owner", "Unknown")
@@ -103,25 +109,163 @@ def loop_validate(
 @loop_app.command(name="run")
 def loop_run(
     file: Annotated[
-        Path,
+        Optional[Path],
         typer.Argument(
             help="Path to the LoopSpec YAML file.",
-            exists=True,
             file_okay=True,
             dir_okay=False,
             readable=True,
         ),
-    ],
+    ] = None,
     scenario: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--scenario",
             "-s",
             help="Simulation scenario to execute.",
         ),
-    ] = "success",
+    ] = None,
+    planner: Annotated[
+        Optional[str],
+        typer.Option(
+            "--planner",
+            help="Override planner tool (claude, codex, gemini, etc.)",
+        ),
+    ] = None,
+    implementer: Annotated[
+        Optional[str],
+        typer.Option(
+            "--implementer",
+            help="Override implementer tool (claude, codex, gemini, etc.)",
+        ),
+    ] = None,
+    reviewer: Annotated[
+        Optional[str],
+        typer.Option(
+            "--reviewer",
+            help="Override reviewer tool (claude, codex, gemini, etc.)",
+        ),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Simulate planning/actions without making changes.",
+        ),
+    ] = False,
+    mode: Annotated[
+        str,
+        typer.Option(
+            "--mode",
+            help="Execution mode (governed, autonomous).",
+        ),
+    ] = "governed",
+    require_approval_on: Annotated[
+        str,
+        typer.Option(
+            "--require-approval-on",
+            help="When to require human approval (high-risk, any, none).",
+        ),
+    ] = "high-risk",
+    max_iterations: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-iterations",
+            help="Override maximum execution iterations.",
+        ),
+    ] = None,
+    max_cost_usd: Annotated[
+        Optional[float],
+        typer.Option(
+            "--max-cost-usd",
+            help="Override maximum token cost budget (USD).",
+        ),
+    ] = None,
+    replay: Annotated[
+        Optional[str],
+        typer.Option(
+            "--replay",
+            help="Replay a loop run from signed evidence.",
+        ),
+    ] = None,
+    fleet: Annotated[
+        bool,
+        typer.Option(
+            "--fleet",
+            help="Run loop across all registered repositories in fleet.",
+        ),
+    ] = False,
 ) -> None:
-    """Simulate running a loop specification with mock execution steps."""
+    """Run a loop specification governed by Niyam LoopOps."""
+    if replay:
+        # Replay mode
+        replay_path = Path(replay)
+        if replay_path.exists():
+            if replay_path.is_file() and replay_path.name == "run.json":
+                run_dir = replay_path.parent
+            elif replay_path.is_dir():
+                run_dir = replay_path
+            else:
+                run_dir = None
+        else:
+            run_dir = _find_loop_run_evidence_dir(replay)
+
+        if not run_dir or not (run_dir / "run.json").exists():
+            console.print(f"[bold red]FAIL:[/] Could not locate evidence run.json for replay: {replay}")
+            raise typer.Exit(1)
+
+        try:
+            run, reason = LoopRunner.replay_loop(run_dir)
+        except Exception as e:
+            console.print(f"[bold red]FAIL:[/] Replay failed: {e}")
+            raise typer.Exit(1)
+
+        status_map = {
+            "pending": "PENDING",
+            "running": "RUNNING",
+            "evaluating": "EVALUATING",
+            "passed": "PASSED",
+            "failed": "FAILED",
+            "stopped": "STOPPED",
+            "requires_approval": "STOPPED_FOR_APPROVAL",
+        }
+        status_upper = status_map.get(run.status, run.status.upper())
+        max_cost_str = f"${run.max_cost_usd:.2f}" if run.max_cost_usd is not None else "N/A"
+
+        console.print("Niyam LoopOps (Replay)\n")
+        console.print(f"Loop: {run.spec_name}")
+        console.print(f"Status: {status_upper}")
+        console.print(f"Iterations: {run.iteration_count}/{run.max_iterations}")
+        console.print(f"Cost: ${run.cost_usd:.2f} / {max_cost_str}")
+        console.print(f"Risk: {run.risk_level.capitalize()}")
+        console.print(f"Reason: {reason or 'Completed.'}\n")
+        console.print("Evidence Pack:")
+        console.print(str(run_dir))
+
+        iterations_dir = run_dir / "iterations"
+        if iterations_dir.is_dir():
+            console.print("\nPlayed back iterations:")
+            for iter_file in sorted(iterations_dir.glob("*.json")):
+                try:
+                    with open(iter_file, encoding="utf-8") as f:
+                        iter_data = json.load(f)
+                    idx = iter_data.get("index", 0)
+                    actor = iter_data.get("actor", "unknown")
+                    step_name = iter_data.get("stepName", "unknown")
+                    result = iter_data.get("result", "unknown")
+                    console.print(f"  Iteration {idx}: {step_name} ({actor}) -> {result.upper()}")
+                except Exception:
+                    pass
+        return
+
+    if not file:
+        console.print("[bold red]FAIL:[/] LoopSpec YAML file is required when not in replay mode.")
+        raise typer.Exit(1)
+
+    if not file.exists() or not file.is_file():
+        console.print(f"[bold red]FAIL:[/] LoopSpec file does not exist: {file}")
+        raise typer.Exit(1)
+
     try:
         data = safe_load_yaml(file)
     except Exception as e:
@@ -148,51 +292,116 @@ def loop_run(
         "stop-errors",
         "approval",
     ]
-    if scenario not in valid_scenarios:
+    if scenario is not None and scenario not in valid_scenarios:
         console.print(f"[bold red]Error:[/] Invalid scenario '{scenario}'. Choose from: {', '.join(valid_scenarios)}")
         raise typer.Exit(1)
 
-    # Generate steps_data based on scenario
-    steps_data: list[dict[str, Any]] = []
-    if scenario == "success":
-        steps_data = [
-            {"status": "success", "cost_usd": 0.45},
-            {"status": "passed", "cost_usd": 0.40},
-        ]
-    elif scenario == "budget-iterations":
-        steps_data = [{"status": "success", "cost_usd": 0.20} for _ in range(spec.budgets.max_iterations + 1)]
-    elif scenario == "budget-cost":
-        steps_data = [
-            {"status": "success", "cost_usd": 2.50},
-            {"status": "success", "cost_usd": 1.20},
-        ]
-    elif scenario == "stop-failures":
-        steps_data = [
-            {"status": "failure", "error": "Error A", "cost_usd": 0.15},
-            {"status": "failure", "error": "Error B", "cost_usd": 0.15},
-            {"status": "failure", "error": "Error C", "cost_usd": 0.15},
-        ]
-    elif scenario == "stop-errors":
-        steps_data = [
-            {"status": "failure", "error": "ConnectionRefusedError", "cost_usd": 0.15},
-            {"status": "failure", "error": "ConnectionRefusedError", "cost_usd": 0.15},
-        ]
-    elif scenario == "approval":
-        steps_data = [
-            {"status": "success", "cost_usd": 0.50},
-            {"status": "success", "human_approval_required": True, "cost_usd": 0.50},
-        ]
+    # Override actors if specified
+    if planner:
+        spec.actors["planner"] = planner
+    if implementer:
+        spec.actors["implementer"] = implementer
+    if reviewer:
+        spec.actors["reviewer"] = reviewer
 
-    # Initialize LoopRun
-    run = LoopRunner.initialize_run(spec)
+    # Override budgets if specified
+    if max_iterations is not None:
+        spec.budgets.max_iterations = max_iterations
+    if max_cost_usd is not None:
+        spec.budgets.max_cost_usd = max_cost_usd
 
-    # Run the simulation loop
-    reason = None
-    idx = 0
-    while run.status in ("pending", "running") and idx < len(steps_data):
-        step_result = steps_data[idx]
-        reason = LoopRunner.process_step_result(run, spec, step_result)
-        idx += 1
+    # Fleet Wave Execution
+    if fleet:
+        from niyam.core.fleet import load_fleet_config, resolve_fleet_dependencies
+        from concurrent.futures import ThreadPoolExecutor
+        from copy import deepcopy
+
+        root = find_niyam_root() or Path.cwd()
+
+        # Check configuration drift first
+        from niyam.core.loopops.validate import check_runtime_drift
+        drift_warnings = check_runtime_drift(root)
+        for warning in drift_warnings:
+            console.print(f"[bold yellow]WARNING:[/] {warning}")
+
+        fleet_config = load_fleet_config()
+        repos = fleet_config.repos
+        if not repos:
+            from niyam.core.fleet import discover_repos
+            discover_repos(root)
+            fleet_config = load_fleet_config()
+            repos = fleet_config.repos
+
+        if not repos:
+            console.print("[bold red]Error:[/] No repositories registered in fleet. Run `niyam fleet register` first.")
+            raise typer.Exit(1)
+
+        # Resolve dependencies
+        waves = resolve_fleet_dependencies(repos)
+
+        # Parallel waves execution
+        for wave_idx, wave in enumerate(waves):
+            console.print(f"\n[bold cyan]Executing Fleet Wave {wave_idx + 1}/{len(waves)}...[/]")
+            with ThreadPoolExecutor(max_workers=len(wave)) as executor:
+                def run_for_repo(repo):
+                    repo_path = Path(repo.path)
+                    repo_spec = deepcopy(spec)
+                    run_obj, reason_msg = LoopRunner.run_loop(
+                        spec=repo_spec,
+                        scenario=scenario,
+                        dry_run=dry_run,
+                        mode=mode,
+                        require_approval_on=require_approval_on,
+                        repo_root=repo_path,
+                    )
+                    return repo.alias, run_obj, reason_msg
+
+                futures = [executor.submit(run_for_repo, repo) for repo in wave]
+                for fut in futures:
+                    alias, run, reason = fut.result()
+
+                    status_map = {
+                        "pending": "PENDING",
+                        "running": "RUNNING",
+                        "evaluating": "EVALUATING",
+                        "passed": "PASSED",
+                        "failed": "FAILED",
+                        "stopped": "STOPPED",
+                        "requires_approval": "STOPPED_FOR_APPROVAL",
+                    }
+                    status_upper = status_map.get(run.status, run.status.upper())
+                    max_cost_str = f"${spec.budgets.max_cost_usd:.2f}" if spec.budgets.max_cost_usd is not None else "N/A"
+                    risk_str = run.risk_level.capitalize()
+                    if run.status == "requires_approval" and run.risk_level != "high":
+                        risk_str = f"{risk_str} → High"
+                    reason_str = reason or "No reason provided."
+
+                    console.print(f"\n[bold green]Repo: {alias}[/]")
+                    console.print(f"Loop: {spec.metadata.name}")
+                    console.print(f"Status: {status_upper}")
+                    console.print(f"Iterations: {run.iteration_count}/{spec.budgets.max_iterations}")
+                    console.print(f"Cost: ${run.cost_usd:.2f} / {max_cost_str}")
+                    console.print(f"Risk: {risk_str}")
+                    console.print(f"Reason: {reason_str}")
+                    console.print("Evidence Pack:")
+                    console.print(run.evidence_path)
+        return
+
+    # Normal execution path: Check configuration drift first
+    from niyam.core.loopops.validate import check_runtime_drift
+    drift_warnings = check_runtime_drift(find_niyam_root() or Path.cwd())
+    for warning in drift_warnings:
+        console.print(f"[bold yellow]WARNING:[/] {warning}")
+
+    # Execute Loop
+    run, reason = LoopRunner.run_loop(
+        spec=spec,
+        scenario=scenario,
+        dry_run=dry_run,
+        mode=mode,
+        require_approval_on=require_approval_on,
+    )
+
 
     # Format output
     status_map = {
@@ -225,6 +434,76 @@ def loop_run(
     console.print(f"Reason: {reason_str}\n")
     console.print("Evidence Pack:")
     console.print(run.evidence_path)
+
+
+@loop_app.command(name="review")
+def loop_review(
+    diff: Annotated[
+        str,
+        typer.Option(
+            "--diff",
+            help="Diff to review (e.g. current or a patch path).",
+        ),
+    ] = "current",
+    reviewer: Annotated[
+        str,
+        typer.Option(
+            "--reviewer",
+            help="Reviewer tool to use (gemini, claude, etc.).",
+        ),
+    ] = "gemini",
+    policy: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--policy",
+            help="Path to the policy YAML file.",
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ] = None,
+) -> None:
+    """Review a diff using a chosen reviewer and policy rules."""
+    from niyam.core.loopops.adapters import get_adapter, AgentTaskRequest
+    from niyam.core.config import find_niyam_root
+
+    root = find_niyam_root() or Path.cwd()
+    diff_content = ""
+    if diff == "current":
+        # Get git diff
+        try:
+            res = subprocess.run(
+                ["git", "diff"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            diff_content = res.stdout
+        except Exception:
+            pass
+    else:
+        diff_path = Path(diff)
+        if diff_path.exists():
+            diff_content = diff_path.read_text(encoding="utf-8")
+
+    console.print(f"Niyam LoopOps: Reviewing diff via {reviewer} with policy {policy}...\n")
+    
+    # Resolve reviewer adapter
+    adapter = get_adapter(reviewer)
+    req = AgentTaskRequest(
+        goal=f"Review the following diff for missing edge cases, design compliance, and vulnerabilities:\n\n{diff_content}",
+        workspace_path=root,
+        action="review_diff",
+        step_name="review",
+    )
+    result = adapter.review(req)
+    
+    console.print(f"Status: {result.status.upper()}")
+    console.print(f"Summary: {result.summary}")
+    if result.risk_flags:
+        console.print(f"Risk Flags: {', '.join(result.risk_flags)}")
+    if result.cost_usd:
+        console.print(f"Estimated Cost: ${result.cost_usd:.4f}")
 
 
 def _find_loop_run_evidence_dir(loop_id: str) -> Optional[Path]:

@@ -186,3 +186,35 @@ def test_cli_loop_report_and_evidence(tmp_path: Path) -> None:
     assert bundle_res.exit_code == 0
     assert "PASS: Evidence bundle created at" in bundle_res.stdout
     assert zip_bundle.exists()
+
+
+def test_cli_loop_review(tmp_path: Path) -> None:
+    """Should run loop review successfully."""
+    runner = CliRunner()
+    diff_file = tmp_path / "test.patch"
+    diff_file.write_text("diff --git a/test.py b/test.py\n+new line", encoding="utf-8")
+
+    result = runner.invoke(app, ["loop", "review", "--diff", str(diff_file), "--reviewer", "gemini"])
+    assert result.exit_code == 0
+    assert "Niyam LoopOps: Reviewing diff via gemini" in result.stdout
+    assert "Status: SUCCESS" in result.stdout
+
+
+def test_cli_loop_run_with_overrides(tmp_path: Path) -> None:
+    """Should run the loop run command with planner/implementer/reviewer overrides."""
+    runner = CliRunner()
+    spec_file = tmp_path / "spec.yaml"
+    starter_spec = generate_starter_spec("override-loop", "code-change")
+    spec_file.write_text(starter_spec, encoding="utf-8")
+
+    result = runner.invoke(app, [
+        "loop", "run", str(spec_file),
+        "--scenario", "success",
+        "--planner", "claude",
+        "--implementer", "codex",
+        "--reviewer", "gemini",
+        "--dry-run"
+    ])
+    assert result.exit_code == 0
+    assert "Status: PASSED" in result.stdout
+

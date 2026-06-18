@@ -101,6 +101,8 @@ class LoopRun(BaseModel):
     consecutive_errors: dict[str, int] = Field(
         default_factory=dict, alias="consecutiveErrors"
     )
+    signature: Optional[str] = Field(None, alias="signature")
+    public_key_pem: Optional[str] = Field(None, alias="publicKeyPem")
 
 
 class LoopStateMachine:

@@ -63,6 +63,16 @@ class LoopEvaluator(BaseModel):
     criteria: Optional[str] = Field(None, alias="criteria")
 
 
+class LoopWorkspace(BaseModel):
+    """Workspace configuration for isolation."""
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+    isolation: Optional[str] = Field("git_worktree", alias="isolation")
+    base_branch: Optional[str] = Field("main", alias="baseBranch")
+    working_branch_prefix: Optional[str] = Field("niyam-loop/", alias="workingBranchPrefix")
+
+
 class LoopSpec(BaseModel):
     """Top-level LoopSpec configuration model."""
 
@@ -74,7 +84,9 @@ class LoopSpec(BaseModel):
     goal: LoopGoal = Field(..., alias="goal")
     actors: dict[str, str] = Field(default_factory=dict, alias="actors")
     steps: list[LoopStep] = Field(default_factory=list, alias="steps")
+    workspace: Optional[LoopWorkspace] = Field(default_factory=LoopWorkspace, alias="workspace")
     budgets: LoopBudgets = Field(..., alias="budgets")
     stop_conditions: list[str] = Field(default_factory=list, alias="stopConditions")
     evaluators: list[LoopEvaluator] = Field(default_factory=list, alias="evaluators")
+
 

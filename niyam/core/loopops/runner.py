@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,14 +24,14 @@ class LoopRunner:
     """Manages the lifecycle of a LoopSpec execution."""
 
     @staticmethod
-    def initialize_run(spec: LoopSpec) -> LoopRun:
+    def initialize_run(spec: LoopSpec, repo_root: Optional[Path] = None) -> LoopRun:
         """Create a new LoopRun database record from a LoopSpec."""
         run_id = f"LR-{uuid.uuid4().hex[:8].upper()}"
         now = datetime.now(timezone.utc).isoformat()
 
         # Resolve evidence directory
         from niyam.core.config import find_niyam_root
-        root = find_niyam_root() or Path.cwd()
+        root = repo_root or find_niyam_root() or Path.cwd()
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         evidence_dir = root / ".niyam" / "evidence" / "loops" / spec.metadata.name / date_str
 
@@ -66,7 +67,7 @@ class LoopRunner:
 
     @staticmethod
     def evaluate_loop_policies(
-        run: LoopRun, spec: LoopSpec, step_result: dict[str, Any]
+        run: LoopRun, spec: LoopSpec, step_result: dict[str, Any], repo_root: Optional[Path] = None
     ) -> list[LoopPolicyDecision]:
         """Evaluate enterprise policies against a step's results."""
         from niyam.core.config import find_niyam_root, load_niyam_config
@@ -75,7 +76,7 @@ class LoopRunner:
         import fnmatch
         import re
 
-        root = find_niyam_root() or Path.cwd()
+        root = repo_root or find_niyam_root() or Path.cwd()
         decisions: list[LoopPolicyDecision] = []
 
         # 1. Load protected files policy
@@ -249,7 +250,7 @@ class LoopRunner:
 
     @staticmethod
     def process_step_result(
-        run: LoopRun, spec: LoopSpec, step_result: dict[str, Any]
+        run: LoopRun, spec: LoopSpec, step_result: dict[str, Any], repo_root: Optional[Path] = None
     ) -> Optional[str]:
         """Process the outcome of a step iteration.
 
@@ -302,7 +303,9 @@ class LoopRunner:
         sm.transition_to("evaluating")
 
         # Run policy evaluations
-        policy_decisions = LoopRunner.evaluate_loop_policies(run, spec, step_result)
+        from niyam.core.config import find_niyam_root
+        root = repo_root or find_niyam_root() or Path.cwd()
+        policy_decisions = LoopRunner.evaluate_loop_policies(run, spec, step_result, root)
 
         # Run evaluators
         from niyam.core.loopops.evaluator import run_evaluators
@@ -398,8 +401,6 @@ class LoopRunner:
             sm.transition_to("running")
 
         # Resolve evidence directory
-        from niyam.core.config import find_niyam_root
-        root = find_niyam_root() or Path.cwd()
         evidence_dir = root / Path(run.evidence_path)
 
         # Determine step name / actor for trace
@@ -506,6 +507,7 @@ class LoopRunner:
                 run.wasted_cost_usd = run.cost_usd
 
             # Save run.json
+            LoopRunner.sign_run_data(run, root)
             with open(evidence_dir / "run.json", "w", encoding="utf-8") as f:
                 json.dump(run.model_dump(by_alias=True), f, indent=2)
 
@@ -515,6 +517,78 @@ class LoopRunner:
                 f.write(report_md)
 
         return termination_reason
+
+    @staticmethod
+    def sign_run_data(run: LoopRun, root: Path) -> None:
+        """Sign LoopRun data using the workspace private Ed25519 key."""
+        from niyam.core.identity import ensure_identity, sign_data, get_public_key_bytes
+        try:
+            # Dump to model representation
+            data = run.model_dump(by_alias=True)
+            # Remove existing signature and public key PEM for deterministic hash
+            data.pop("signature", None)
+            data.pop("publicKeyPem", None)
+
+            # Serialize
+            serialized_str = json.dumps(data, sort_keys=True)
+
+            # Get key and sign
+            private_key = ensure_identity(root)
+            sig = sign_data(serialized_str, private_key)
+
+            # Update fields in run object
+            run.signature = sig
+            run.public_key_pem = get_public_key_bytes(root).decode("utf-8")
+        except Exception:
+            pass
+
+    @staticmethod
+    def replay_loop(run_dir: Path) -> tuple[LoopRun, Optional[str]]:
+        """Replay a loop run from signed evidence directory without running agents."""
+        run_path = run_dir / "run.json"
+        if not run_path.exists():
+            raise ValueError("Evidence run.json is missing.")
+
+        with open(run_path, encoding="utf-8") as f:
+            run_data = json.load(f)
+
+        # Cryptographically verify the signature
+        signature = run_data.get("signature")
+        public_key_pem = run_data.get("publicKeyPem")
+
+        # Verify
+        verify_data = dict(run_data)
+        verify_data.pop("signature", None)
+        verify_data.pop("publicKeyPem", None)
+        verify_serialized = json.dumps(verify_data, sort_keys=True)
+
+        from niyam.core.identity import verify_signature
+        is_valid = False
+        if signature and public_key_pem:
+            is_valid = verify_signature(verify_serialized, signature, public_key_pem.encode("utf-8"))
+
+        if not is_valid:
+            raise ValueError("Cryptographic signature verification failed or missing.")
+
+        run = LoopRun.model_validate(run_data)
+
+        # Play back iterations: verify that we have iterations
+        iterations_dir = run_dir / "iterations"
+        if not iterations_dir.is_dir() or not list(iterations_dir.glob("*.json")):
+            raise ValueError("Missing evidence: iteration logs are missing.")
+
+        # Reconstruct completion reason or message
+        reason = run_data.get("reason")
+        if not reason:
+            report_path = run_dir / "report.md"
+            if report_path.exists():
+                report_content = report_path.read_text(encoding="utf-8")
+                for line in report_content.splitlines():
+                    if "Reason" in line:
+                        reason = line.split(":", 1)[1].strip().replace("`", "")
+                        break
+        return run, reason
+
 
     @staticmethod
     def generate_report_markdown(run: LoopRun, spec: LoopSpec, reason_message: str) -> str:
@@ -569,4 +643,298 @@ class LoopRunner:
             report += "\n".join(eval_lines) + "\n"
 
         return report
+
+    @staticmethod
+    def run_loop(
+        spec: LoopSpec,
+        scenario: Optional[str] = None,
+        dry_run: bool = False,
+        mode: str = "governed",
+        require_approval_on: str = "high-risk",
+        repo_root: Optional[Path] = None,
+    ) -> tuple[LoopRun, Optional[str]]:
+        """Run the actual execution loop using adapters and policy gates."""
+        from niyam.core.loopops.adapters import get_adapter, AgentTaskRequest
+        from niyam.mission.worktree import is_git_repo, create_worktree, cleanup_worktree, commit_worktree_changes
+        from niyam.core.config import find_niyam_root
+
+        root = repo_root or find_niyam_root() or Path.cwd()
+        run = LoopRunner.initialize_run(spec, repo_root=root)
+        evidence_dir = root / Path(run.evidence_path)
+
+        # 1. Setup Isolated Git Worktree if needed and possible
+        worktree_path = root
+        use_worktree = (
+            spec.workspace and spec.workspace.isolation == "git_worktree"
+            and is_git_repo(root)
+            and not dry_run
+            and not scenario
+        )
+
+        branch_name = f"niyam-loop/{run.id.lower()}"
+        if use_worktree:
+            from rich.console import Console
+            console_log = Console(stderr=True)
+            mock_task = {"id": run.id, "depends_on": []}
+            try:
+                worktree_path = create_worktree(
+                    repo_root=root,
+                    run_dir=evidence_dir,
+                    mission_id="loop",
+                    task=mock_task,
+                    console=console_log,
+                    branch_name=branch_name,
+                )
+            except Exception:
+                use_worktree = False
+                worktree_path = root
+
+        # 2. Iterate through steps
+        reason = None
+        iteration_idx = 1
+
+        # Configure hook cache temporarily when in governed mode
+        original_guard_config = None
+        hook_config_dir = root / ".niyam" / "hook-cache"
+        guard_config_path = hook_config_dir / "guard-config.json"
+
+        if mode == "governed" and not dry_run:
+            try:
+                hook_config_dir.mkdir(parents=True, exist_ok=True)
+                if guard_config_path.exists():
+                    original_guard_config = guard_config_path.read_text(encoding="utf-8")
+
+                g_config = {
+                    "guard_enabled": True,
+                    "deny_patterns": [],
+                    "warn_patterns": [],
+                    "deny_write_patterns": [],
+                    "allow_write_patterns": [],
+                    "frozen_paths": [],
+                }
+                if original_guard_config:
+                    try:
+                        existing = json.loads(original_guard_config)
+                        g_config.update(existing)
+                    except Exception:
+                        pass
+                g_config["guard_enabled"] = True
+                guard_config_path.write_text(json.dumps(g_config, indent=2), encoding="utf-8")
+
+                # If using worktree, mirror it into the worktree
+                if use_worktree:
+                    wt_hook_cache = worktree_path / ".niyam" / "hook-cache"
+                    wt_hook_cache.mkdir(parents=True, exist_ok=True)
+                    (wt_hook_cache / "guard-config.json").write_text(json.dumps(g_config, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
+        try:
+            # Swarm coordination: prune stale agents at start of loop run
+            try:
+                from niyam.core.swarm import prune_stale_agents
+                prune_stale_agents(root)
+            except Exception:
+                pass
+
+            while run.status in ("pending", "running"):
+                if run.iteration_count >= spec.budgets.max_iterations:
+                    from niyam.core.loopops.state_machine import LoopStateMachine
+                    sm = LoopStateMachine(run)
+                    reason = sm.evaluate_budgets(spec.budgets)
+                    break
+
+                step_idx = (run.iteration_count) % len(spec.steps) if spec.steps else 0
+                step = spec.steps[step_idx] if spec.steps else None
+
+                if not step:
+                    run.status = "passed"
+                    reason = "No steps defined in LoopSpec."
+                    break
+
+                actor_role = step.actor or "planner"
+                actor_provider = spec.actors.get(actor_role, "claude")
+
+                adapter = get_adapter(actor_provider)
+
+                # Register actor in swarm coordination
+                actor_id = f"agent-{actor_provider}-{run.id}"
+                try:
+                    from niyam.core.swarm import heartbeat
+                    heartbeat(
+                        agent_id=actor_id,
+                        role=actor_role,
+                        status="busy",
+                        task_id=run.id,
+                        repo_root=root,
+                    )
+                except Exception:
+                    pass
+
+                # Parse potential target files from goal to lock them
+                target_files = []
+                for word in spec.goal.description.split():
+                    word_clean = word.strip("'`\",;()[]{}")
+                    if "." in word_clean and ("/" in word_clean or "\\" in word_clean):
+                        target_files.append(word_clean)
+
+                if not target_files and ("implement" in step.action.lower() or "repair" in step.action.lower()):
+                    target_files = ["src/app.py"]
+
+                # Swarm locks: acquire locks before write actions
+                lock_failed = False
+                locked_files = []
+                for f in target_files:
+                    try:
+                        from niyam.core.swarm import acquire_lock
+                        if not acquire_lock(f, actor_id, reason=f"Loop {run.id} step {step.name}", repo_root=root):
+                            lock_failed = True
+                            break
+                        locked_files.append(f)
+                    except Exception:
+                        pass
+
+                if lock_failed:
+                    # Swarm locks prevent concurrent writes
+                    for lf in locked_files:
+                        try:
+                            from niyam.core.swarm import release_lock
+                            release_lock(lf, actor_id, repo_root=root)
+                        except Exception:
+                            pass
+                    try:
+                        from niyam.core.swarm import deregister_agent
+                        deregister_agent(actor_id, repo_root=root)
+                    except Exception:
+                        pass
+                    run.status = "failed"
+                    reason = f"Blocked by swarm lock: resource '{target_files[0]}' is locked by another agent."
+                    break
+
+                # Load project memory and codebase context
+                memories = []
+                memory_dir = root / ".niyam" / "memory"
+                if memory_dir.is_dir():
+                    for filepath in sorted(memory_dir.glob("*.md")):
+                        try:
+                            content = filepath.read_text(encoding="utf-8")
+                            if content.strip():
+                                memories.append(f"### Memory: {filepath.stem}\n{content}")
+                        except Exception:
+                            pass
+
+                search_results = []
+                try:
+                    from niyam.core.memory import CodebaseIndexer
+                    indexer = CodebaseIndexer(root)
+                    search_results = indexer.search(spec.goal.description, k=3)
+                except Exception:
+                    pass
+
+                agent_context = {
+                    "memories": memories,
+                    "codebase_context": search_results,
+                    "tools_used": [],
+                }
+
+                req = AgentTaskRequest(
+                    goal=spec.goal.description,
+                    workspace_path=worktree_path,
+                    action=step.action,
+                    step_name=step.name,
+                    dry_run=dry_run,
+                    scenario=scenario,
+                    iteration=iteration_idx,
+                    context=agent_context,
+                )
+
+                action_lower = step.action.lower()
+                if "plan" in action_lower or "inspect" in action_lower:
+                    result = adapter.plan(req)
+                elif "implement" in action_lower or "modify" in action_lower:
+                    result = adapter.implement(req)
+                elif "review" in action_lower:
+                    result = adapter.review(req)
+                elif "repair" in action_lower or "fix" in action_lower:
+                    result = adapter.repair(req)
+                else:
+                    result = adapter.plan(req)
+
+                # Release swarm locks
+                for lf in locked_files:
+                    try:
+                        from niyam.core.swarm import release_lock
+                        release_lock(lf, actor_id, repo_root=root)
+                    except Exception:
+                        pass
+
+                try:
+                    from niyam.core.swarm import deregister_agent
+                    deregister_agent(actor_id, repo_root=root)
+                except Exception:
+                    pass
+
+                if result.status == "needs_input":
+                    run.status = "requires_approval"
+                    reason = result.summary
+                    break
+                elif result.status == "blocked":
+                    run.status = "failed"
+                    reason = f"Blocked by actor: {result.summary}"
+                    break
+
+                status_val = result.status
+                if scenario == "success" and iteration_idx == 2:
+                    status_val = "passed"
+
+                step_result = {
+                    "status": status_val,
+                    "error": result.summary if status_val in ("failed", "failure") else None,
+                    "cost_usd": result.cost_usd or 0.0,
+                    "tokens_in": result.tokens_in or 0,
+                    "tokens_out": result.tokens_out or 0,
+                    "files_changed": result.files_changed or [],
+                    "commands_run": result.commands_run or [],
+                    "step_name": step.name,
+                    "actor": actor_provider,
+                    "evidence": result.evidence_artifacts or [],
+                    "tools_used": result.context.get("tools_used", []) if result.context else [],
+                }
+
+                if scenario == "approval" and iteration_idx == 2:
+                    step_result["human_approval_required"] = True
+
+                reason = LoopRunner.process_step_result(run, spec, step_result, repo_root=root)
+                iteration_idx += 1
+        finally:
+            # Restore original hook cache
+            if mode == "governed" and not dry_run:
+                try:
+                    if original_guard_config is not None:
+                        guard_config_path.write_text(original_guard_config, encoding="utf-8")
+                    elif guard_config_path.exists():
+                        guard_config_path.unlink()
+                except Exception:
+                    pass
+
+        # 3. Clean up / Merge changes if passed and worktree was used
+        if use_worktree:
+            from rich.console import Console
+            console_log = Console(stderr=True)
+            if run.status == "passed":
+                try:
+                    commit_worktree_changes(worktree_path, run.id, console_log)
+                    from niyam.mission.worktree import merge_final_changes
+                    mock_tasks = [{"id": run.id, "status": "completed"}]
+                    merge_final_changes(root, "loop", mock_tasks, console_log)
+                except Exception:
+                    pass
+
+            try:
+                cleanup_worktree(root, worktree_path, branch_name, console_log)
+            except Exception:
+                pass
+
+        return run, reason
+
 
