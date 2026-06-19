@@ -229,6 +229,8 @@ def loop_run(
             "failed": "FAILED",
             "stopped": "STOPPED",
             "requires_approval": "STOPPED_FOR_APPROVAL",
+            "blocked": "BLOCKED",
+            "retrying": "RETRYING",
         }
         status_upper = status_map.get(run.status, run.status.upper())
         max_cost_str = f"${run.max_cost_usd:.2f}" if run.max_cost_usd is not None else "N/A"
@@ -369,6 +371,8 @@ def loop_run(
                         "failed": "FAILED",
                         "stopped": "STOPPED",
                         "requires_approval": "STOPPED_FOR_APPROVAL",
+                        "blocked": "BLOCKED",
+                        "retrying": "RETRYING",
                     }
                     status_upper = status_map.get(run.status, run.status.upper())
                     max_cost_str = f"${spec.budgets.max_cost_usd:.2f}" if spec.budgets.max_cost_usd is not None else "N/A"
@@ -413,6 +417,8 @@ def loop_run(
         "failed": "FAILED",
         "stopped": "STOPPED",
         "requires_approval": "STOPPED_FOR_APPROVAL",
+        "blocked": "BLOCKED",
+        "retrying": "RETRYING",
     }
     status_upper = status_map.get(run.status, run.status.upper())
 

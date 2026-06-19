@@ -263,7 +263,7 @@ class LoopRunner:
             Optional[str]: The stop/failure reason if the run is completed or stopped, None otherwise.
         """
         sm = LoopStateMachine(run)
-        if run.status == "pending":
+        if run.status in ("pending", "retrying"):
             sm.transition_to("running")
 
         # 1. Update iterations and cost
@@ -345,11 +345,11 @@ class LoopRunner:
         termination_reason: Optional[str] = None
         if has_block:
             status = "blocked"
-            sm.transition_to("failed")
+            sm.transition_to("blocked")
             termination_reason = f"Blocked by policy: {'; '.join(block_reasons)}"
         elif evaluator_blocked:
             status = "blocked"
-            sm.transition_to("failed")
+            sm.transition_to("blocked")
             termination_reason = f"Blocked by evaluator: {'; '.join(evaluator_block_reasons)}"
         elif has_approval:
             sm.transition_to("requires_approval")
@@ -357,9 +357,10 @@ class LoopRunner:
         elif status == "passed":
             sm.transition_to("passed")
             termination_reason = "Loop completed successfully (goal met)."
-        elif status == "failed":
-            sm.transition_to("failed")
-            termination_reason = "Loop execution failed."
+        elif status in ("failed", "failure"):
+            # Wait, if it failed but no stop conditions met, we transition to retrying later.
+            # However, if status is explicitly failed/failure, let's check stop conditions first.
+            pass
 
         # 4. Check budget limits first if not already terminated
         if not termination_reason:
@@ -398,9 +399,19 @@ class LoopRunner:
                         termination_reason = f"Stop condition triggered: '{condition}'."
                     break
 
-        # If no budget or stop conditions met and not completed, transition back to running
+        # If it was a step failure and we hit no stop conditions / budgets, transition to failed now
+        if not termination_reason and status in ("failed", "failure"):
+            # But wait! If we have stop conditions that check consecutive failures, we should let it retry
+            # unless a stop condition triggered or max_iterations was hit.
+            # So if no stop condition was hit, we do NOT terminate, but we transition to retrying!
+            pass
+
+        # If no budget or stop conditions met and not completed, transition back to running or retrying
         if not termination_reason:
-            sm.transition_to("running")
+            if status in ("failed", "failure"):
+                sm.transition_to("retrying")
+            else:
+                sm.transition_to("running")
 
         # Resolve evidence directory
         evidence_dir = root / Path(run.evidence_path)
@@ -457,9 +468,21 @@ class LoopRunner:
             policyDecisions=policy_decisions,
         )
 
+        # Sign iteration data
+        from niyam.core.identity import ensure_identity, sign_data, get_public_key_bytes
+        iter_data = iteration.model_dump(by_alias=True)
+        iter_serialized = json.dumps(iter_data, sort_keys=True)
+        try:
+            private_key = ensure_identity(root)
+            iter_sig = sign_data(iter_serialized, private_key)
+            iter_data["signature"] = iter_sig
+            iter_data["publicKeyPem"] = get_public_key_bytes(root).decode("utf-8")
+        except Exception:
+            logger.debug("Failed to sign iteration data", exc_info=True)
+
         iter_file = evidence_dir / "iterations" / f"{run.iteration_count:03d}.json"
         with open(iter_file, "w", encoding="utf-8") as f:
-            json.dump(iteration.model_dump(by_alias=True), f, indent=2)
+            json.dump(iter_data, f, indent=2)
 
         # 7. Write execution artifacts from real adapter output (not mock data)
         artifacts_dir = evidence_dir / "artifacts"
@@ -501,11 +524,11 @@ class LoopRunner:
             json.dump(policy_res, f, indent=2)
 
         # 8. Check if loop is completed to write final run.json and report.md
-        if run.status in ("passed", "failed", "stopped", "requires_approval"):
+        if run.status in ("passed", "failed", "stopped", "requires_approval", "blocked"):
             run.completed_at = datetime.now(timezone.utc).isoformat()
 
             # Calculate wasted cost for non-passed terminal states
-            if run.status in ("failed", "stopped"):
+            if run.status in ("failed", "stopped", "blocked"):
                 run.wasted_cost_usd = run.cost_usd
 
             # Save run.json
@@ -517,6 +540,9 @@ class LoopRunner:
             report_md = LoopRunner.generate_report_markdown(run, spec, termination_reason or "Completed.")
             with open(evidence_dir / "report.md", "w", encoding="utf-8") as f:
                 f.write(report_md)
+
+            # Generate and sign manifest
+            LoopRunner.generate_and_sign_manifest(evidence_dir, root)
 
         return termination_reason
 
@@ -545,39 +571,112 @@ class LoopRunner:
             logger.debug("Exception caught", exc_info=True)
 
     @staticmethod
+    def generate_and_sign_manifest(evidence_dir: Path, root: Path) -> None:
+        """Generate a manifest containing SHA-256 hashes of all files in evidence_dir and sign it."""
+        import hashlib
+        from niyam.core.identity import ensure_identity, sign_data, get_public_key_bytes
+
+        manifest_data = {
+            "files": {}
+        }
+
+        # Find all files in evidence_dir (except manifest.json itself)
+        for filepath in sorted(evidence_dir.rglob("*")):
+            if filepath.is_file() and filepath.name != "manifest.json":
+                rel_path = filepath.relative_to(evidence_dir).as_posix()
+                # Compute SHA-256
+                hasher = hashlib.sha256()
+                with open(filepath, "rb") as f:
+                    while chunk := f.read(8192):
+                        hasher.update(chunk)
+                manifest_data["files"][rel_path] = hasher.hexdigest()
+
+        # Sign manifest_data
+        serialized = json.dumps(manifest_data, sort_keys=True)
+        try:
+            private_key = ensure_identity(root)
+            sig = sign_data(serialized, private_key)
+            manifest_data["signature"] = sig
+            manifest_data["publicKeyPem"] = get_public_key_bytes(root).decode("utf-8")
+        except Exception:
+            logger.debug("Failed to sign manifest", exc_info=True)
+
+        with open(evidence_dir / "manifest.json", "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2)
+
+    @staticmethod
     def replay_loop(run_dir: Path) -> tuple[LoopRun, Optional[str]]:
         """Replay a loop run from signed evidence directory without running agents."""
         run_path = run_dir / "run.json"
         if not run_path.exists():
             raise ValueError("Evidence run.json is missing.")
 
+        manifest_path = run_dir / "manifest.json"
+        if not manifest_path.exists():
+            raise ValueError("Missing evidence: manifest.json is missing.")
+
+        # 1. Load and verify manifest
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest_data = json.load(f)
+
+        signature = manifest_data.get("signature")
+        public_key_pem = manifest_data.get("publicKeyPem")
+
+        verify_manifest = dict(manifest_data)
+        verify_manifest.pop("signature", None)
+        verify_manifest.pop("publicKeyPem", None)
+        verify_serialized = json.dumps(verify_manifest, sort_keys=True)
+
+        from niyam.core.identity import verify_signature
+        is_manifest_valid = False
+        if signature and public_key_pem:
+            is_manifest_valid = verify_signature(verify_serialized, signature, public_key_pem.encode("utf-8"))
+
+        if not is_manifest_valid:
+            raise ValueError("Tampered evidence: manifest signature verification failed.")
+
+        # 2. Verify all files listed in the manifest
+        import hashlib
+        for rel_path, expected_hash in manifest_data.get("files", {}).items():
+            filepath = run_dir / rel_path
+            if not filepath.exists():
+                raise ValueError(f"Tampered evidence: file '{rel_path}' is missing.")
+            
+            # Compute hash
+            hasher = hashlib.sha256()
+            with open(filepath, "rb") as f:
+                while chunk := f.read(8192):
+                    hasher.update(chunk)
+            current_hash = hasher.hexdigest()
+            if current_hash != expected_hash:
+                raise ValueError(f"Tampered evidence: file '{rel_path}' has been modified.")
+
+        # 3. Load run.json
         with open(run_path, encoding="utf-8") as f:
             run_data = json.load(f)
 
-        # Cryptographically verify the signature
-        signature = run_data.get("signature")
-        public_key_pem = run_data.get("publicKeyPem")
-
-        # Verify
-        verify_data = dict(run_data)
-        verify_data.pop("signature", None)
-        verify_data.pop("publicKeyPem", None)
-        verify_serialized = json.dumps(verify_data, sort_keys=True)
-
-        from niyam.core.identity import verify_signature
-        is_valid = False
-        if signature and public_key_pem:
-            is_valid = verify_signature(verify_serialized, signature, public_key_pem.encode("utf-8"))
-
-        if not is_valid:
-            raise ValueError("Cryptographic signature verification failed or missing.")
-
         run = LoopRun.model_validate(run_data)
 
-        # Play back iterations: verify that we have iterations
+        # 4. Verify iteration signatures
         iterations_dir = run_dir / "iterations"
         if not iterations_dir.is_dir() or not list(iterations_dir.glob("*.json")):
             raise ValueError("Missing evidence: iteration logs are missing.")
+
+        for iter_file in sorted(iterations_dir.glob("*.json")):
+            with open(iter_file, encoding="utf-8") as f:
+                iter_data = json.load(f)
+            iter_sig = iter_data.get("signature")
+            iter_pub = iter_data.get("publicKeyPem")
+            if not iter_sig or not iter_pub:
+                raise ValueError("Tampered evidence: iteration file signature is missing.")
+            
+            # Verify iteration signature
+            verify_iter = dict(iter_data)
+            verify_iter.pop("signature", None)
+            verify_iter.pop("publicKeyPem", None)
+            iter_serialized = json.dumps(verify_iter, sort_keys=True)
+            if not verify_signature(iter_serialized, iter_sig, iter_pub.encode("utf-8")):
+                raise ValueError(f"Tampered evidence: iteration signature verification failed for '{iter_file.name}'.")
 
         # Reconstruct completion reason or message
         reason = run_data.get("reason")
@@ -826,6 +925,50 @@ class LoopRunner:
             except Exception:
                 logger.warning("Exception caught", exc_info=True)
 
+        # Verify hook file integrity before loop execution
+        hook_tampered = False
+        tampered_details = []
+        checksums_path = root / ".niyam" / "hook-cache" / "hook_checksums.json"
+        if checksums_path.exists():
+            import hashlib
+            try:
+                checksums = json.loads(checksums_path.read_text(encoding="utf-8"))
+                for rel_hook_path, expected_hash in checksums.items():
+                    hook_file = root / rel_hook_path
+                    if not hook_file.exists():
+                        hook_tampered = True
+                        tampered_details.append(f"Hook file '{rel_hook_path}' is missing.")
+                    else:
+                        current_hash = hashlib.sha256(hook_file.read_bytes()).hexdigest()
+                        if current_hash != expected_hash:
+                            hook_tampered = True
+                            tampered_details.append(f"Hook file '{rel_hook_path}' hash mismatched. Expected: {expected_hash}, Actual: {current_hash}")
+            except Exception as e:
+                logger.warning("Failed to verify hook integrity checksums", exc_info=True)
+
+        if hook_tampered:
+            msg = f"Hook file integrity verification failed: {'; '.join(tampered_details)}"
+            from niyam.core.config import load_niyam_config
+            try:
+                config = load_niyam_config(root)
+                guard_mode = config.governance.guard.mode if (config and config.governance and config.governance.guard) else "observe"
+            except Exception:
+                guard_mode = "observe"
+
+            if guard_mode == "block":
+                from niyam.core.loopops.state_machine import LoopStateMachine
+                sm = LoopStateMachine(run)
+                sm.transition_to("failed")
+                run.completed_at = datetime.now(timezone.utc).isoformat()
+                LoopRunner.sign_run_data(run, root)
+                with open(evidence_dir / "run.json", "w", encoding="utf-8") as f:
+                    json.dump(run.model_dump(by_alias=True), f, indent=2)
+                LoopRunner.generate_and_sign_manifest(evidence_dir, root)
+                return run, f"Blocked by policy: {msg}"
+            else:
+                from niyam.mission.task_runner import log_policy_event
+                log_policy_event(evidence_dir, root / ".niyam", "WARNING", f"Hook integrity check warning: {msg}")
+
         try:
             try:
                 from niyam.core.swarm import prune_stale_agents
@@ -833,12 +976,16 @@ class LoopRunner:
             except Exception:
                 logger.debug("Exception caught", exc_info=True)
 
-            while run.status in ("pending", "running"):
-                if run.iteration_count >= spec.budgets.max_iterations:
-                    from niyam.core.loopops.state_machine import LoopStateMachine
-                    sm = LoopStateMachine(run)
-                    reason = sm.evaluate_budgets(spec.budgets)
+            while run.status in ("pending", "running", "retrying"):
+                from niyam.core.loopops.state_machine import LoopStateMachine
+                sm = LoopStateMachine(run)
+                budget_reason = sm.evaluate_budgets(spec.budgets)
+                if budget_reason:
+                    reason = budget_reason
                     break
+
+                if run.status == "retrying":
+                    sm.transition_to("running")
 
                 step_idx = (run.iteration_count) % len(spec.steps) if spec.steps else 0
                 step = spec.steps[step_idx] if spec.steps else None
@@ -852,7 +999,7 @@ class LoopRunner:
                 if step.max_attempts is not None:
                     step_attempts[step.name] = step_attempts.get(step.name, 0) + 1
                     if step_attempts[step.name] > step.max_attempts:
-                        run.status = "failed"
+                        sm.transition_to("failed")
                         reason = (
                             f"Step '{step.name}' exceeded maxAttempts "
                             f"({step.max_attempts}). Stopping loop."

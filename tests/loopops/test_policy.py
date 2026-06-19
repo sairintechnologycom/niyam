@@ -126,7 +126,7 @@ def test_policy_unapproved_mcp_tools(tmp_path: Path) -> None:
         }
     )
     assert "Blocked by policy" in result
-    assert run_critical.status == "failed"
+    assert run_critical.status == "blocked"
 
 def test_policy_exceptions(tmp_path: Path) -> None:
     """Should downgrade policy block/approvals to allow when active exceptions exist."""

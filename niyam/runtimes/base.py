@@ -202,6 +202,22 @@ class RuntimeAdapter(ABC):
         hook_path = hooks_dir / "pre_tool_guard.py"
         self._write_file(hook_path, hook_content, console)
 
+        # Store SHA-256 checksum of generated hook
+        import hashlib
+        hook_hash = hashlib.sha256(hook_content.encode("utf-8")).hexdigest()
+        checksums_path = self.repo_root / ".niyam" / "hook-cache" / "hook_checksums.json"
+        checksums = {}
+        if checksums_path.exists():
+            try:
+                checksums = json.loads(checksums_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        rel_hook_path = f".{self.name}/hooks/pre_tool_guard.py"
+        checksums[rel_hook_path] = hook_hash
+        if not self.dry_run:
+            checksums_path.parent.mkdir(parents=True, exist_ok=True)
+            checksums_path.write_text(json.dumps(checksums, indent=2), encoding="utf-8")
+
     def _render_hook_script(
         self,
         deny_list: list[str],

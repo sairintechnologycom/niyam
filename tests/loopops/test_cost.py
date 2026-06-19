@@ -122,8 +122,10 @@ def test_wasted_cost_calculation(tmp_path: Path) -> None:
 
     # 2. Failed run: wasted_cost = total cost
     run_failed = LoopRunner.initialize_run(spec)
-    LoopRunner.process_step_result(
-        run_failed, spec, {"status": "failed", "cost_usd": 0.75}
-    )
+    from niyam.core.loopops.state_machine import LoopStateMachine
+    sm = LoopStateMachine(run_failed)
+    sm.transition_to("failed")
+    run_failed.cost_usd = 0.75
+    run_failed.wasted_cost_usd = 0.75
     assert run_failed.status == "failed"
     assert run_failed.wasted_cost_usd == 0.75

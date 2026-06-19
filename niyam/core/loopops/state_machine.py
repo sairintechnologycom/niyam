@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 
 # Valid state transitions
 VALID_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"running", "stopped", "failed"},
-    "running": {"evaluating", "stopped", "failed", "requires_approval"},
-    "evaluating": {"running", "passed", "failed", "stopped", "requires_approval"},
-    "requires_approval": {"running", "stopped", "failed"},
+    "pending": {"running", "stopped", "failed", "blocked"},
+    "running": {"evaluating", "stopped", "failed", "requires_approval", "blocked", "retrying"},
+    "evaluating": {"running", "passed", "failed", "stopped", "requires_approval", "blocked", "retrying"},
+    "requires_approval": {"running", "stopped", "failed", "blocked"},
+    "retrying": {"running", "evaluating", "failed", "stopped", "blocked"},
     "passed": set(),
     "failed": set(),
     "stopped": set(),
+    "blocked": set(),
 }
 
 STOP_CONDITION_REGEX = re.compile(
@@ -87,6 +89,8 @@ class LoopRun(BaseModel):
         "failed",
         "stopped",
         "requires_approval",
+        "blocked",
+        "retrying",
     ] = "pending"
     started_at: str = Field(..., alias="startedAt")
     completed_at: Optional[str] = Field(None, alias="completedAt")
@@ -125,6 +129,8 @@ class LoopStateMachine:
             "failed",
             "stopped",
             "requires_approval",
+            "blocked",
+            "retrying",
         ],
     ) -> None:
         """Transition the LoopRun status to a new state if valid."""

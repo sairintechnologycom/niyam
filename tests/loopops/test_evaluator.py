@@ -76,7 +76,7 @@ def test_evaluator_required_fail_blocks_loop(tmp_path: Path) -> None:
     assert result is not None
     assert "Blocked by evaluator" in result
     assert "security-review" in result
-    assert run.status == "failed"
+    assert run.status == "blocked"
 
 def test_evaluator_optional_fail_warns(tmp_path: Path) -> None:
     """Should continue with warning when an optional evaluator fails."""
@@ -103,7 +103,7 @@ def test_evaluator_optional_fail_warns(tmp_path: Path) -> None:
     result = LoopRunner.process_step_result(
         run, spec, {"status": "failure", "cost_usd": 0.10, "error": "LintError"}
     )
-    assert run.status == "running"
+    assert run.status == "retrying"
     assert result is None
 
     # Verify warning in trace

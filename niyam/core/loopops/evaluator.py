@@ -10,6 +10,7 @@ from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field
 
 from niyam.core.loopops.schema import LoopSpec
+from niyam.core.security import safe_run_command, CommandSecurityError
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,11 @@ class LoopEvaluationResult(BaseModel):
         None, alias="riskLevel", description="Assessed risk level"
     )
     timestamp: str
+    exit_code: Optional[int] = Field(None, alias="exitCode")
+    stdout: Optional[str] = Field(None, alias="stdout")
+    stderr: Optional[str] = Field(None, alias="stderr")
+    duration: Optional[float] = Field(None, alias="duration")
+    policy_result: Optional[str] = Field(None, alias="policyResult")
 
 
 def run_evaluators(
@@ -135,10 +141,11 @@ def _run_command_evaluator(
 
     cwd = workspace_path or Path.cwd()
 
-    from niyam.core.security import safe_run_command, CommandSecurityError
-
+    import time
+    start_time = time.time()
     try:
         res = safe_run_command(command, cwd=cwd, timeout=120)
+        duration = time.time() - start_time
         if res.returncode == 0:
             return LoopEvaluationResult(
                 evaluatorName=name,
@@ -147,6 +154,11 @@ def _run_command_evaluator(
                 required=required,
                 details=f"Command '{command}' exited 0.",
                 timestamp=timestamp,
+                exitCode=0,
+                stdout=res.stdout,
+                stderr=res.stderr,
+                duration=duration,
+                policyResult="allow",
             )
         stderr_snippet = (res.stderr or "")[:300].strip()
         return LoopEvaluationResult(
@@ -159,8 +171,14 @@ def _run_command_evaluator(
                 + (f" stderr: {stderr_snippet}" if stderr_snippet else "")
             ),
             timestamp=timestamp,
+            exitCode=res.returncode,
+            stdout=res.stdout,
+            stderr=res.stderr,
+            duration=duration,
+            policyResult="allow",
         )
     except CommandSecurityError as exc:
+        duration = time.time() - start_time
         logger.warning("Evaluator command blocked by security policy: %s", exc)
         return LoopEvaluationResult(
             evaluatorName=name,
@@ -169,8 +187,14 @@ def _run_command_evaluator(
             required=required,
             details=f"Command blocked by Niyam security policy: {exc}",
             timestamp=timestamp,
+            exitCode=-1,
+            stdout="",
+            stderr=str(exc),
+            duration=duration,
+            policyResult="blocked",
         )
     except Exception as exc:
+        duration = time.time() - start_time
         logger.warning("Evaluator command execution error for '%s': %s", name, exc, exc_info=True)
         return LoopEvaluationResult(
             evaluatorName=name,
@@ -179,6 +203,11 @@ def _run_command_evaluator(
             required=required,
             details=f"Command execution error: {exc}",
             timestamp=timestamp,
+            exitCode=-1,
+            stdout="",
+            stderr=str(exc),
+            duration=duration,
+            policyResult="error",
         )
 
 

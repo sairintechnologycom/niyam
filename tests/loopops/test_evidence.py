@@ -118,4 +118,4 @@ def test_evidence_missing_evaluation_failure(tmp_path: Path) -> None:
         }
     )
     assert "Blocked by policy" in result
-    assert run.status == "failed"
+    assert run.status == "blocked"

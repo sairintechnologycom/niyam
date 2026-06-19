@@ -31,9 +31,54 @@ def _load_template(filename: str) -> str:
 def redact_secrets_recursive(data: Any) -> Any:
     """Recursively search and redact secrets in dictionaries, lists, and strings."""
     if isinstance(data, str):
-        # Match pattern containing api_key, password, private_key, token, etc.
-        pattern = r"(?i)(api_key|apikey|secret_key|private_key|token|auth_token|password|pass)\s*[=:]\s*[\"']?[a-zA-Z0-9_\-\.]{8,}[\"']?"
-        return re.sub(pattern, r"\1=REDACTED", data)
+        import math
+        from collections import Counter
+
+        def is_high_entropy_b64(s: str) -> bool:
+            if len(s) < 20:
+                return False
+            # Check if it consists only of base64/token characters
+            if not re.match(r'^[A-Za-z0-9+/=\-_]+$', s):
+                return False
+            entropy = 0
+            for count in Counter(s).values():
+                p = count / len(s)
+                entropy -= p * math.log2(p)
+            return entropy > 3.8
+
+        text = data
+        
+        # 1. Redact Authorization Bearer tokens
+        text = re.sub(r"(?i)(bearer\s+)[a-zA-Z0-9_\-\.\~\+\/=]{8,}", r"\1[REDACTED]", text)
+        text = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[a-zA-Z0-9_\-\.\~\+\/=]{8,}", r"\1[REDACTED]", text)
+        
+        # 2. Redact JWT-like values
+        text = re.sub(r"\beyJ[a-zA-Z0-9_\-]{10,}\.[a-zA-Z0-9_\-]{10,}\.[a-zA-Z0-9_\-]{10,}\b", "[REDACTED_JWT]", text)
+        
+        # 3. Redact JSON secrets (keys containing api_key, password, token, secret, pass)
+        text = re.sub(
+            r'(?i)"([^"]*(?:api_key|apikey|secret_key|private_key|token|auth_token|password|pass|secret)[^"]*)"\s*:\s*"([^"]{8,})"',
+            r'"\1": "[REDACTED]"',
+            text
+        )
+
+        # 4. Redact key=value secrets
+        # Matches patterns like api_key=xyz, password: xyz, secret = "xyz"
+        text = re.sub(
+            r"(?i)\b(api_key|apikey|secret_key|private_key|token|auth_token|password|pass|secret)\b\s*([=:])\s*([\"']?)([a-zA-Z0-9_\-\.\@\#\$\%\^\&\*\/]{8,128})(\3)",
+            r"\1\2\3[REDACTED]\5",
+            text
+        )
+
+        # 5. Redact high-entropy base64-like tokens
+        words = re.split(r'(\s+|,|;|"|\'|\[|\]|\{|\})', text)
+        for idx, word in enumerate(words):
+            if len(word) >= 32 and is_high_entropy_b64(word):
+                words[idx] = "[REDACTED_HIGH_ENTROPY]"
+        text = "".join(words)
+        
+        return text
+
     elif isinstance(data, dict):
         return {k: redact_secrets_recursive(v) for k, v in data.items()}
     elif isinstance(data, list):

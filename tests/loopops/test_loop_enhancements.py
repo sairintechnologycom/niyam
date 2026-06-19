@@ -476,4 +476,4 @@ def test_missing_evidence_fails_replay(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError) as exc:
         LoopRunner.replay_loop(evidence_dir)
-    assert "Missing evidence" in str(exc.value)
+    assert "is missing" in str(exc.value) or "Tampered evidence" in str(exc.value)

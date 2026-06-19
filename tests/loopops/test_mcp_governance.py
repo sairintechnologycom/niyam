@@ -65,4 +65,4 @@ def test_mcp_tool_governance(tmp_path: Path) -> None:
         }
     )
     assert "Blocked by policy" in result
-    assert run_critical.status == "failed"
+    assert run_critical.status == "blocked"
