@@ -33,6 +33,9 @@ class MCPTool(BaseModel):
     notes: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    approved_by: str | None = None
+    approval_reason: str | None = None
+
 
 
 class MCPRegistry(BaseModel):

@@ -9,9 +9,7 @@ REPORT_DIR=".niyam/reports"
 mkdir -p "$REPORT_DIR"
 
 # Clean up any existing state to ensure clean run
-rm -f .niyam/mcp-registry.json
-rm -rf .niyam/logs
-rm -rf "$REPORT_DIR"
+python3 -c "import os, shutil; [os.remove(f) for f in ['.niyam/mcp-registry.json'] if os.path.exists(f)]; [shutil.rmtree(d, ignore_errors=True) for d in ['.niyam/logs', '$REPORT_DIR']]"
 mkdir -p "$REPORT_DIR"
 
 # Ensure we have a valid niyam configuration for guard/cost log testing

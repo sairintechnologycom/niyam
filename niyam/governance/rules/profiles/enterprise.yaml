@@ -42,6 +42,10 @@ rules:
         - ".env.local"
         - ".env.production"
         - ".env.development"
+        - "*.pem"
+        - "*.key"
+        - "*.crt"
+        - "*.cer"
 
   - id: DEP001
     title: Missing Dependency Lockfile

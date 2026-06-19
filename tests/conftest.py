@@ -38,3 +38,14 @@ def niyam_repo(tmp_repo: Path) -> Path:
     finally:
         os.chdir(original_dir)
     return tmp_repo
+
+
+@pytest.fixture(autouse=True)
+def mock_external_scanners_by_default(request):
+    """Disable external scanners for all tests except the external scanner tests."""
+    if "test_external_scanners" in request.module.__name__:
+        yield
+    else:
+        from unittest.mock import patch
+        with patch("niyam.core.external_scanners.SCANNER_REGISTRY", []):
+            yield

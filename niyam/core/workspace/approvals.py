@@ -20,6 +20,63 @@ class WorkspaceApprovals:
         with path.open("a", encoding="utf-8") as f:
             f.write(approval.model_dump_json() + "\n")
 
+        # Remote webhook approval trigger when SaaS is enabled
+        try:
+            from niyam.core.config import load_niyam_config
+            config = load_niyam_config()
+            if config.saas and config.saas.enabled:
+                self.trigger_remote_approval(approval, config.saas.base_url, config.saas.api_key)
+        except Exception:
+            pass
+
+    def trigger_remote_approval(self, approval: WorkspaceApproval, base_url: str, api_key: str | None) -> None:
+        """Issue an HTTP POST to request remote approval when SaaS is enabled."""
+        import urllib.request
+        import json
+
+        url = f"{base_url.rstrip('/')}/api/v1/missions/{approval.session_id}/tasks/{approval.id}/approval-request"
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = approval.model_dump()
+        for k, v in payload.items():
+            if hasattr(v, "isoformat"):
+                payload[k] = v.isoformat()
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                pass
+        except Exception:
+            # Silent fallback / logging in pilot phase
+            pass
+
+    def poll_remote_approval(self, session_id: str, approval_id: str, base_url: str, api_key: str | None) -> str | None:
+        """Poll the remote endpoint to check approval status."""
+        import urllib.request
+        import json
+
+        url = f"{base_url.rstrip('/')}/api/v1/missions/{session_id}/tasks/{approval_id}/approval-status"
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                return data.get("status")
+        except Exception:
+            return None
+
     def update_approval(self, approval: WorkspaceApproval) -> None:
         """
         Since it's an append-only log, we write the updated state.

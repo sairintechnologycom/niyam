@@ -229,3 +229,47 @@ def test_cost_missing_fields_handling(tmp_path: Path) -> None:
     assert data["task_id"] == "default-task"
     assert data["status"] == "success"
     assert data["notes"] is None
+
+
+def test_cost_pricing_sync(tmp_path: Path) -> None:
+    """Should view pricing table and attempt update."""
+    runner = CliRunner()
+
+    # 1. View default pricing table
+    result = runner.invoke(app, ["cost", "pricing"])
+    assert result.exit_code == 0
+    assert "Model Pricing Table" in result.stdout
+    assert "claude-haiku" in result.stdout
+
+    # 2. Update pricing without remote url (shows warning)
+    result_warn = runner.invoke(app, ["cost", "pricing", "--update"])
+    assert result_warn.exit_code == 0
+    assert "Warning: saas.pricing_url is not configured" in result_warn.stdout
+
+    # 3. Update pricing with remote url configured (mocked fetch)
+    with open(tmp_path / ".niyam" / "niyam.yaml", "w") as f:
+        f.write("version: 0.1.0\nsaas:\n  pricing_url: http://mock-pricing-api/pricing\n")
+
+    mock_pricing_response = {
+        "custom-model": {"input_cost_per_million": 10.0, "output_cost_per_million": 20.0}
+    }
+
+    from unittest.mock import patch, MagicMock
+    import io
+    
+    mock_urlopen = MagicMock()
+    mock_urlopen.return_value.__enter__.return_value.read.return_value = json.dumps(mock_pricing_response).encode("utf-8")
+
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result_ok = runner.invoke(app, ["cost", "pricing", "--update"])
+        assert result_ok.exit_code == 0
+        assert "Fetching remote pricing from: http://mock-pricing-api/pricing" in result_ok.stdout
+        assert "Pricing table successfully synchronized" in result_ok.stdout
+
+        # Verify pricing cache was updated
+        pricing_cache = tmp_path / ".niyam" / "pricing.json"
+        assert pricing_cache.exists()
+        cached_data = json.loads(pricing_cache.read_text(encoding="utf-8"))
+        assert "custom-model" in cached_data
+        assert cached_data["custom-model"]["input_cost_per_million"] == 10.0
+

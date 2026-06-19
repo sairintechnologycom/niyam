@@ -243,9 +243,22 @@ def cost_pricing(
     root = find_niyam_root() or Path.cwd()
     
     if update:
-        # load_pricing with force update if URL is set
-        pricing = load_pricing(root)
-        console.print("[green]Pricing table updated (if remote URL was configured).[/]")
+        # Check if remote URL is configured first to provide clear feedback
+        from niyam.core.config import load_niyam_config
+        remote_url = None
+        try:
+            config = load_niyam_config(root)
+            remote_url = config.saas.pricing_url if config.saas else None
+        except Exception:
+            pass
+
+        if not remote_url:
+            console.print("[yellow]Warning: saas.pricing_url is not configured in niyam.yaml. Cannot sync remote pricing.[/]")
+            pricing = load_pricing(root)
+        else:
+            console.print(f"Fetching remote pricing from: [cyan]{remote_url}[/]...")
+            pricing = load_pricing(root)
+            console.print("[green]Pricing table successfully synchronized with remote endpoint.[/]")
     else:
         pricing = load_pricing(root)
 
@@ -261,6 +274,8 @@ def cost_pricing(
                 f"${rates.get('input_cost_per_million', 0.0):.2f}",
                 f"${rates.get('output_cost_per_million', 0.0):.2f}"
             )
+        console.print(table)
+        
         
 @cost_app.command("scorecard")
 def cost_scorecard() -> None:

@@ -9,6 +9,33 @@ import typer
 from niyam.cli import console, mcp_app
 
 
+def _get_git_user() -> str | None:
+    import subprocess
+    try:
+        res = subprocess.run(
+            ["git", "config", "user.name"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    try:
+        res = subprocess.run(
+            ["git", "config", "user.email"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 @mcp_app.command("register")
 def mcp_register(
     name: Annotated[str, typer.Argument(help="Name of the tool/MCP server.")],
@@ -420,7 +447,9 @@ def mcp_show(
         f"[bold]Requires Approval:[/] {'Yes' if tool.requires_approval else 'No'}\n"
         f"[bold]Notes:[/] {tool.notes or 'N/A'}\n"
         f"[bold]Created At:[/] {tool.created_at or 'N/A'}\n"
-        f"[bold]Updated At:[/] {tool.updated_at or 'N/A'}"
+        f"[bold]Updated At:[/] {tool.updated_at or 'N/A'}\n"
+        f"[bold]Approved By:[/] {tool.approved_by or 'N/A'}\n"
+        f"[bold]Approval Reason:[/] {tool.approval_reason or 'N/A'}"
     )
 
     console.print(
@@ -431,6 +460,14 @@ def mcp_show(
 @mcp_app.command("approve")
 def mcp_approve(
     name: Annotated[str, typer.Argument(help="Name of the tool to approve.")],
+    approved_by: Annotated[
+        Optional[str],
+        typer.Option("--approved-by", help="Name or identifier of the approver."),
+    ] = None,
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", help="Reason for approval."),
+    ] = None,
 ) -> None:
     """Approve a registered tool or MCP server for agent usage."""
     from niyam.core.mcp import load_mcp_registry, save_mcp_registry
@@ -450,14 +487,18 @@ def mcp_approve(
         console.print(f"[yellow]Tool '{name}' is already approved.[/]")
         return
 
+    approver = approved_by or _get_git_user() or "operator"
+
     tool.approved = True
+    tool.approved_by = approver
+    tool.approval_reason = reason
     tool.updated_at = datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
     registry.tools[name] = tool
     save_mcp_registry(registry)
 
-    console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully approved.")
+    console.print(f"[bold green]✓[/] Tool [bold]{name}[/] successfully approved by {approver}.")
 
 
 @mcp_app.command("approve-all")
@@ -465,6 +506,14 @@ def mcp_approve_all(
     force: Annotated[
         bool, typer.Option("--force", help="Skip confirmation prompt.")
     ] = False,
+    approved_by: Annotated[
+        Optional[str],
+        typer.Option("--approved-by", help="Name or identifier of the approver."),
+    ] = None,
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", help="Reason for approval."),
+    ] = None,
 ) -> None:
     """Approve ALL currently registered tools in one step."""
     from niyam.core.mcp import load_mcp_registry, save_mcp_registry
@@ -490,13 +539,16 @@ def mcp_approve_all(
             console.print("[yellow]Aborted.[/]")
             return
 
+    approver = approved_by or _get_git_user() or "operator"
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for name in unapproved:
         registry.tools[name].approved = True
+        registry.tools[name].approved_by = approver
+        registry.tools[name].approval_reason = reason
         registry.tools[name].updated_at = now
     
     save_mcp_registry(registry)
-    console.print(f"[bold green]✓[/] Successfully approved [bold]{len(unapproved)}[/] tools.")
+    console.print(f"[bold green]✓[/] Successfully approved [bold]{len(unapproved)}[/] tools by {approver}.")
 
 
 @mcp_app.command("risk-report")

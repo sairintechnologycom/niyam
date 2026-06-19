@@ -34,9 +34,16 @@ class BaseScanner(ABC):
         self.name = name
         self.binary = binary
 
-    def is_available(self) -> bool:
+    def get_binary(self, config: dict[str, Any] | None = None) -> str:
+        """Resolve binary from config or use default."""
+        if config and config.get("binary_path"):
+            return config["binary_path"]
+        return self.binary
+
+    def is_available(self, config: dict[str, Any] | None = None) -> bool:
         """Check if the scanner binary is available in the current environment."""
-        return shutil.which(self.binary) is not None
+        binary = self.get_binary(config)
+        return shutil.which(binary) is not None
 
     @abstractmethod
     def run(self, root: Path, config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -49,14 +56,15 @@ class GitleaksScanner(BaseScanner):
         super().__init__("gitleaks", "gitleaks")
 
     def run(self, root: Path, config: dict[str, Any]) -> list[dict[str, Any]]:
-        if not self.is_available():
+        if not self.is_available(config):
             return []
 
+        binary = self.get_binary(config)
         findings = []
         with tempfile.TemporaryDirectory() as tmpdir:
             report_file = Path(tmpdir) / "gitleaks-report.json"
             cmd = [
-                self.binary,
+                binary,
                 "detect",
                 f"--source={root}",
                 "--no-git",
@@ -116,10 +124,11 @@ class SemgrepScanner(BaseScanner):
         super().__init__("semgrep", "semgrep")
 
     def run(self, root: Path, config: dict[str, Any]) -> list[dict[str, Any]]:
-        if not self.is_available():
+        if not self.is_available(config):
             return []
 
-        cmd = [self.binary, "scan", "--config=auto", "--json", "--quiet"]
+        binary = self.get_binary(config)
+        cmd = [binary, "scan", "--config=auto", "--json", "--quiet"]
         findings = []
 
         try:
@@ -172,10 +181,11 @@ class TrivyScanner(BaseScanner):
         super().__init__("trivy", "trivy")
 
     def run(self, root: Path, config: dict[str, Any]) -> list[dict[str, Any]]:
-        if not self.is_available():
+        if not self.is_available(config):
             return []
 
-        cmd = [self.binary, "fs", "--format", "json", "--quiet", "."]
+        binary = self.get_binary(config)
+        cmd = [binary, "fs", "--format", "json", "--quiet", "."]
         findings = []
 
         try:
@@ -230,10 +240,11 @@ class CheckovScanner(BaseScanner):
         super().__init__("checkov", "checkov")
 
     def run(self, root: Path, config: dict[str, Any]) -> list[dict[str, Any]]:
-        if not self.is_available():
+        if not self.is_available(config):
             return []
 
-        cmd = [self.binary, "-d", ".", "--output", "json"]
+        binary = self.get_binary(config)
+        cmd = [binary, "-d", ".", "--output", "json"]
         findings = []
 
         try:

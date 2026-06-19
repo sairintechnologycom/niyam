@@ -235,7 +235,7 @@ def test_run_scanner_checks_integrates_external_scanners(tmp_path: Path) -> None
 
 
 def test_scanner_checks_reports_skipped_scanners(tmp_path: Path) -> None:
-    """If external binaries are missing, run_scanner_checks should list them in skipped_scanners."""
+    """If external binaries are missing, run_scanner_checks should list them and log findings."""
     with patch("shutil.which", return_value=None):
         results = run_scanner_checks(tmp_path, profile="startup")
         assert "skipped_scanners" in results
@@ -245,3 +245,10 @@ def test_scanner_checks_reports_skipped_scanners(tmp_path: Path) -> None:
             "trivy",
             "checkov",
         }
+        
+        # Verify findings list contains the missing scanner alerts
+        missing_findings = [f for f in results["findings"] if f["id"].startswith("EXT-SCAN-MISSING-")]
+        assert len(missing_findings) == 4
+        gitleaks_finding = next(f for f in missing_findings if "GITLEAKS" in f["id"])
+        assert gitleaks_finding["severity"] == "high"
+        assert gitleaks_finding["category"] == "security"

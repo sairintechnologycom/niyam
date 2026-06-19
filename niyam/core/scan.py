@@ -45,6 +45,10 @@ TEXT_EXTENSIONS = {
     ".txt",
     ".md",
     ".env",
+    ".pem",
+    ".key",
+    ".crt",
+    ".cer",
     "dockerfile",
 }
 
@@ -643,6 +647,39 @@ def run_scanner_checks(
     except Exception:
         pass
 
+    # Check for missing/skipped external scanners
+    from niyam.core.external_scanners import SCANNER_REGISTRY
+    import hashlib
+
+    skipped_scanners = []
+    scanner_config = config.model_dump().get("external_scanners", {}) if config else {}
+    for scanner in SCANNER_REGISTRY:
+        # Only report as skipped if it's enabled in config but binary is missing
+        sc_config = scanner_config.get(scanner.name, {})
+        if sc_config.get("enabled", True):
+            if not scanner.is_available(sc_config):
+                skipped_scanners.append(scanner.name)
+                
+                # Append a high-severity finding since an enabled external scanner is missing
+                binary_name = scanner.get_binary(sc_config)
+                fp_src = f"EXT-SCAN-MISSING::{scanner.name}"
+                fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
+                findings.append({
+                    "schema_version": "1.0.0",
+                    "id": f"EXT-SCAN-MISSING-{scanner.name.upper()}",
+                    "title": f"Missing Enabled External Scanner: {scanner.name}",
+                    "category": "security",
+                    "severity": "high",
+                    "confidence": "high",
+                    "file_path": "niyam.yaml",
+                    "line_number": None,
+                    "description": f"The external security scanner '{scanner.name}' is enabled in configuration, but its binary '{binary_name}' is not available on system PATH.",
+                    "recommendation": f"Install '{binary_name}' or set the correct path, or disable the scanner in niyam.yaml under 'external_scanners.{scanner.name}.enabled: false'.",
+                    "remediation_effort": "low",
+                    "tags": ["security", "scanners"],
+                    "fingerprint": fingerprint,
+                })
+
     # 3b. Apply/Create Baseline
     from niyam.core.baseline import load_baseline, apply_baseline, save_baseline
 
@@ -673,17 +710,6 @@ def run_scanner_checks(
     decision, decision_reason, score = evaluate_decision(
         open_findings, score, profile=profile_name, project_root=root
     )
-
-    # Check for missing/skipped external scanners
-    from niyam.core.external_scanners import SCANNER_REGISTRY
-
-    skipped_scanners = []
-    scanner_config = config.model_dump().get("external_scanners", {}) if config else {}
-    for scanner in SCANNER_REGISTRY:
-        # Only report as skipped if it's enabled in config but binary is missing
-        if scanner_config.get(scanner.name, {}).get("enabled", True):
-            if not scanner.is_available():
-                skipped_scanners.append(scanner.name)
 
     # 6. Calculate summary metrics
     summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}

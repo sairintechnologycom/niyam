@@ -112,3 +112,53 @@ def test_workspace_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert result_md.exit_code == 0
     assert "Workspace Session: TASK-EVIDENCE" in result_md.stdout
     assert "**prompt**: 1" in result_md.stdout
+
+
+def test_workspace_remote_webhook_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    _workspace(tmp_path, monkeypatch)
+
+    # Enable SaaS and configure webhook
+    config_file = tmp_path / ".niyam" / "niyam.yaml"
+    config_file.write_text(
+        "version: 1.0.0-rc1\nsaas:\n  enabled: true\n  base_url: http://mock-saas-api\n  api_key: mock-key\n",
+        encoding="utf-8"
+    )
+
+    from unittest.mock import patch, MagicMock
+    from niyam.core.workspace import WorkspaceApproval
+    from datetime import datetime, timezone
+
+    appr = WorkspaceApproval(
+        id="APP-TEST",
+        session_id="TASK-REMOTE",
+        action="delete-production",
+        risk="critical",
+        reason="Danger action",
+        requested_by="agent",
+    )
+
+    mock_urlopen = MagicMock()
+    # Mocking successful post
+    mock_urlopen.return_value.__enter__.return_value.read.return_value = b"{}"
+
+    with patch("urllib.request.urlopen", mock_urlopen):
+        approvals_manager = WorkspaceApprovals(tmp_path / ".niyam" / "workspace")
+        approvals_manager.request_approval(appr)
+
+        # Verify urllib.request.urlopen was called with mock URL
+        assert mock_urlopen.call_count == 1
+        req_args = mock_urlopen.call_args[0][0]
+        assert req_args.full_url == "http://mock-saas-api/api/v1/missions/TASK-REMOTE/tasks/APP-TEST/approval-request"
+        assert req_args.get_header("Authorization") == "Bearer mock-key"
+
+        # Test polling method
+        mock_poll_response = b'{"status": "approved"}'
+        mock_urlopen.reset_mock()
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = mock_poll_response
+        
+        status = approvals_manager.poll_remote_approval("TASK-REMOTE", "APP-TEST", "http://mock-saas-api", "mock-key")
+        assert status == "approved"
+        assert mock_urlopen.call_count == 1
+        poll_req = mock_urlopen.call_args[0][0]
+        assert poll_req.full_url == "http://mock-saas-api/api/v1/missions/TASK-REMOTE/tasks/APP-TEST/approval-status"
+

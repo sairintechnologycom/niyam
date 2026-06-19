@@ -484,17 +484,31 @@ def test_mcp_approve_tool(tmp_path: Path):
         app, ["mcp", "register", "app-tool", "--type", "api", "--no-approved"]
     )
 
-    # Approve tool
-    result = runner.invoke(app, ["mcp", "approve", "app-tool"])
+    # Approve tool with metadata
+    result = runner.invoke(
+        app,
+        [
+            "mcp",
+            "approve",
+            "app-tool",
+            "--approved-by",
+            "test-officer",
+            "--reason",
+            "verified security boundaries",
+        ],
+    )
     assert result.exit_code == 0
-    assert "successfully approved" in result.stdout
+    assert "successfully approved by test-officer" in result.stdout
 
     # Check registry
     from niyam.core.mcp import load_mcp_registry
 
     reg = load_mcp_registry(tmp_path)
     assert reg.tools["app-tool"].approved is True
+    assert reg.tools["app-tool"].approved_by == "test-officer"
+    assert reg.tools["app-tool"].approval_reason == "verified security boundaries"
     assert reg.tools["app-tool"].updated_at is not None
+
 
 
 def test_mcp_show_all_fields(tmp_path: Path):
@@ -517,6 +531,19 @@ def test_mcp_show_all_fields(tmp_path: Path):
             "true",
         ],
     )
+    # Approve first so fields are populated
+    runner.invoke(
+        app,
+        [
+            "mcp",
+            "approve",
+            "show-tool",
+            "--approved-by",
+            "test-user",
+            "--reason",
+            "trusted tool",
+        ],
+    )
 
     result = runner.invoke(app, ["mcp", "show", "show-tool"])
     assert result.exit_code == 0
@@ -525,3 +552,6 @@ def test_mcp_show_all_fields(tmp_path: Path):
     assert "Requires Approval:" in result.stdout
     assert "Created At:" in result.stdout
     assert "Updated At:" in result.stdout
+    assert "Approved By:" in result.stdout
+    assert "Approval Reason:" in result.stdout
+
