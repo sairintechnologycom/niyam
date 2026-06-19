@@ -454,12 +454,14 @@ class ShellAdapter(CodingAgentAdapter):
 
     def implement(self, request: AgentTaskRequest) -> AgentTaskResult:
         # Execute shell commands
+        import shlex
         raw_out = request.workspace_path / ".niyam" / "evidence" / "loops" / "raw_shell_exec.txt"
         raw_out.parent.mkdir(parents=True, exist_ok=True)
         try:
+            cmd = shlex.split(request.goal)
             res = subprocess.run(
-                request.goal,
-                shell=True,
+                cmd,
+                shell=False,
                 cwd=request.workspace_path,
                 capture_output=True,
                 text=True,
@@ -645,5 +647,7 @@ def get_adapter(name: str) -> CodingAgentAdapter:
         "human": HumanApprovalAdapter(),
         "antigravity": AntigravityAdapter(),
     }
-    # Fallback to shell or mock if not standard
-    return adapters.get(name.lower(), ShellAdapter())
+    adapter_name = name.lower()
+    if adapter_name not in adapters:
+        raise ValueError(f"Unknown adapter: {name}")
+    return adapters[adapter_name]

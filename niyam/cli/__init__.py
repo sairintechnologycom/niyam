@@ -144,12 +144,7 @@ runtime_app = typer.Typer(
 )
 app.add_typer(runtime_app)
 
-policy_app = typer.Typer(
-    name="policy",
-    help="Policy management and validation.",
-    no_args_is_help=True,
-)
-app.add_typer(policy_app)
+
 
 pack_app = typer.Typer(
     name="pack",
@@ -302,8 +297,8 @@ from niyam.cli import ci  # noqa: F401
 from niyam.cli import scan  # noqa: F401
 from niyam.cli import rules  # noqa: F401
 from niyam.cli import skills  # noqa: F401
-from niyam.cli import policy  # noqa: F401
 from niyam.cli import evidence  # noqa: F401
+
 from niyam.cli import identity  # noqa: F401
 from niyam.cli import saas  # noqa: F401
 from niyam.cli import fleet  # noqa: F401

@@ -56,8 +56,7 @@ def test_evidence_generation_success(tmp_path: Path) -> None:
     reason1 = LoopRunner.process_step_result(run, spec, {"status": "success", "cost_usd": 0.50})
     assert reason1 is None
     assert (evidence_dir / "iterations" / "001.json").exists()
-    assert (evidence_dir / "artifacts" / "test-output.txt").exists()
-    assert (evidence_dir / "artifacts" / "diff.patch").exists()
+    assert (evidence_dir / "artifacts" / "execution-output.txt").exists()
     assert (evidence_dir / "artifacts" / "policy-results.json").exists()
 
     # Process iteration 2 (passed/completed)

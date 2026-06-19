@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
+from datetime import datetime, timezone
 from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 # Valid state transitions
 VALID_TRANSITIONS: dict[str, set[str]] = {
@@ -160,6 +164,23 @@ class LoopStateMachine:
                 reason = f"Max token budget ({budgets.max_tokens:,}) exceeded (used {total_tokens:,})."
                 self.transition_to("stopped")
                 return reason
+
+        # 4. Check max runtime limit
+        if budgets.max_runtime_minutes is not None:
+            try:
+                started = datetime.fromisoformat(self.run.started_at)
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                elapsed_minutes = (datetime.now(timezone.utc) - started).total_seconds() / 60
+                if elapsed_minutes > budgets.max_runtime_minutes:
+                    reason = (
+                        f"Max runtime ({budgets.max_runtime_minutes}m) exceeded "
+                        f"(elapsed {elapsed_minutes:.1f}m)."
+                    )
+                    self.transition_to("stopped")
+                    return reason
+            except Exception:
+                logger.debug("Could not evaluate maxRuntimeMinutes budget", exc_info=True)
 
         return None
 

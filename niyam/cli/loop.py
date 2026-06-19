@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import subprocess
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -422,8 +423,6 @@ def loop_run(
         risk_str = f"{risk_str} → High"
 
     reason_str = reason or "No reason provided."
-    if scenario == "approval":
-        reason_str = "Modified authentication middleware"
 
     console.print("Niyam LoopOps\n")
     console.print(f"Loop: {spec.metadata.name}")

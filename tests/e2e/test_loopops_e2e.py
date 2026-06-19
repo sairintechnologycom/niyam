@@ -29,7 +29,7 @@ def test_e2e_requires_approval(tmp_path: Path) -> None:
     result = runner.invoke(app, ["loop", "run", str(spec_file), "--scenario", "approval"])
     assert result.exit_code == 0
     assert "Status: STOPPED_FOR_APPROVAL" in result.stdout
-    assert "Reason: Modified authentication middleware" in result.stdout
+    assert "humanApprovalRequired" in result.stdout
 
 def test_e2e_repeated_failure(tmp_path: Path) -> None:
     """E2E-003: Agent tries to fix the same failing test repeatedly -> stops."""
