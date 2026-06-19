@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from niyam.cli import console, mission_app
-from niyam.cli.main_cmds import Runtime
+from niyam.cli.main_cmds import Runtime, ReportFormat
 
 
 @mission_app.command("ingest")
@@ -742,15 +742,29 @@ def mission_report(
         bool,
         typer.Option("--upload", "-u", help="Upload report to Niyam Dashboard."),
     ] = False,
+    branch: Annotated[
+        bool,
+        typer.Option("--branch", "-b", help="Generate evidence report for the current branch."),
+    ] = False,
+    format: Annotated[
+        Optional[ReportFormat],
+        typer.Option("--format", "-f", help="Output format for branch report (markdown/json)."),
+    ] = None,
 ) -> None:
-    """Generate final evidence package for the latest mission."""
-    from niyam.mission.reporter import run_mission_report
+    """Generate evidence report for the latest mission or current branch."""
+    if branch:
+        from niyam.evidence.reporter import run_report
+        from niyam.cli.main_cmds import ReportFormat
+        fmt = format or ReportFormat.md
+        run_report(format=fmt.value, console=console)
+    else:
+        from niyam.mission.reporter import run_mission_report
 
-    try:
-        run_mission_report(console=console, mission_id=mission_id, upload=upload)
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise typer.Exit(1)
+        try:
+            run_mission_report(console=console, mission_id=mission_id, upload=upload)
+        except Exception as e:
+            console.print(f"[bold red]Error:[/] {e}")
+            raise typer.Exit(1)
 
 
 @mission_app.command("verify-report")
@@ -1333,3 +1347,215 @@ def mission_reject_task(
     }
     (task_dir / "approval.json").write_text(json.dumps(approval_data, indent=2), encoding="utf-8")
     console.print(f"[bold red]❌[/] Task [cyan]{task_id}[/] rejected.")
+
+
+def interrogate_requirement(requirement: str, orchestrator: str, console) -> str:
+    import shutil
+    import subprocess
+
+    console.print(
+        f"[cyan]Deep analyzing requirement with {orchestrator} to identify missing context...[/]"
+    )
+    prompt = f"""
+You are the Niyam project architect. I am about to give you a requirement. 
+Before we start planning, identify 3 critical clarifying questions that would help you generate a perfect, production-ready implementation plan.
+
+Requirement:
+{requirement}
+
+Format your response as a numbered list of 3 questions.
+""".strip()
+
+    if not shutil.which(orchestrator):
+        return requirement
+
+    cmd = [orchestrator, "-p", prompt]
+    if orchestrator == "gemini":
+        cmd.append("--skip-trust")
+
+    try:
+        res = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if res.returncode != 0:
+            return requirement
+        raw = res.stdout or res.stderr or ""
+    except Exception:
+        return requirement
+
+    console.print(
+        "\n[bold cyan]Niyam needs a bit more context to be highly accurate:[/]"
+    )
+    console.print(raw.strip())
+
+    console.print(
+        "\n[dim](Enter your answers below, or just press Enter to skip and proceed with current context)[/]"
+    )
+    answers = []
+    for i in range(1, 4):
+        try:
+            ans = input(f"Answer {i}: ").strip()
+            if ans:
+                answers.append(f"Q{i} Context: {ans}")
+        except (KeyboardInterrupt, EOFError):
+            break
+
+    if answers:
+        return (
+            requirement + "\n\n## Additional Developer Context\n" + "\n".join(answers)
+        )
+    return requirement
+
+
+@mission_app.command("validate-task")
+def mission_validate_task(
+    task_id: Annotated[
+        str,
+        typer.Argument(help="Task ID to validate (e.g., T1, TASK-001)."),
+    ],
+    mission: Annotated[
+        Optional[str], typer.Option("--mission", help="Mission ID containing the task.")
+    ] = None,
+) -> None:
+    """Validate a task's execution (scope enforcement and tests)."""
+    from niyam.core.validate import run_task_validation
+
+    try:
+        run_task_validation(task_id=task_id, mission_id=mission, console=console)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise typer.Exit(1)
+
+
+@mission_app.command("start-wizard")
+def mission_start_wizard(
+    runtime: Annotated[
+        Optional[Runtime],
+        typer.Option("--runtime", "-r", help="Runtime override for planning."),
+    ] = None,
+) -> None:
+    """Interactive wizard to start a new task."""
+    import sys
+    import re
+    from datetime import datetime
+    from niyam.core.config import find_niyam_root, load_niyam_config
+    from niyam.mission.planner import run_mission_plan
+
+    repo_root = find_niyam_root()
+    if not repo_root:
+        console.print(
+            "[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first."
+        )
+        raise typer.Exit(1)
+
+    console.print("🚀 [bold cyan]Welcome to Niyam! Let's start your new task.[/]")
+
+    # 1. Ask for Task Name
+    try:
+        run_id = input("\n1. What is the name of this task? (e.g. ADD-AUTH): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[red]Cancelled.[/]")
+        raise typer.Exit(1)
+
+    if not run_id:
+        run_id = f"RUN-{datetime.now().strftime('%m%d-%H%M')}"
+        console.print(f"   (No name provided, using generated ID: {run_id})")
+
+    # Clean the run_id
+    run_id = re.sub(r"[^a-zA-Z0-9_\-]+", "-", run_id).strip("-")
+
+    # 2. Ask for Requirement Source
+    console.print("\n2. How would you like to provide the requirement?")
+    console.print("   [1] Paste text (from clipboard/design doc)")
+    console.print("   [2] Provide path to a Markdown file")
+    try:
+        choice = input("Choice [1/2]: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[red]Cancelled.[/]")
+        raise typer.Exit(1)
+
+    input_source = "-"
+    requirement = ""
+    if choice == "2":
+        try:
+            input_source = input("   Path to file: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[red]Cancelled.[/]")
+            raise typer.Exit(1)
+
+        if not Path(input_source).exists():
+            console.print(
+                f"   [yellow]Warning:[/] File {input_source} not found. Falling back to paste mode."
+            )
+            input_source = "-"
+        else:
+            requirement = Path(input_source).read_text(encoding="utf-8")
+
+    if input_source == "-":
+        console.print("   Paste requirement text below (Press Ctrl+D when finished):")
+        try:
+            requirement = sys.stdin.read()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[red]Cancelled.[/]")
+            raise typer.Exit(1)
+
+    # 3. Determine planning engine
+    config = None
+    try:
+        config = load_niyam_config(repo_root)
+    except Exception:
+        pass
+
+    default_engine = "claude"
+    if config and config.runtimes:
+        default_engine = config.runtimes[0]
+
+    engine = runtime.value if runtime else default_engine
+    if not runtime:
+        console.print(
+            f"\n3. Which planning engine should I use? (default: {default_engine})"
+        )
+        try:
+            custom_engine = (
+                input(
+                    f"   Press Enter for {default_engine}, or type [claude/gemini/codex]: "
+                )
+                .strip()
+                .lower()
+            )
+            if custom_engine in {"claude", "gemini", "codex"}:
+                engine = custom_engine
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[red]Cancelled.[/]")
+            raise typer.Exit(1)
+
+    # Interrogation phase
+    requirement = interrogate_requirement(requirement, engine, console)
+
+    # 4. Confirm and Run Plan
+    console.print(
+        f"\n[cyan]Ready! Running plan generation for mission '{run_id}' using engine '{engine}'...[/]"
+    )
+
+    # We need a temporary file for the requirement
+    temp_dir = repo_root / ".niyam" / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_req = temp_dir / f"{run_id}.md"
+    temp_req.write_text(requirement, encoding="utf-8")
+
+    try:
+        run_mission_plan(
+            requirements_path=str(temp_req),
+            strict=False,
+            console=console,
+            template=None,
+            runtime_override=engine,
+        )
+    finally:
+        if temp_req.exists():
+            temp_req.unlink()
+

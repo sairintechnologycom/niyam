@@ -280,6 +280,10 @@ def validate(
     ] = None,
 ) -> None:
     """Validate a task's execution (scope enforcement and tests)."""
+    console.print(
+        "[yellow]Warning: 'niyam validate' is deprecated and will be removed in a future release. "
+        "Use 'niyam mission validate-task' instead.[/]\n"
+    )
     from niyam.core.validate import run_task_validation
 
     try:
@@ -297,6 +301,10 @@ def report(
     ] = ReportFormat.md,
 ) -> None:
     """Generate evidence report for the current branch."""
+    console.print(
+        "[yellow]Warning: 'niyam report' is deprecated and will be removed in a future release. "
+        "Use 'niyam mission report --branch' instead.[/]\n"
+    )
     from niyam.evidence.reporter import run_report
 
     run_report(format=format.value, console=console)
@@ -314,6 +322,10 @@ def dashboard(
     ] = False,
 ) -> None:
     """Show real-time dashboard of the active or latest mission."""
+    console.print(
+        "[yellow]Warning: 'niyam dashboard' is deprecated and will be removed in a future release. "
+        "Use 'niyam mission dashboard' instead.[/]\n"
+    )
     from niyam.mission.dashboard import run_mission_dashboard
 
     try:
@@ -437,68 +449,6 @@ def compare(
         raise typer.Exit(1)
 
 
-def interrogate_requirement(requirement: str, orchestrator: str, console) -> str:
-    import shutil
-    import subprocess
-
-    console.print(
-        f"[cyan]Deep analyzing requirement with {orchestrator} to identify missing context...[/]"
-    )
-    prompt = f"""
-You are the Niyam project architect. I am about to give you a requirement. 
-Before we start planning, identify 3 critical clarifying questions that would help you generate a perfect, production-ready implementation plan.
-
-Requirement:
-{requirement}
-
-Format your response as a numbered list of 3 questions.
-""".strip()
-
-    if not shutil.which(orchestrator):
-        return requirement
-
-    cmd = [orchestrator, "-p", prompt]
-    if orchestrator == "gemini":
-        cmd.append("--skip-trust")
-
-    try:
-        res = subprocess.run(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if res.returncode != 0:
-            return requirement
-        raw = res.stdout or res.stderr or ""
-    except Exception:
-        return requirement
-
-    console.print(
-        "\n[bold cyan]Niyam needs a bit more context to be highly accurate:[/]"
-    )
-    console.print(raw.strip())
-
-    console.print(
-        "\n[dim](Enter your answers below, or just press Enter to skip and proceed with current context)[/]"
-    )
-    answers = []
-    for i in range(1, 4):
-        try:
-            ans = input(f"Answer {i}: ").strip()
-            if ans:
-                answers.append(f"Q{i} Context: {ans}")
-        except (KeyboardInterrupt, EOFError):
-            break
-
-    if answers:
-        return (
-            requirement + "\n\n## Additional Developer Context\n" + "\n".join(answers)
-        )
-    return requirement
-
-
 @app.command()
 def status(
     mission: Annotated[
@@ -506,6 +456,10 @@ def status(
     ] = None,
 ) -> None:
     """Display the status of the latest planned or active mission (Alias for 'niyam mission show')."""
+    console.print(
+        "[yellow]Warning: 'niyam status' is deprecated and will be removed in a future release. "
+        "Use 'niyam mission show' instead.[/]\n"
+    )
     from niyam.cli.mission import mission_show
 
     mission_show(mission_id=mission)
@@ -519,127 +473,13 @@ def start(
     ] = None,
 ) -> None:
     """Interactive wizard to start a new task."""
-    import sys
-    from datetime import datetime
-    from pathlib import Path
-    from niyam.core.config import find_niyam_root, load_niyam_config
-    from niyam.mission.planner import run_mission_plan
-
-    repo_root = find_niyam_root()
-    if not repo_root:
-        console.print(
-            "[bold red]Error:[/] Not a Niyam workspace. Run 'niyam init' first."
-        )
-        raise typer.Exit(1)
-
-    console.print("🚀 [bold cyan]Welcome to Niyam! Let's start your new task.[/]")
-
-    # 1. Ask for Task Name
-    try:
-        run_id = input("\n1. What is the name of this task? (e.g. ADD-AUTH): ").strip()
-    except (KeyboardInterrupt, EOFError):
-        console.print("\n[red]Cancelled.[/]")
-        raise typer.Exit(1)
-
-    if not run_id:
-        run_id = f"RUN-{datetime.now().strftime('%m%d-%H%M')}"
-        console.print(f"   (No name provided, using generated ID: {run_id})")
-
-    # Clean the run_id
-    import re
-
-    run_id = re.sub(r"[^a-zA-Z0-9_\-]+", "-", run_id).strip("-")
-
-    # 2. Ask for Requirement Source
-    console.print("\n2. How would you like to provide the requirement?")
-    console.print("   [1] Paste text (from clipboard/design doc)")
-    console.print("   [2] Provide path to a Markdown file")
-    try:
-        choice = input("Choice [1/2]: ").strip()
-    except (KeyboardInterrupt, EOFError):
-        console.print("\n[red]Cancelled.[/]")
-        raise typer.Exit(1)
-
-    input_source = "-"
-    requirement = ""
-    if choice == "2":
-        try:
-            input_source = input("   Path to file: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[red]Cancelled.[/]")
-            raise typer.Exit(1)
-
-        if not Path(input_source).exists():
-            console.print(
-                f"   [yellow]Warning:[/] File {input_source} not found. Falling back to paste mode."
-            )
-            input_source = "-"
-        else:
-            requirement = Path(input_source).read_text(encoding="utf-8")
-
-    if input_source == "-":
-        console.print("   Paste requirement text below (Press Ctrl+D when finished):")
-        try:
-            requirement = sys.stdin.read()
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[red]Cancelled.[/]")
-            raise typer.Exit(1)
-
-    # 3. Determine planning engine
-    config = None
-    try:
-        config = load_niyam_config(repo_root)
-    except Exception:
-        pass
-
-    default_engine = "claude"
-    if config and config.runtimes:
-        default_engine = config.runtimes[0]
-
-    engine = runtime.value if runtime else default_engine
-    if not runtime:
-        console.print(
-            f"\n3. Which planning engine should I use? (default: {default_engine})"
-        )
-        try:
-            custom_engine = (
-                input(
-                    f"   Press Enter for {default_engine}, or type [claude/gemini/codex]: "
-                )
-                .strip()
-                .lower()
-            )
-            if custom_engine in {"claude", "gemini", "codex"}:
-                engine = custom_engine
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[red]Cancelled.[/]")
-            raise typer.Exit(1)
-
-    # Interrogation phase
-    requirement = interrogate_requirement(requirement, engine, console)
-
-    # 4. Confirm and Run Plan
     console.print(
-        f"\n[cyan]Ready! Running plan generation for mission '{run_id}' using engine '{engine}'...[/]"
+        "[yellow]Warning: 'niyam start' is deprecated and will be removed in a future release. "
+        "Use 'niyam mission start-wizard' instead.[/]\n"
     )
+    from niyam.cli.mission import mission_start_wizard
 
-    # We need a temporary file for the requirement
-    temp_dir = repo_root / ".niyam" / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    temp_req = temp_dir / f"{run_id}.md"
-    temp_req.write_text(requirement, encoding="utf-8")
-
-    try:
-        run_mission_plan(
-            requirements_path=str(temp_req),
-            strict=False,
-            console=console,
-            template=None,
-            runtime_override=engine,
-        )
-    finally:
-        if temp_req.exists():
-            temp_req.unlink()
+    mission_start_wizard(runtime=runtime)
 
 
 @app.command()
