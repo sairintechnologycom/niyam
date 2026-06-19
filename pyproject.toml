@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "niyam"
-version = "1.0.0-rc1"
+version = "1.0.0"
 description = "Governed autonomous development and production-readiness for AI coding agents."
 readme = "README.md"
 license = "MIT"

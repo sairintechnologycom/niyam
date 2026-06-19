@@ -329,14 +329,46 @@ def find_niyam_root(start: Path | None = None) -> Path | None:
 
 
 def load_niyam_config(repo_root: Path | None = None) -> NiyamConfig:
-    """Load and validate niyam.yaml."""
+    """Load and validate niyam.yaml with environment variable overrides."""
+    import os
     from niyam.core.security import safe_load_yaml
 
     niyam_dir = get_niyam_dir(repo_root)
     config_path = niyam_dir / NIYAM_YAML
     if not config_path.exists() and (niyam_dir / "sutra.yaml").exists():
         config_path = niyam_dir / "sutra.yaml"
-    data = safe_load_yaml(config_path)
+    data = safe_load_yaml(config_path) or {}
+
+    # Overlay environment variable overrides for SaaS configuration
+    if "saas" not in data or data["saas"] is None:
+        data["saas"] = {}
+
+    saas = data["saas"]
+
+    env_enabled = os.getenv("NIYAM_SAAS_ENABLED")
+    if env_enabled is not None:
+        saas["enabled"] = env_enabled.lower() in ("true", "1", "yes")
+
+    env_base_url = os.getenv("NIYAM_SAAS_BASE_URL")
+    if env_base_url is not None:
+        saas["base_url"] = env_base_url
+
+    env_api_key = os.getenv("NIYAM_SAAS_API_KEY")
+    if env_api_key is not None:
+        saas["api_key"] = env_api_key
+
+    env_project_id = os.getenv("NIYAM_SAAS_PROJECT_ID")
+    if env_project_id is not None:
+        saas["project_id"] = env_project_id
+
+    env_org_id = os.getenv("NIYAM_SAAS_ORGANIZATION_ID")
+    if env_org_id is not None:
+        saas["organization_id"] = env_org_id
+
+    env_pricing_url = os.getenv("NIYAM_SAAS_PRICING_URL")
+    if env_pricing_url is not None:
+        saas["pricing_url"] = env_pricing_url
+
     return NiyamConfig(**data)
 
 
