@@ -26,15 +26,26 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies and SBOM Tool
+      - name: Install external scanner binaries and tools
+        run: |
+          mkdir -p $HOME/.local/bin
+          # Install Syft SBOM tool
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b $HOME/.local/bin
+          # Install Gitleaks
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -xz -C $HOME/.local/bin
+          # Install Trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin
+          # Add local bin to PATH for subsequent steps
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies, Semgrep, and Checkov
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          pip install -e ".[dev,rag]" semgrep checkov
 
       - name: Run Tests
         run: |
-          pytest tests/test_init.py tests/test_cli.py tests/test_scan.py tests/test_governance_smoke.py
+          pytest
 
       - name: Run Niyam Readiness Scan (Dogfooding)
         run: |
