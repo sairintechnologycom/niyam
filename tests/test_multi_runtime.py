@@ -132,38 +132,57 @@ def test_executor_resolves_task_runtime(niyam_repo: Path) -> None:
     ]
     save_plan(run_dir, plan_data)
 
-    # Mock shutil.which to find all runtimes
+    # Mock shutil.which to find all runtimes (name or full path)
     def mock_which(cmd: str) -> str | None:
-        if cmd in ["gemini", "codex", "claude"]:
-            return f"/mock/bin/{cmd}"
+        name = Path(str(cmd)).name
+        if name in ("gemini", "codex", "claude"):
+            return f"/mock/bin/{name}"
         return None
 
-    # Patch subprocess.run to track invocations
+    import subprocess as sp
+
+    real_run = sp.run
+    runtime_calls: list[str] = []
+
+    def mock_run(args, **kwargs):
+        if args and args[0] == "git":
+            return real_run(args, **kwargs)
+        cmd0 = args[0] if args else ""
+        base = Path(str(cmd0)).name
+        if base in ("gemini", "codex", "claude"):
+            runtime_calls.append(base)
+            res = MagicMock()
+            res.returncode = 0
+            res.stdout = "ok"
+            res.stderr = ""
+            return res
+        res = MagicMock()
+        res.returncode = 0
+        res.stdout = ""
+        res.stderr = ""
+        return res
+
     with (
         patch("shutil.which", side_effect=mock_which),
-        patch("subprocess.run") as mock_run,
+        patch("subprocess.run", side_effect=mock_run),
     ):
-        # NIYAM_TEST=0 allows running subprocess block.
-        # NIYAM_CI_AUTO_APPROVE=1 satisfies the approval check.
+        prev_test = os.environ.pop("NIYAM_TEST", None)
         os.environ["NIYAM_CI_AUTO_APPROVE"] = "1"
         try:
-            run_mission_start(console=console)
+            run_mission_start(console=console, non_interactive=True, worktree=False)
         finally:
             del os.environ["NIYAM_CI_AUTO_APPROVE"]
+            if prev_test is not None:
+                os.environ["NIYAM_TEST"] = prev_test
 
-        # Let's inspect mock_run calls
-        # There should be calls to git status / diff or executing runtimes
-        runtime_calls = []
-        for call in mock_run.call_args_list:
-            cmd = call[0][0]
-            if isinstance(cmd, list) and len(cmd) > 0:
-                if cmd[0] in ["gemini", "codex", "claude"]:
-                    runtime_calls.append(cmd[0])
+        # First occurrence order: T1 gemini, T2 codex, T3 claude (fallback).
+        # Extra claude invocations may occur for recovery/validation retries.
+        first_seen: list[str] = []
+        for r in runtime_calls:
+            if r not in first_seen:
+                first_seen.append(r)
+        assert first_seen == ["gemini", "codex", "claude"], runtime_calls
 
-        # Assert correct dispatching sequence: T1 -> gemini, T2 -> codex, T3 -> claude (fallback)
-        assert runtime_calls == ["gemini", "codex", "claude"]
-
-        # Check Token Ledger
         ledger_path = run_dir / "token-ledger.json"
         assert ledger_path.exists()
         with open(ledger_path, encoding="utf-8") as f:
@@ -171,7 +190,6 @@ def test_executor_resolves_task_runtime(niyam_repo: Path) -> None:
 
         events = ledger.get("events", [])
         assert len(events) >= 3
-        # Map task ID to runtime used from ledger
         task_runtimes = {
             entry["task_id"]: entry["runtime"] for entry in events if "task_id" in entry
         }

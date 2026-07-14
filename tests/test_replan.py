@@ -77,6 +77,7 @@ tasks:
         mock_res = MagicMock()
         mock_res.returncode = 0
         mock_res.stdout = mock_ai_output
+        mock_res.stderr = ""
         mock_run.return_value = mock_res
 
         # Execute re-plan

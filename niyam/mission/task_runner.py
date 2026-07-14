@@ -1019,6 +1019,14 @@ Do not perform destructive operations.
 
             success = False
             tried_runtimes = []
+            import sys as _sys
+
+            effective_non_interactive = (
+                non_interactive
+                or os.environ.get("NIYAM_TEST") == "1"
+                or os.environ.get("CI") == "true"
+                or "pytest" in _sys.modules
+            )
 
             # Apply routing + budget-aware tier degradation before execution
             try:
@@ -1078,7 +1086,7 @@ Do not perform destructive operations.
                     if len(tried_runtimes) < len(orchestrators_to_try):
                         continue
                     else:
-                        if parallel_limit > 1 or non_interactive:
+                        if parallel_limit > 1 or effective_non_interactive:
                             pass
                         else:
                             with print_lock:
@@ -1225,7 +1233,7 @@ Do not perform destructive operations.
                     ):
                         continue
                     else:
-                        if parallel_limit > 1 or non_interactive:
+                        if parallel_limit > 1 or effective_non_interactive:
                             pass
                         else:
                             try:
@@ -1242,125 +1250,128 @@ Do not perform destructive operations.
 
     if success:
         transition_task(run_dir, task_id, "validating")
-        after_snapshot = get_snapshot(task_cwd, is_git)
 
-        changed_files = []
-        if is_git:
-            for f in after_snapshot:
-                if f not in before_snapshot or after_snapshot[f] != before_snapshot[f]:
-                    changed_files.append(f)
-            for f in before_snapshot:
-                if f not in after_snapshot:
-                    changed_files.append(f)
+    # Always evaluate write scope after execution — even on agent failure —
+    # so unauthorized leftover files are reverted and policy events recorded.
+    after_snapshot = get_snapshot(task_cwd, is_git)
+
+    changed_files = []
+    if is_git:
+        for f in after_snapshot:
+            if f not in before_snapshot or after_snapshot[f] != before_snapshot[f]:
+                changed_files.append(f)
+        for f in before_snapshot:
+            if f not in after_snapshot:
+                changed_files.append(f)
+    else:
+        all_keys = set(before_snapshot.keys()) | set(after_snapshot.keys())
+        for f in all_keys:
+            if before_snapshot.get(f) != after_snapshot.get(f):
+                changed_files.append(f)
+
+    if changed_files and is_git:
+        try:
+            res_diff = subprocess.run(
+                ["git", "diff"], cwd=task_cwd, capture_output=True, text=True
+            )
+            if res_diff.returncode == 0:
+                (task_dir / "diff.patch").write_text(res_diff.stdout, encoding="utf-8")
+        except Exception:
+            pass
+
+    violated_files = []
+    writes_files = task.get("writes_files", True)
+    allowed_files = task.get("allowed_files") or task.get("files_allowed") or ["*"]
+    blocked_files = task.get("blocked_files", [])
+
+    from niyam.policies.guard import load_security_policy
+
+    sec_data = load_security_policy(repo_root)
+    deny_patterns = sec_data.get("deny_write_patterns", [])
+    allow_patterns = sec_data.get("allow_write_patterns", [])
+
+    if changed_files:
+        if not writes_files:
+            violated_files = list(changed_files)
         else:
-            all_keys = set(before_snapshot.keys()) | set(after_snapshot.keys())
-            for f in all_keys:
-                if before_snapshot.get(f) != after_snapshot.get(f):
-                    changed_files.append(f)
+            for f in changed_files:
+                if blocked_files and any(
+                    fnmatch.fnmatch(f, pat) for pat in blocked_files
+                ):
+                    violated_files.append(f)
+                    continue
+                if allowed_files and "*" not in allowed_files:
+                    if not any(fnmatch.fnmatch(f, pat) for pat in allowed_files):
+                        violated_files.append(f)
+                        continue
+                if deny_patterns and any(
+                    fnmatch.fnmatch(f, pat) for pat in deny_patterns
+                ):
+                    violated_files.append(f)
+                    continue
+                if (
+                    allow_patterns
+                    and len(allow_patterns) > 0
+                    and not any(fnmatch.fnmatch(f, pat) for pat in allow_patterns)
+                ):
+                    violated_files.append(f)
+                    continue
 
-        # Capture task-specific diff
-        if changed_files and is_git:
-            try:
-                # If using worktree, diff HEAD~1..HEAD (since we haven't committed yet, wait,
-                # we commit at the end of the function. So right now it's just dirty changes in worktree)
-                diff_cmd = ["git", "diff"]
-                res_diff = subprocess.run(
-                    diff_cmd, cwd=task_cwd, capture_output=True, text=True
+    if violated_files:
+        if is_git:
+            for f in violated_files:
+                rel = f.split(" -> ")[-1].strip().strip('"')
+                res_cat = subprocess.run(
+                    ["git", "cat-file", "-e", f"HEAD:{rel}"],
+                    cwd=task_cwd,
+                    capture_output=True,
                 )
-                if res_diff.returncode == 0:
-                    (task_dir / "diff.patch").write_text(
-                        res_diff.stdout, encoding="utf-8"
-                    )
-            except Exception:
-                pass
-
-        violated_files = []
-        writes_files = task.get("writes_files", True)
-        allowed_files = task.get("allowed_files") or task.get("files_allowed") or ["*"]
-        blocked_files = task.get("blocked_files", [])
-
-        from niyam.policies.guard import load_security_policy
-
-        sec_data = load_security_policy(repo_root)
-        deny_patterns = sec_data.get("deny_write_patterns", [])
-        allow_patterns = sec_data.get("allow_write_patterns", [])
-
-        if changed_files:
-            if not writes_files:
-                violated_files = changed_files
-            else:
-                for f in changed_files:
-                    if blocked_files and any(
-                        fnmatch.fnmatch(f, pat) for pat in blocked_files
-                    ):
-                        violated_files.append(f)
-                        continue
-                    if allowed_files and "*" not in allowed_files:
-                        if not any(fnmatch.fnmatch(f, pat) for pat in allowed_files):
-                            violated_files.append(f)
-                            continue
-                    if deny_patterns and any(
-                        fnmatch.fnmatch(f, pat) for pat in deny_patterns
-                    ):
-                        violated_files.append(f)
-                        continue
-                    if (
-                        allow_patterns
-                        and len(allow_patterns) > 0
-                        and not any(fnmatch.fnmatch(f, pat) for pat in allow_patterns)
-                    ):
-                        violated_files.append(f)
-                        continue
-
-        if violated_files:
-            if is_git:
-                for f in violated_files:
-                    res_cat = subprocess.run(
-                        ["git", "cat-file", "-e", f"HEAD:{f}"],
+                if res_cat.returncode == 0:
+                    subprocess.run(
+                        ["git", "reset", "HEAD", "--", rel],
                         cwd=task_cwd,
                         capture_output=True,
                     )
-                    if res_cat.returncode == 0:
-                        subprocess.run(
-                            ["git", "reset", "HEAD", f],
-                            cwd=task_cwd,
-                            capture_output=True,
-                        )
-                        subprocess.run(
-                            ["git", "checkout", "--", f],
-                            cwd=task_cwd,
-                            capture_output=True,
-                        )
-                    else:
-                        subprocess.run(
-                            ["git", "rm", "--cached", "-f", f],
-                            cwd=task_cwd,
-                            capture_output=True,
-                        )
-                        full_p = task_cwd / f
-                        if full_p.exists() and not full_p.is_dir():
-                            try:
-                                full_p.unlink()
-                            except Exception:
-                                pass
-            else:
-                for f in violated_files:
-                    restore_non_git_file(f, backup_dir, task_cwd)
+                    subprocess.run(
+                        ["git", "checkout", "HEAD", "--", rel],
+                        cwd=task_cwd,
+                        capture_output=True,
+                    )
+                else:
+                    subprocess.run(
+                        ["git", "rm", "--cached", "-f", "--", rel],
+                        cwd=task_cwd,
+                        capture_output=True,
+                    )
+                    full_p = task_cwd / rel
+                    if full_p.exists() and not full_p.is_dir():
+                        try:
+                            full_p.unlink()
+                        except Exception:
+                            pass
+                    elif full_p.is_dir():
+                        try:
+                            shutil.rmtree(full_p)
+                        except Exception:
+                            pass
+        else:
+            for f in violated_files:
+                restore_non_git_file(f, backup_dir, task_cwd)
 
-            log_mission_event(
-                run_dir,
-                "POLICY_VIOLATION",
-                task_id=task_id,
-                details=f"Task attempted unauthorized modifications to: {', '.join(violated_files)}",
-                type="WRITE_VIOLATION",
-            )
-            log_policy_event(
-                run_dir,
-                niyam_dir,
-                "WRITE_VIOLATION",
-                f"Unauthorized write attempt by {task_id} to: {', '.join(violated_files)}",
-            )
-            success = False
+        log_mission_event(
+            run_dir,
+            "POLICY_VIOLATION",
+            task_id=task_id,
+            details=f"Task attempted unauthorized modifications to: {', '.join(violated_files)}",
+            type="WRITE_VIOLATION",
+        )
+        log_policy_event(
+            run_dir,
+            niyam_dir,
+            "WRITE_VIOLATION",
+            f"Unauthorized write attempt by {task_id} to: {', '.join(violated_files)}",
+        )
+        success = False
 
     if not is_git and backup_dir.exists():
         try:

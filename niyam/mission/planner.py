@@ -1318,11 +1318,8 @@ def run_mission_plan(
         except Exception:
             cfg_for_routing = None
         if plan_data.get("tasks"):
-            # Ensure runtime default on tasks before resolving models
-            orch = plan_data.get("mission", {}).get("orchestrator") or "claude"
-            for t in plan_data["tasks"]:
-                if not t.get("runtime"):
-                    t["runtime"] = orch
+            # Apply cost/tier routing without forcing a default runtime onto the
+            # plan. Execution falls back to mission orchestrator when omitted.
             plan_data["tasks"] = apply_routing_policy(
                 plan_data["tasks"], cfg_for_routing
             )

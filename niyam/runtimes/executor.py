@@ -454,6 +454,19 @@ def run_runtime(
             error=f"binary_missing:{spec.binary}",
         )
 
+    def _as_text(value: Any) -> str:
+        """Coerce subprocess output to str (unit tests often return MagicMock)."""
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (bytes, bytearray)):
+            try:
+                return value.decode("utf-8", errors="replace")
+            except Exception:
+                return ""
+        return ""
+
     try:
         completed = subprocess.run(
             inv.argv,
@@ -464,8 +477,8 @@ def run_runtime(
             timeout=timeout,
             env=inv.env,
         )
-        stdout = completed.stdout or ""
-        stderr = completed.stderr or ""
+        stdout = _as_text(getattr(completed, "stdout", None))
+        stderr = _as_text(getattr(completed, "stderr", None))
         combined = stdout + "\n" + stderr
         if log_path is not None:
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -473,9 +486,13 @@ def run_runtime(
 
         usage = parse_usage_from_output(combined, parser=spec.usage_parser, runtime=spec.name)
         exhausted = detect_exhaustion(combined, spec.exhaustion_patterns)
+        try:
+            returncode = int(getattr(completed, "returncode", 1) or 0)
+        except (TypeError, ValueError):
+            returncode = 1
         return RuntimeRunResult(
-            success=completed.returncode == 0,
-            returncode=completed.returncode,
+            success=returncode == 0,
+            returncode=returncode,
             stdout=stdout,
             stderr=stderr,
             usage=usage,

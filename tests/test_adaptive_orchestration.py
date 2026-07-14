@@ -118,7 +118,7 @@ tasks:
     agent: "default-agent"
 ```
 """
-    mock_sub_run.return_value = MagicMock(returncode=0, stdout=mock_ai_output)
+    mock_sub_run.return_value = MagicMock(returncode=0, stdout=mock_ai_output, stderr="")
     
     console = Console()
     with patch("niyam.mission.planner.get_latest_mission_id", return_value="test-mission"):

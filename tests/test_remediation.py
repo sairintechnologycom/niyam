@@ -259,18 +259,26 @@ def test_writes_files_false_violation_and_revert(niyam_repo: Path) -> None:
 
         res = MagicMock()
         res.returncode = 0
+        res.stdout = "ok"
+        res.stderr = ""
         return res
 
+    prev_test = os.environ.pop("NIYAM_TEST", None)
     with (
         patch("shutil.which", return_value="/usr/local/bin/claude"),
         patch("subprocess.run", side_effect=mock_subprocess_run),
     ):
         try:
             with pytest.raises(SystemExit) as excinfo:
-                run_mission_start(console=console, worktree=False)
+                run_mission_start(
+                    console=console, worktree=False, non_interactive=True
+                )
             assert excinfo.value.code == 1
         except Exception:
             pass
+        finally:
+            if prev_test is not None:
+                os.environ["NIYAM_TEST"] = prev_test
 
     # Verify task failed and file was reverted/deleted
     plan = load_plan(run_dir)

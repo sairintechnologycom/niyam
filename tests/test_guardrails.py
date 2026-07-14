@@ -66,24 +66,26 @@ def test_path_write_denial_and_revert(niyam_repo: Path) -> None:
 
         res = MagicMock()
         res.returncode = 0
+        res.stdout = "ok"
+        res.stderr = ""
         return res
 
+    prev_test = os.environ.pop("NIYAM_TEST", None)
     with (
         patch("shutil.which", return_value="/usr/local/bin/claude"),
         patch("subprocess.run", side_effect=mock_subprocess_run),
     ):
-        # We do NOT run in test mode (NIYAM_TEST) because we want orchestrator execution path
-        # But wait, run_mission_start will run.
-        # Let's make sure it doesn't fail on validation test commands (no validation set in fullstack by default)
         try:
-            # Run the mission start (which will execute the first task T1)
-            # T1 is discovery (writes_files: False, but we simulate writing anyway)
             with pytest.raises(SystemExit) as excinfo:
-                run_mission_start(console=console, worktree=False)
+                run_mission_start(
+                    console=console, worktree=False, non_interactive=True
+                )
             assert excinfo.value.code == 1
         except Exception:
-            # Let it fail with SystemExit as expected
             pass
+        finally:
+            if prev_test is not None:
+                os.environ["NIYAM_TEST"] = prev_test
 
     # 4. Assert task T1 failed due to violation, and unauthorized file was deleted/reverted
     run_dir = niyam_dir / "runs" / mission_id
