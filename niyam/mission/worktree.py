@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 from rich.console import Console
 from niyam.mission.utils import print_lock, git_lock
@@ -291,15 +292,134 @@ def find_leaf_tasks(tasks: list[dict]) -> list[str]:
     return list(all_ids - dependent_ids)
 
 
+@dataclass
+class MergeResult:
+    """Outcome of final mission branch integration."""
+
+    success: bool
+    recovery_tasks: list[dict] = field(default_factory=list)
+    conflicts: list[dict] = field(default_factory=list)
+    message: str = ""
+
+
+def _unmerged_paths(repo_root: Path) -> list[str]:
+    """List paths with unresolved merge conflicts."""
+    res = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=U"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        return []
+    return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+
+def _branch_diff_summary(
+    repo_root: Path, branch_name: str, *, max_chars: int = 8000
+) -> str:
+    """Short stat + patch summary of branch vs HEAD for recovery prompts."""
+    parts: list[str] = []
+    for args in (
+        ["git", "diff", "--stat", "HEAD", branch_name],
+        ["git", "diff", "HEAD", branch_name, "--"],
+    ):
+        res = subprocess.run(
+            args,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            parts.append(res.stdout.strip())
+    text = "\n\n".join(parts) if parts else "(no diff available)"
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n… [truncated]"
+    return text
+
+
+def build_merge_recovery_task(
+    *,
+    mission_id: str,
+    leaf_id: str,
+    branch_name: str,
+    conflict_files: list[str],
+    merge_output: str,
+    branch_diff: str,
+    existing_task_ids: set[str] | None = None,
+) -> dict:
+    """Create a recovery TaskContract-shaped dict for a final-merge conflict."""
+    base_id = f"T_MERGE_REC_{leaf_id}"
+    task_id = base_id
+    if existing_task_ids:
+        n = 2
+        while task_id in existing_task_ids:
+            task_id = f"{base_id}_{n}"
+            n += 1
+
+    files = conflict_files or ["*"]
+    healing = (
+        f"Final integration of branch `{branch_name}` into the workspace failed "
+        f"with a merge conflict while completing mission `{mission_id}` "
+        f"(leaf task `{leaf_id}`).\n\n"
+        f"Conflict files:\n"
+        + "\n".join(f"- {p}" for p in (conflict_files or ["(unknown)"]))
+        + "\n\nMerge output:\n```\n"
+        + (merge_output or "")[:4000]
+        + "\n```\n\nBranch diff vs workspace HEAD:\n```\n"
+        + (branch_diff or "")[:6000]
+        + "\n```\n\n"
+        "Resolve by: (1) merging the branch cleanly or replaying changes, "
+        "(2) fixing every conflict file without leaving conflict markers, "
+        "(3) ensuring validation commands pass. Do not force-push or rewrite "
+        "shared history."
+    )
+    return {
+        "id": task_id,
+        "title": f"Recovery: resolve merge conflict integrating {leaf_id}",
+        "type": "recovery",
+        "status": "planned",
+        "approval_required": True,
+        "agent": "backend-specialist",
+        "depends_on": [leaf_id],
+        "files_allowed": files,
+        "allowed_files": files,
+        "writes_files": True,
+        "acceptance_criteria": [
+            f"Branch {branch_name} merges cleanly into the workspace",
+            "No conflict markers remain in the tree",
+            "Relevant validation commands pass",
+        ],
+        "description": healing,
+        "healing_prompt": healing,
+        "context": {
+            "kind": "merge_conflict",
+            "mission_id": mission_id,
+            "leaf_task_id": leaf_id,
+            "branch": branch_name,
+            "conflict_files": conflict_files,
+        },
+    }
+
+
 def merge_final_changes(
     repo_root: Path, mission_id: str, tasks: list[dict], console: Console
-) -> None:
-    """Merge leaf task branches of the completed mission back into main workspace."""
+) -> MergeResult:
+    """Merge leaf task branches back into the main workspace.
+
+    On merge conflict: abort the merge, build a recovery task (conflict files +
+    branch diffs), and return ``success=False`` with recovery tasks so the
+    executor can pause for approval instead of failing the mission hard.
+    """
     with git_lock:
         leaf_ids = find_leaf_tasks(tasks)
         if not leaf_ids:
             console.print("[yellow]No completed leaf tasks to merge.[/]")
-            return
+            return MergeResult(success=True, message="No completed leaf tasks to merge.")
+
+        existing_ids = {t["id"] for t in tasks}
+        recovery_tasks: list[dict] = []
+        conflicts: list[dict] = []
 
         # Check if working directory is dirty (including untracked files)
         status_res = subprocess.run(
@@ -341,6 +461,9 @@ def merge_final_changes(
                     f"[cyan]Merging final branch {branch_name} into workspace...[/]"
                 )
 
+                # Capture branch content before merge attempt for recovery prompts
+                branch_diff = _branch_diff_summary(repo_root, branch_name)
+
                 res = subprocess.run(
                     [
                         "git",
@@ -354,12 +477,38 @@ def merge_final_changes(
                     text=True,
                 )
                 if res.returncode != 0:
+                    merge_out = (res.stderr or "") + "\n" + (res.stdout or "")
+                    conflict_files = _unmerged_paths(repo_root)
+                    # Leave workspace clean for the recovery task
+                    subprocess.run(
+                        ["git", "merge", "--abort"],
+                        cwd=repo_root,
+                        capture_output=True,
+                        text=True,
+                    )
                     console.print(
-                        f"[bold red]Merge conflict during final integration:[/] Failed to merge {branch_name} back to main workspace.\n{res.stderr or res.stdout}"
+                        f"[bold yellow]Merge conflict during final integration of "
+                        f"{branch_name}.[/] Generating recovery task instead of aborting "
+                        f"the mission.\nConflict files: {', '.join(conflict_files) or '(see merge output)'}"
                     )
-                    raise RuntimeError(
-                        f"Merge conflict during final integration of {branch_name}"
+                    rec = build_merge_recovery_task(
+                        mission_id=mission_id,
+                        leaf_id=leaf_id,
+                        branch_name=branch_name,
+                        conflict_files=conflict_files,
+                        merge_output=merge_out.strip(),
+                        branch_diff=branch_diff,
+                        existing_task_ids=existing_ids | {t["id"] for t in recovery_tasks},
                     )
+                    recovery_tasks.append(rec)
+                    conflicts.append(
+                        {
+                            "leaf_id": leaf_id,
+                            "branch": branch_name,
+                            "conflict_files": conflict_files,
+                        }
+                    )
+                    continue
 
                 console.print(
                     f"[bold green]✓[/] Successfully integrated changes from branch [cyan]{branch_name}[/]."
@@ -379,6 +528,17 @@ def merge_final_changes(
                     console.print(
                         f"[bold red]Warning: Failed to restore stashed changes: {pop_res.stderr or pop_res.stdout}[/]"
                     )
+
+        if recovery_tasks:
+            return MergeResult(
+                success=False,
+                recovery_tasks=recovery_tasks,
+                conflicts=conflicts,
+                message=(
+                    f"{len(recovery_tasks)} merge conflict(s) require recovery tasks."
+                ),
+            )
+        return MergeResult(success=True, message="All leaf branches integrated.")
 
 
 def delete_mission_branches(

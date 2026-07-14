@@ -133,6 +133,14 @@ def build_runtime_invocation(
     argv = [binary, *rendered]
     env = dict(os.environ)
     env.update(spec.env)
+    # Hookless runtimes get PATH shims for deny-list command enforcement
+    if repo_root is not None:
+        try:
+            from niyam.policies.path_shim import inject_path_shim_env
+
+            env = inject_path_shim_env(env, Path(repo_root), runtime_name)
+        except Exception:
+            logger.debug("path-shim inject skipped", exc_info=True)
     return RuntimeInvocation(argv=argv, stdin_data=stdin_data, env=env, spec=spec)
 
 

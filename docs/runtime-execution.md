@@ -84,3 +84,34 @@ After implementation validation, Niyam runs an orchestrator evidence review
 - `REJECT` → task failed
 
 Artifacts: `tasks/T*/evidence-pack.md`, `review-verdict.yaml`.
+
+## Merge-conflict recovery
+
+When final worktree integration (`merge_final_changes`) hits a Git conflict,
+Niyam does **not** fail the mission hard. It:
+
+1. Aborts the in-progress merge (clean workspace)
+2. Creates a `type: recovery` task (`T_MERGE_REC_<leaf>`) with conflict files
+   and branch diffs in the healing prompt
+3. Pauses the mission for approval (`niyam mission approve-task` → `start`)
+
+Source: `niyam/mission/worktree.py` (`MergeResult`, `build_merge_recovery_task`).
+
+## DAG scheduling
+
+The executor schedules via `DAGPlanner.ready_tasks()` (same dependency graph
+as `executable_layers` / mission explain). Recovery tasks are prioritized.
+Failed dependencies mark dependents `skipped`.
+
+## PATH-shim guards (hookless runtimes)
+
+Codex, Gemini, and other runtimes without `hooks` capability get
+`.niyam/shims/bin` prepended to the subprocess `PATH`. Wrappers for `git`,
+`rm`, `npm`, `terraform`, … consult deny patterns from
+`guard-config.json` / `policies/commands.yaml` and block matches (exit 126)
+with entries in `.niyam/evidence/policy-events.json`.
+
+- Disable: `NIYAM_PATH_SHIM=0`
+- Force for all runtimes (including Claude): `NIYAM_PATH_SHIM_FORCE=1`
+
+Source: `niyam/policies/path_shim.py`, injected in `runtimes/executor.py`.

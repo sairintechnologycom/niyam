@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from niyam.core.config import get_niyam_dir, load_niyam_config, load_project_config
-from niyam.mission.planner import resolve_mission_id, run_mission_replan
+from niyam.mission.planner import DAGPlanner, resolve_mission_id, run_mission_replan
 
 from niyam.mission.utils import print_lock, load_plan, save_plan
 from niyam.core.swarm import (
@@ -481,25 +481,16 @@ def run_mission_start(
                     pass
 
 
-            # Find ready tasks
-            ready_tasks = []
+            # Find ready tasks via DAGPlanner (single scheduling source of truth)
             tasks = current_plan.get("tasks", [])
             task_by_id = {task["id"]: task for task in tasks}
-            for t in tasks:
-                t_id = t["id"]
-                if t["status"] in ("planned", "retry_ready") and t_id not in running_tasks:
-                    deps = t.get("depends_on", [])
-                    finished_statuses = {"completed", "failed", "skipped"}
-                    dep_tasks = [task_by_id[dep] for dep in deps if dep in task_by_id]
-
-                    if all(dt["status"] in finished_statuses for dt in dep_tasks):
-                        if any(dt["status"] == "failed" for dt in dep_tasks):
-                            transition_task(run_dir, t_id, "skipped", reason="Dependency failed.")
-                            continue
-                        ready_tasks.append(t)
-
-            # Sort ready tasks to prioritize 'recovery' tasks
-            ready_tasks.sort(key=lambda x: x.get("type") != "recovery")
+            ready_tasks, skip_tasks = DAGPlanner().ready_tasks(
+                tasks, exclude_ids=set(running_tasks)
+            )
+            for t in skip_tasks:
+                transition_task(
+                    run_dir, t["id"], "skipped", reason="Dependency failed."
+                )
 
             # Submit ready tasks up to concurrency capacity
             for t in ready_tasks:
@@ -681,8 +672,52 @@ def run_mission_start(
     # Success integration (merge back if worktree was used)
     if use_worktree and is_git:
         try:
-            merge_final_changes(repo_root, mission_id, tasks_list, console)
-            delete_mission_branches(repo_root, mission_id, tasks_list, console)
+            merge_result = merge_final_changes(
+                repo_root, mission_id, tasks_list, console
+            )
+            if not merge_result.success and merge_result.recovery_tasks:
+                # Append recovery tasks and pause for human approval
+                plan_now = load_plan(run_dir)
+                existing = {t["id"] for t in plan_now.get("tasks", [])}
+                for rec in merge_result.recovery_tasks:
+                    if rec["id"] not in existing:
+                        plan_now.setdefault("tasks", []).append(rec)
+                        existing.add(rec["id"])
+                save_plan(run_dir, plan_now)
+                rec_ids = ", ".join(r["id"] for r in merge_result.recovery_tasks)
+                console.print(
+                    Panel(
+                        f"[bold yellow]Merge conflict(s) detected.[/]\n"
+                        f"Created recovery task(s): [cyan]{rec_ids}[/]\n"
+                        f"Approve with: [bold]niyam mission approve-task <id>[/]\n"
+                        f"Then resume: [bold]niyam mission start[/]",
+                        title="[bold yellow]Merge Recovery Required[/]",
+                        border_style="yellow",
+                    )
+                )
+                transition_mission(
+                    run_dir,
+                    "paused",
+                    reason=(
+                        f"Paused for merge-conflict recovery: {merge_result.message}"
+                    ),
+                )
+                run_hooks(
+                    "post_mission",
+                    {
+                        "mission_id": mission_id,
+                        "mission_status": "paused",
+                        "reason": "merge_conflict_recovery",
+                    },
+                    niyam_dir,
+                    console,
+                )
+                return
+
+            if merge_result.success:
+                delete_mission_branches(
+                    repo_root, mission_id, tasks_list, console
+                )
         except Exception as e:
             console.print(f"[bold red]Error integrating final changes:[/] {e}")
             transition_mission(run_dir, "failed", reason=f"Merge error: {e}")

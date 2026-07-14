@@ -19,8 +19,10 @@ Date: 2026-07-11
 - task_runner: degrade tier, resolve model on failover, post-validation review  
 - Tests: `tests/test_routing_and_review.py`  
 
-Remaining: Phase 4.3 merge-conflict recovery, Phase 4.4 DAGPlanner-only
-scheduler, Phase 5 PATH-shim governance.
+**Update 2026-07-14 (remaining tranche):** Phase 4.3 merge-conflict recovery,
+Phase 4.4 DAGPlanner `ready_tasks` scheduling, Phase 5.3 PATH-shim guards
+implemented (`worktree.MergeResult`, `DAGPlanner.ready_tasks`,
+`policies/path_shim.py`).
 
 Scope (original): review only — no code changes. This document is the work order for follow-up
 implementation (each task has file pointers and acceptance criteria so it can be

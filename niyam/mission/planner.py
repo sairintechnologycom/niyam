@@ -426,6 +426,9 @@ class CircularDependencyError(ValueError):
 class DAGPlanner:
     """Build executable task layers from `depends_on` relationships."""
 
+    DEFAULT_READY_STATUSES = frozenset({"planned", "retry_ready", "approved"})
+    DEFAULT_FINISHED_STATUSES = frozenset({"completed", "failed", "skipped"})
+
     @staticmethod
     def _task_id(task) -> str:
         return task["id"] if isinstance(task, dict) else task.id
@@ -434,6 +437,18 @@ class DAGPlanner:
     def _depends_on(task) -> list[str]:
         deps = task.get("depends_on", []) if isinstance(task, dict) else task.depends_on
         return list(deps or [])
+
+    @staticmethod
+    def _task_status(task) -> str:
+        if isinstance(task, dict):
+            return str(task.get("status") or "planned")
+        return str(getattr(task, "status", None) or "planned")
+
+    @staticmethod
+    def _task_type(task) -> str:
+        if isinstance(task, dict):
+            return str(task.get("type") or "")
+        return str(getattr(task, "type", None) or "")
 
     def executable_layers(self, tasks: list) -> list[list]:
         """Return topologically sorted batches of unblocked tasks."""
@@ -479,6 +494,58 @@ class DAGPlanner:
     def topological_sort(self, tasks: list) -> list:
         """Return a flattened topological ordering of tasks."""
         return [task for layer in self.executable_layers(tasks) for task in layer]
+
+    def ready_tasks(
+        self,
+        tasks: list,
+        *,
+        ready_statuses: frozenset[str] | set[str] | None = None,
+        finished_statuses: frozenset[str] | set[str] | None = None,
+        exclude_ids: set[str] | None = None,
+        prioritize_recovery: bool = True,
+    ) -> tuple[list, list]:
+        """Return (ready, skip_due_to_failed_deps) for the live executor schedule.
+
+        Single source of scheduling truth used by the mission executor. A task is
+        ready when its status is in ``ready_statuses``, it is not excluded
+        (already running), and every dependency is in ``finished_statuses``.
+        Dependents of failed tasks are returned in the skip list.
+        """
+        ready_statuses = frozenset(ready_statuses or self.DEFAULT_READY_STATUSES)
+        finished_statuses = frozenset(
+            finished_statuses or self.DEFAULT_FINISHED_STATUSES
+        )
+        exclude_ids = exclude_ids or set()
+        task_by_id = {self._task_id(task): task for task in tasks}
+
+        ready: list = []
+        to_skip: list = []
+
+        for task in tasks:
+            task_id = self._task_id(task)
+            if task_id in exclude_ids:
+                continue
+            status = self._task_status(task)
+            if status not in ready_statuses:
+                continue
+
+            deps = self._depends_on(task)
+            dep_tasks = [task_by_id[d] for d in deps if d in task_by_id]
+            # Missing deps already validated at plan time; treat unknown as unfinished
+            if len(dep_tasks) != len(deps):
+                continue
+            if not all(self._task_status(dt) in finished_statuses for dt in dep_tasks):
+                continue
+
+            if any(self._task_status(dt) == "failed" for dt in dep_tasks):
+                to_skip.append(task)
+                continue
+            ready.append(task)
+
+        if prioritize_recovery:
+            ready.sort(key=lambda t: self._task_type(t) != "recovery")
+
+        return ready, to_skip
 
 
 DEFAULT_TEMPLATES = {
