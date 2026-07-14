@@ -237,7 +237,13 @@ Please fix the error. Return ONLY the corrected YAML/JSON block matching the sch
 
 def choose_fallback_template(requirement_text: str) -> str:
     req_lower = requirement_text.lower()
-    if "api" in req_lower or "endpoint" in req_lower:
+    if (
+        "api" in req_lower
+        or "endpoint" in req_lower
+        or "healthcheck" in req_lower
+        or "health check" in req_lower
+        or re.search(r"\b(get|post|put|patch|delete)\s+/", req_lower)
+    ):
         return "api-endpoint"
     if (
         "bug" in req_lower
@@ -250,6 +256,124 @@ def choose_fallback_template(requirement_text: str) -> str:
     if "refactor" in req_lower or "clean" in req_lower or "optimize" in req_lower:
         return "refactor"
     return "default"
+
+
+def extract_requirement_summary(requirement_text: str, max_len: int = 120) -> str:
+    """Pick a short human-readable summary line from a requirement document."""
+    body_lines: list[str] = []
+    heading_lines: list[str] = []
+    for raw in requirement_text.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        is_heading = stripped.startswith("#")
+        line = stripped.lstrip("#").strip()
+        if not line:
+            continue
+        # Skip section labels alone
+        if line.lower() in {
+            "acceptance",
+            "acceptance criteria",
+            "requirements",
+            "overview",
+            "summary",
+            "description",
+        }:
+            continue
+        if line.startswith(("-", "*", "•")):
+            line = line.lstrip("-*• ").strip()
+        if not line:
+            continue
+        if is_heading:
+            heading_lines.append(line)
+        else:
+            body_lines.append(line)
+
+    # Prefer body/paragraph content over markdown titles
+    for line in body_lines + heading_lines:
+        return line if len(line) <= max_len else line[: max_len - 1].rstrip() + "…"
+    return "the stated requirement"
+
+
+def extract_api_endpoint_from_requirement(
+    requirement_text: str,
+) -> tuple[str, str]:
+    """Extract HTTP method and path from requirement text.
+
+    Returns ``(method, path)``. Falls back to sensible defaults grounded in
+    common phrases (e.g. healthcheck → GET /health) rather than a generic
+    ``/api/v1/resource`` when the requirement implies a specific route.
+    """
+    method = "GET"
+    path: str | None = None
+
+    # Explicit "GET /health" / "POST /api/v1/users" patterns
+    m = re.search(
+        r"\b(GET|POST|PUT|PATCH|DELETE)\s+(/[A-Za-z0-9_\-./{}:]+)",
+        requirement_text,
+        re.IGNORECASE,
+    )
+    if m:
+        method = m.group(1).upper()
+        path = m.group(2).rstrip(".,);:`'\"")
+
+    # Bare path mentions: /health, /api/v1/foo
+    if path is None:
+        for candidate in re.findall(r"(?<![/\w])(/[A-Za-z0-9_\-./{}:]+)", requirement_text):
+            cleaned = candidate.rstrip(".,);:`'\"")
+            if len(cleaned) > 1 and cleaned not in {"/"}:
+                path = cleaned
+                break
+
+    # Phrase heuristics when no explicit path is present
+    if path is None:
+        lower = requirement_text.lower()
+        if "healthcheck" in lower or "health check" in lower or re.search(r"\bhealth\b", lower):
+            path = "/health"
+        elif "ready" in lower or "readiness" in lower:
+            path = "/ready"
+        elif "ping" in lower:
+            path = "/ping"
+
+    if path is None:
+        path = "/api/v1/resource"
+
+    # Method heuristics for common health/read endpoints
+    if method == "GET" and path in {"/health", "/ready", "/ping", "/healthz", "/live"}:
+        method = "GET"
+    elif re.search(r"\b(create|post|submit)\b", requirement_text, re.IGNORECASE) and method == "GET":
+        # Only flip default method when path was generic and requirement implies write
+        if path == "/api/v1/resource":
+            method = "POST"
+
+    return method, path
+
+
+def resolve_fallback_template_variables(
+    fallback_type: str, requirement_text: str, req_name: str
+) -> dict[str, str]:
+    """Ground template variables in the actual requirement text."""
+    summary = extract_requirement_summary(requirement_text)
+    var_values: dict[str, str] = {}
+
+    if fallback_type == "api-endpoint":
+        method, endpoint_path = extract_api_endpoint_from_requirement(requirement_text)
+        var_values["method"] = method
+        var_values["endpoint_path"] = endpoint_path
+    elif fallback_type == "bugfix":
+        var_values["bug_description"] = summary
+    elif fallback_type == "refactor":
+        # Prefer an explicit file path if the requirement names one
+        file_match = re.search(
+            r"\b([\w./-]+\.(?:py|ts|tsx|js|jsx|go|java|rb|rs|md))\b",
+            requirement_text,
+        )
+        var_values["target_file"] = file_match.group(1) if file_match else summary
+    else:
+        var_values["requirement_summary"] = summary
+        var_values["req_name"] = req_name
+
+    return var_values
 
 
 def inject_validation_commands(tasks: list[dict], repo_root: Path) -> None:
@@ -962,16 +1086,19 @@ def run_mission_plan(
         if fallback_type in DEFAULT_TEMPLATES:
             # We will use the default template rendering logic programmatically
             template_data = DEFAULT_TEMPLATES[fallback_type]
-            var_values = {}
+            # Ground variables in requirement text (not hard-coded /api/v1/resource)
+            grounded = resolve_fallback_template_variables(
+                fallback_type, requirement_content, req_name
+            )
+            var_values: dict[str, str] = {}
             for var in template_data.get("variables", []):
                 var_name = var.get("name")
-                default_val = var.get("default", "")
-                if fallback_type == "bugfix" and var_name == "bug_description":
-                    var_values[var_name] = f"Fix issue described in {req_name}"
-                elif fallback_type == "refactor" and var_name == "target_file":
-                    var_values[var_name] = f"files in {req_name}"
+                if not var_name:
+                    continue
+                if var_name in grounded and grounded[var_name]:
+                    var_values[var_name] = grounded[var_name]
                 else:
-                    var_values[var_name] = default_val
+                    var_values[var_name] = var.get("default", "")
 
             raw_tasks = template_data.get("tasks", [])
             rendered_tasks = []
@@ -1032,7 +1159,8 @@ def run_mission_plan(
                 "tasks": rendered_tasks,
             }
         else:
-            # Standard fallback (default)
+            # Standard fallback (default) — ground titles in requirement summary
+            req_summary = extract_requirement_summary(requirement_content)
             plan_data = {
                 "mission": {
                     "id": mission_id,
@@ -1048,7 +1176,7 @@ def run_mission_plan(
                 "tasks": [
                     {
                         "id": "T1",
-                        "title": f"Discovery: Analyze requirement in {req_name}",
+                        "title": f"Discovery: Analyze requirement — {req_summary}",
                         "type": "discovery",
                         "status": "planned",
                         "agent": backend_agent,
@@ -1056,7 +1184,7 @@ def run_mission_plan(
                     },
                     {
                         "id": "T2",
-                        "title": f"TDD: Write failing test cases for {req_name}",
+                        "title": f"TDD: Write failing test cases for — {req_summary}",
                         "type": "implementation",
                         "status": "planned",
                         "agent": backend_agent,
@@ -1066,7 +1194,7 @@ def run_mission_plan(
                     },
                     {
                         "id": "T3",
-                        "title": f"Implementation: Code the solution for {req_name}",
+                        "title": f"Implementation: Code the solution for — {req_summary}",
                         "type": "implementation",
                         "status": "planned",
                         "agent": backend_agent,
@@ -1075,7 +1203,7 @@ def run_mission_plan(
                     },
                     {
                         "id": "T4",
-                        "title": f"Security: Review changes for {req_name} for vulnerabilities",
+                        "title": f"Security: Review changes for vulnerabilities — {req_summary}",
                         "type": "review",
                         "status": "planned",
                         "agent": security_agent,
@@ -1084,7 +1212,7 @@ def run_mission_plan(
                     },
                     {
                         "id": "T5",
-                        "title": f"Validation: Run full verification suite for {req_name}",
+                        "title": f"Validation: Run full verification suite — {req_summary}",
                         "type": "validation",
                         "status": "planned",
                         "agent": qa_agent,

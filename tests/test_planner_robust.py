@@ -14,6 +14,9 @@ from niyam.mission.planner import (
     run_mission_plan,
     extract_yaml_or_json,
     choose_fallback_template,
+    extract_api_endpoint_from_requirement,
+    extract_requirement_summary,
+    resolve_fallback_template_variables,
     inject_validation_commands,
 )
 
@@ -58,6 +61,67 @@ def test_fallback_matches_requirement_keywords() -> None:
     assert choose_fallback_template("Fix auth bug where user cannot login") == "bugfix"
     assert choose_fallback_template("refactor executor.py code structure") == "refactor"
     assert choose_fallback_template("do some generic stuff") == "default"
+    assert choose_fallback_template("Add a healthcheck that returns ok") == "api-endpoint"
+    assert choose_fallback_template("GET /health returns 200") == "api-endpoint"
+    assert "healthcheck" in extract_requirement_summary(
+        "# Title\n\nAdd a healthcheck endpoint that returns ok.\n"
+    ).lower()
+
+
+def test_extract_api_endpoint_from_requirement() -> None:
+    """Fallback API plans must ground method/path in the requirement text."""
+    method, path = extract_api_endpoint_from_requirement(
+        "# E2E\n\nAdd a healthcheck endpoint.\n\n- GET /health returns 200\n"
+    )
+    assert method == "GET"
+    assert path == "/health"
+
+    method, path = extract_api_endpoint_from_requirement(
+        "Create POST /api/v1/invoices endpoint for billing"
+    )
+    assert method == "POST"
+    assert path == "/api/v1/invoices"
+
+    method, path = extract_api_endpoint_from_requirement(
+        "Add a readiness health check probe"
+    )
+    assert method == "GET"
+    assert path == "/health"
+
+
+def test_resolve_fallback_variables_ground_api_template() -> None:
+    vars_ = resolve_fallback_template_variables(
+        "api-endpoint",
+        "Add a healthcheck endpoint that returns ok.\n\nGET /health returns 200",
+        "e2e-req.md",
+    )
+    assert vars_["endpoint_path"] == "/health"
+    assert vars_["method"] == "GET"
+
+
+def test_fallback_api_plan_uses_health_path_not_generic_resource(
+    niyam_repo: Path,
+) -> None:
+    """AI-fallback mission plan should not invent /api/v1/resource for /health."""
+    os.chdir(niyam_repo)
+    req_file = niyam_repo / "requirements.md"
+    req_file.write_text(
+        "# E2E Requirement\n\n"
+        "Add a healthcheck endpoint that returns ok.\n\n"
+        "## Acceptance\n"
+        "- GET /health returns 200\n"
+        "- No secrets in source\n",
+        encoding="utf-8",
+    )
+
+    with patch.dict(os.environ, {"NIYAM_TEST": "1"}):
+        mission_id = run_mission_plan(str(req_file), console=Console(quiet=True))
+
+    plan_path = get_niyam_dir(niyam_repo) / "runs" / mission_id / "mission-plan.yaml"
+    plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+    titles = " ".join(task["title"] for task in plan["tasks"])
+    assert "/health" in titles
+    assert "/api/v1/resource" not in titles
 
 
 def test_validation_commands_injected_from_project_yaml(niyam_repo: Path) -> None:

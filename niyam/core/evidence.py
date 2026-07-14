@@ -16,6 +16,54 @@ from niyam.core.config import find_niyam_root, load_niyam_config
 
 logger = logging.getLogger(__name__)
 
+# Canonical locations for the latest scan report (newest mtime wins among existing)
+_SCAN_REPORT_CANDIDATES = (
+    ".niyam/scan-report.json",
+    ".niyam/reports/scan.json",
+    ".niyam/evidence/scan-report.json",
+    ".sutra/reports/scan.json",
+)
+
+
+def find_latest_scan_report(root: Path | None = None) -> Path | None:
+    """Locate the most recent scan JSON report under a workspace root.
+
+    Prefers known canonical paths, then falls back to newest ``*scan*.json``
+    under ``.niyam/`` (excluding large unrelated artifacts when possible).
+    """
+    if root is None:
+        root = find_niyam_root() or Path.cwd()
+    root = Path(root).resolve()
+
+    existing: list[Path] = []
+    for rel in _SCAN_REPORT_CANDIDATES:
+        candidate = root / rel
+        if candidate.is_file():
+            existing.append(candidate)
+
+    # Also consider mission-scoped scan reports
+    runs_dir = root / ".niyam" / "runs"
+    if runs_dir.is_dir():
+        for fname in ("scan-report.json", "scan.json"):
+            for match in runs_dir.glob(f"*/{fname}"):
+                if match.is_file():
+                    existing.append(match)
+
+    if not existing:
+        niyam_dir = root / ".niyam"
+        if niyam_dir.is_dir():
+            for match in niyam_dir.rglob("*scan*.json"):
+                name = match.name.lower()
+                if match.is_file() and "scan" in name and "baseline" not in name:
+                    existing.append(match)
+
+    if not existing:
+        return None
+
+    existing.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return existing[0]
+
+
 # ── Template Loading ───────────────────────────────────────────────────
 
 
@@ -669,14 +717,10 @@ class UnifiedEvidenceCompiler:
                 if (self.run_dir / fname).exists():
                     scan_path = self.run_dir / fname
                     break
-        
+
         if not scan_path:
-            # Look for project-level scan report
-            for candidate in [self.root / ".niyam" / "reports" / "scan.json", self.root / ".niyam" / "scan-report.json"]:
-                if candidate.exists():
-                    scan_path = candidate
-                    break
-        
+            scan_path = find_latest_scan_report(self.root)
+
         if scan_path:
             try:
                 with open(scan_path, encoding="utf-8") as f:
@@ -772,9 +816,9 @@ def run_generate_evidence(
              compiler.save(output)
         return report_str
 
-    # 0. Find the best scan report input
+    # 0. Find the best scan report input (explicit path → mission → latest workspace scan)
     scan_json_path = None
-    
+
     if from_scan_json:
         scan_json_path = Path(from_scan_json).resolve()
         if not scan_json_path.exists():
@@ -792,25 +836,17 @@ def run_generate_evidence(
             pass
 
     if not scan_json_path:
-        # Search for default scan report under .niyam/reports/scan.json
-        for candidate in [
-            root / ".niyam" / "reports" / "scan.json",
-            root / ".niyam" / "scan-report.json",
-            root / ".sutra" / "reports" / "scan.json"
-        ]:
-            if candidate.exists():
-                scan_json_path = candidate
-                break
+        scan_json_path = find_latest_scan_report(root)
 
     if not scan_json_path:
-         scan_results = {
-             "score": 0,
-             "readiness_score": 0,
-             "findings": [],
-             "decision": "NOT_SCANNED",
-             "decision_reason": "No scan report was provided or found.",
-             "generated_at": datetime.now(timezone.utc).isoformat(),
-         }
+        scan_results = {
+            "score": 0,
+            "readiness_score": 0,
+            "findings": [],
+            "decision": "NOT_SCANNED",
+            "decision_reason": "No scan report was provided or found.",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
     else:
         try:
             with open(scan_json_path, encoding="utf-8") as f:

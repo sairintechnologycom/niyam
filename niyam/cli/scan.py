@@ -341,6 +341,24 @@ def scan_command(
 
     results = redact_secrets(results)
 
+    # Always persist the latest JSON scan report for evidence/ci/fleet auto-discovery
+    try:
+        from niyam.core.config import find_niyam_root, get_niyam_dir
+
+        persist_root = find_niyam_root(scan_path) or Path(scan_path).resolve()
+        if (persist_root / ".niyam").is_dir() or find_niyam_root(scan_path):
+            niyam_dir = get_niyam_dir(persist_root)
+            niyam_dir.mkdir(parents=True, exist_ok=True)
+            canonical = niyam_dir / "scan-report.json"
+            reports_dir = niyam_dir / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(results, indent=2)
+            canonical.write_text(payload, encoding="utf-8")
+            (reports_dir / "scan.json").write_text(payload, encoding="utf-8")
+    except Exception:
+        # Persistence is best-effort; never fail the scan over cache writes
+        pass
+
     # Save file if requested
     if report_file:
         report_path = Path(report_file).resolve()

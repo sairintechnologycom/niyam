@@ -652,15 +652,30 @@ def run_scanner_checks(
     import hashlib
 
     skipped_scanners = []
-    scanner_config = config.model_dump().get("external_scanners", {}) if config else {}
+    # external_scanners may live outside the typed NiyamConfig model
+    scanner_config: dict[str, Any] = {}
+    if config is not None:
+        dumped = config.model_dump()
+        scanner_config = dumped.get("external_scanners") or {}
+        if not scanner_config:
+            # Support extra keys / raw yaml attachment if present
+            raw = getattr(config, "model_extra", None) or {}
+            if isinstance(raw, dict):
+                scanner_config = raw.get("external_scanners") or {}
     for scanner in SCANNER_REGISTRY:
         # Only report as skipped if it's enabled in config but binary is missing
         sc_config = scanner_config.get(scanner.name, {})
+        if not isinstance(sc_config, dict):
+            sc_config = {}
         if sc_config.get("enabled", True):
             if not scanner.is_available(sc_config):
                 skipped_scanners.append(scanner.name)
-                
-                # Append a high-severity finding since an enabled external scanner is missing
+
+                # Optional scanners are informational by default so clean projects
+                # are not NO_GO solely because gitleaks/trivy/checkov are absent.
+                # Mark required: true in niyam.yaml to treat as high severity.
+                is_required = bool(sc_config.get("required", False))
+                severity = "high" if is_required else "info"
                 binary_name = scanner.get_binary(sc_config)
                 fp_src = f"EXT-SCAN-MISSING::{scanner.name}"
                 fingerprint = hashlib.sha256(fp_src.encode("utf-8")).hexdigest()
@@ -668,15 +683,34 @@ def run_scanner_checks(
                     "schema_version": "1.0.0",
                     "id": f"EXT-SCAN-MISSING-{scanner.name.upper()}",
                     "title": f"Missing Enabled External Scanner: {scanner.name}",
-                    "category": "security",
-                    "severity": "high",
+                    "category": "tooling" if not is_required else "security",
+                    "severity": severity,
                     "confidence": "high",
                     "file_path": "niyam.yaml",
                     "line_number": None,
-                    "description": f"The external security scanner '{scanner.name}' is enabled in configuration, but its binary '{binary_name}' is not available on system PATH.",
-                    "recommendation": f"Install '{binary_name}' or set the correct path, or disable the scanner in niyam.yaml under 'external_scanners.{scanner.name}.enabled: false'.",
+                    "description": (
+                        f"The external security scanner '{scanner.name}' is enabled "
+                        f"in configuration, but its binary '{binary_name}' is not "
+                        f"available on system PATH."
+                        + (
+                            " This scanner is marked required."
+                            if is_required
+                            else " Optional scanners do not block readiness by default."
+                        )
+                    ),
+                    "recommendation": (
+                        f"Install '{binary_name}' or set the correct path, or disable "
+                        f"the scanner in niyam.yaml under "
+                        f"'external_scanners.{scanner.name}.enabled: false'."
+                        + (
+                            ""
+                            if is_required
+                            else " To enforce this scanner, set "
+                            f"'external_scanners.{scanner.name}.required: true'."
+                        )
+                    ),
                     "remediation_effort": "low",
-                    "tags": ["security", "scanners"],
+                    "tags": ["security", "scanners"] if is_required else ["tooling", "scanners"],
                     "fingerprint": fingerprint,
                 })
 

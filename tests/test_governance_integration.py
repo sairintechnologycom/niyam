@@ -407,6 +407,48 @@ def test_evidence_handles_missing_scan_file() -> None:
         run_generate_evidence(from_scan_json="non-existent-scan.json")
 
 
+def test_evidence_auto_discovers_canonical_scan_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Evidence without --from should load .niyam/scan-report.json automatically."""
+    from niyam.core import evidence as evidence_mod
+
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir(exist_ok=True)
+    (niyam_dir / "niyam.yaml").write_text("version: '1.0.0'\nproject_name: auto-scan\n")
+    scan_data = {
+        "profile": "startup",
+        "score": 77,
+        "readiness_score": 77,
+        "decision": "CONDITIONAL_GO",
+        "decision_reason": "Auto-discovered scan",
+        "findings": [],
+        "summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
+        "scoring_breakdown": {},
+        "project_path": str(tmp_path),
+    }
+    (niyam_dir / "scan-report.json").write_text(json.dumps(scan_data), encoding="utf-8")
+
+    monkeypatch.setattr(evidence_mod, "find_niyam_root", lambda start=None: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    report = run_generate_evidence(fmt="markdown")
+    assert "77/100" in report
+    assert "CONDITIONAL GO" in report or "CONDITIONAL_GO" in report
+    assert "NOT SCANNED" not in report
+
+
+def test_find_latest_scan_report_prefers_canonical(tmp_path: Path) -> None:
+    from niyam.core.evidence import find_latest_scan_report
+
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir(exist_ok=True)
+    canonical = niyam_dir / "scan-report.json"
+    canonical.write_text(json.dumps({"score": 50}), encoding="utf-8")
+    found = find_latest_scan_report(tmp_path)
+    assert found == canonical
+
+
 def test_evidence_does_not_include_raw_secrets(tmp_path: Path) -> None:
     """Verify secrets in scan results are redacted in generated evidence reports."""
     scan_json = tmp_path / "scan.json"

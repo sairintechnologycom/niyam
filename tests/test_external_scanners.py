@@ -246,9 +246,38 @@ def test_scanner_checks_reports_skipped_scanners(tmp_path: Path) -> None:
             "checkov",
         }
         
-        # Verify findings list contains the missing scanner alerts
+        # Optional missing scanners are informational (do not NO_GO clean apps)
         missing_findings = [f for f in results["findings"] if f["id"].startswith("EXT-SCAN-MISSING-")]
         assert len(missing_findings) == 4
         gitleaks_finding = next(f for f in missing_findings if "GITLEAKS" in f["id"])
-        assert gitleaks_finding["severity"] == "high"
-        assert gitleaks_finding["category"] == "security"
+        assert gitleaks_finding["severity"] == "info"
+        assert gitleaks_finding["category"] == "tooling"
+        # Info findings contribute 0 readiness deduction
+        assert all(f["severity"] == "info" for f in missing_findings)
+
+
+def test_required_missing_scanner_is_high_severity(tmp_path: Path) -> None:
+    """Scanners marked required: true remain high-severity when binary is missing."""
+    niyam_dir = tmp_path / ".niyam"
+    niyam_dir.mkdir()
+    (niyam_dir / "niyam.yaml").write_text(
+        "version: '1.0.0'\n"
+        "external_scanners:\n"
+        "  gitleaks:\n"
+        "    enabled: true\n"
+        "    required: true\n"
+        "  semgrep:\n"
+        "    enabled: false\n"
+        "  trivy:\n"
+        "    enabled: false\n"
+        "  checkov:\n"
+        "    enabled: false\n",
+        encoding="utf-8",
+    )
+    with patch("shutil.which", return_value=None):
+        results = run_scanner_checks(tmp_path, profile="startup")
+        missing = [f for f in results["findings"] if f["id"].startswith("EXT-SCAN-MISSING-")]
+        assert len(missing) == 1
+        assert missing[0]["id"] == "EXT-SCAN-MISSING-GITLEAKS"
+        assert missing[0]["severity"] == "high"
+        assert missing[0]["category"] == "security"
