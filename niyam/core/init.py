@@ -231,7 +231,14 @@ def run_init(
             '  niyam context add -t prd "..."  [dim]# provide your PRD or project description[/]\n'
             "  niyam context refresh           [dim]# detect your stack[/]\n"
             "  niyam policy validate           [dim]# check policies[/]\n"
-            "  niyam doctor                    [dim]# verify setup[/]",
+            "  niyam doctor                    [dim]# verify setup[/]\n"
+            "  niyam sync                      [dim]# project rules into your AI runtime[/]\n"
+            "\n"
+            "[dim]How to use Niyam:[/] "
+            "[link=https://github.com/sairintechnologycom/niyam/blob/main/docs/user-guide.md]"
+            "User Guide[/link] "
+            "(setup, day-to-day commands, missions, scan/guard, evidence).\n"
+            "Then open your agent and use [bold]/implement[/], [bold]/review[/], [bold]/ship[/].",
             title="[bold green]Niyam Initialized[/]",
             border_style="green",
         )

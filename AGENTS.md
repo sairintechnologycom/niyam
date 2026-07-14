@@ -10,6 +10,12 @@
 
 This project is managed by Niyam — a governed AI-development workspace.
 
+**User guide:** How Niyam is expected to work (setup, day-to-day slash commands, missions, scan/guard, evidence, Control Room):
+- Local (when present): `docs/user-guide.md`
+- Published: https://github.com/sairintechnologycom/niyam/blob/main/docs/user-guide.md
+
+Prefer Niyam slash commands (`/implement`, `/review`, `/ship`) over free-form agent workflows.
+
 ## Working Agreements
 
 - Follow the project's existing code style and conventions.

@@ -146,6 +146,8 @@ niyam portal
 3. **Start building:**
    Open your agent (e.g. `claude`) and use `/implement`, `/review`, or `/ship`.
 
+For full user journeys (missions, scan/guard, evidence, Control Room, CI), see the **[User Guide](docs/user-guide.md)**.
+
 ## AgentOps Workflows
 
 **Govern portable agent memory:**
@@ -191,6 +193,7 @@ Preview features are local-first and test-covered, but their command shape and d
 
 ## Documentation & Architecture
 
+*   [**User Guide**](docs/user-guide.md) — How Niyam is expected to work: setup, day-to-day flows, missions, governance, and command map.
 *   [**CLI Reference Guide**](docs/cli-reference.md) — Comprehensive command line interface (CLI) usage and commands.
 *   [**AgentOps Control Plane Architecture**](docs/agentops-platform.md) — Under the hood of Niyam's platform design.
 *   [**Memory Ledger & Context Portability**](docs/memory-ledger.md) — Governed agent memory management.

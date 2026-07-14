@@ -2,6 +2,8 @@
 
 These commands are available as slash commands in Claude Code (e.g., `/implement`).
 
+For the full product journey (setup, missions, governance, evidence, CI), see the **[Niyam User Guide](https://github.com/sairintechnologycom/niyam/blob/main/docs/user-guide.md)** (or local `docs/user-guide.md` when present).
+
 ## /implement
 
 Plan and implement a feature or change using test-driven development.
