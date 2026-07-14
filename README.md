@@ -48,6 +48,16 @@ niyam completion install
 
 ---
 
+## How Niyam Works (Visual)
+
+![Niyam user journey: Init → Sync → Build → Gate → Ship](docs/images/niyam-user-journey.jpg)
+
+![Niyam AgentOps control plane layers](docs/images/niyam-control-plane.jpg)
+
+Interactive diagrams: **[docs/user-flows.html](docs/user-flows.html)** · Written guide: **[docs/user-guide.md](docs/user-guide.md)**
+
+---
+
 ## Niyam in Action
 
 ### 1. Interactive Development (Day-to-Day)
@@ -148,6 +158,8 @@ niyam portal
 
 For full user journeys (missions, scan/guard, evidence, Control Room, CI), see the **[User Guide](docs/user-guide.md)**.
 
+**Visual flows (open in a browser):** [docs/user-flows.html](docs/user-flows.html)
+
 ## AgentOps Workflows
 
 **Govern portable agent memory:**
@@ -194,6 +206,7 @@ Preview features are local-first and test-covered, but their command shape and d
 ## Documentation & Architecture
 
 *   [**User Guide**](docs/user-guide.md) — How Niyam is expected to work: setup, day-to-day flows, missions, governance, and command map.
+*   [**Visual User Flows**](docs/user-flows.html) — Interactive diagrams for setup, daily work, missions, governance, and ship.
 *   [**CLI Reference Guide**](docs/cli-reference.md) — Comprehensive command line interface (CLI) usage and commands.
 *   [**AgentOps Control Plane Architecture**](docs/agentops-platform.md) — Under the hood of Niyam's platform design.
 *   [**Memory Ledger & Context Portability**](docs/memory-ledger.md) — Governed agent memory management.

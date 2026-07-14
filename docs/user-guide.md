@@ -6,6 +6,32 @@ Niyam is an open-source **AgentOps control plane** for governed autonomous AI de
 
 > One `.niyam/` source of truth. Many AI runtimes. Policy-driven autonomy. Portable memory. Evidence-backed delivery.
 
+### Visual guide (start here)
+
+![Niyam user journey: Init → Sync → Build → Gate → Ship](images/niyam-user-journey.jpg)
+
+![Niyam AgentOps control plane layers: Human, Niyam, AI runtimes, Repository](images/niyam-control-plane.jpg)
+
+Open the **interactive** flow diagrams in a browser (clickable TOC + live Mermaid):
+
+```bash
+open docs/user-flows.html   # macOS
+# or: xdg-open docs/user-flows.html
+```
+
+**[User Flows — Visual Guide](user-flows.html)** covers:
+
+| Flow | What you’ll see |
+| --- | --- |
+| **Big picture** | You · Niyam · AI runtimes · repo |
+| **Happy path** | Init → sync → implement → review → scan → mission → evidence |
+| **Setup** | First-time bootstrap sequence |
+| **Day-to-day** | `/implement` → `/review` → `/ship` sequence |
+| **Missions** | Plan → approve → execute → validate → report |
+| **Governance** | Scan · guard · MCP · cost → GO/NO-GO |
+| **Ship / CI** | Branch → evidence → PR → verify → merge |
+| **Modes** | When to use interactive vs mission vs loop vs fleet |
+
 Related deep dives:
 
 - [CLI Reference](cli-reference.md)
@@ -15,6 +41,60 @@ Related deep dives:
 - [Control Room](control-room.md)
 - [MCP Memory Server](mcp-memory-server.md)
 - [Browser Sandbox](browser-sandbox.md)
+
+---
+
+## At a glance — product journey
+
+```text
+ ┌──────────┐   ┌──────────┐   ┌────────────┐   ┌──────────┐   ┌───────────┐
+ │ 1. Init  │ → │ 2. Sync  │ → │ 3. Build   │ → │ 4. Gate  │ → │ 5. Ship   │
+ │ profile  │   │ project  │   │ /implement │   │ scan     │   │ evidence  │
+ │ runtime  │   │ rules to │   │ /review    │   │ guard    │   │ CI verify │
+ │ doctor   │   │ agent    │   │ mission    │   │ approve  │   │ PR        │
+ └──────────┘   └──────────┘   └────────────┘   └──────────┘   └───────────┘
+       │              │               │               │              │
+       ▼              ▼               ▼               ▼              ▼
+   .niyam/        CLAUDE.md       AI agents       GO/NO-GO      Audit pack
+   policies       AGENTS.md       write code      score         + merge
+```
+
+```mermaid
+flowchart LR
+  subgraph Setup
+    I[init] --> C[context refresh]
+    C --> S[sync]
+    S --> D[doctor]
+  end
+
+  subgraph Build
+    D --> IMP["/implement"]
+    IMP --> REV["/review"]
+    REV --> SHP["/ship"]
+    IMP --> MIS[mission plan/start]
+  end
+
+  subgraph Gate
+    SHP --> SC[scan]
+    MIS --> SC
+    SC --> GU[guard / approvals]
+  end
+
+  subgraph Deliver
+    GU --> EV[evidence]
+    EV --> CI[ci verify]
+    CI --> PR[PR / merge]
+  end
+
+  classDef s fill:#172554,stroke:#3b82f6,color:#dbeafe
+  classDef b fill:#2e1065,stroke:#8b5cf6,color:#ede9fe
+  classDef g fill:#4c0519,stroke:#fb7185,color:#ffe4e6
+  classDef d fill:#052e16,stroke:#10b981,color:#a7f3d0
+  class I,C,S,D s
+  class IMP,REV,SHP,MIS b
+  class SC,GU g
+  class EV,CI,PR d
+```
 
 ---
 

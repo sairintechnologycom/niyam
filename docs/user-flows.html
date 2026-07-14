@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Niyam User Flows — Visual Guide</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0c;
+      --card: #141418;
+      --border: #2a2a32;
+      --text: #ececef;
+      --dim: #94949e;
+      --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.15);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.12);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.12);
+      --violet: #8b5cf6;
+      --violet-soft: rgba(139, 92, 246, 0.12);
+      --rose: #f43f5e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--blue-soft);
+      color: var(--blue);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      background: linear-gradient(90deg, #fff, #9ca3af);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .lede {
+      color: var(--dim);
+      max-width: 640px;
+      margin: 0 auto 18px;
+      font-size: 1.05rem;
+    }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin: 24px 0 8px;
+    }
+
+    .toc a {
+      text-decoration: none;
+      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+
+    .toc a:hover {
+      border-color: var(--blue);
+      transform: translateY(-1px);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      justify-content: center;
+      margin: 28px 0 8px;
+      color: var(--dim);
+      font-size: 0.85rem;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot.human { background: var(--amber); }
+    .dot.niyam { background: var(--blue); }
+    .dot.agent { background: var(--violet); }
+    .dot.gate { background: var(--rose); }
+    .dot.ship { background: var(--green); }
+
+    section.flow {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 24px 18px;
+      margin: 28px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    section.flow::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+    }
+
+    section.flow.setup::before { background: var(--blue); }
+    section.flow.daily::before { background: var(--violet); }
+    section.flow.mission::before { background: var(--amber); }
+    section.flow.gov::before { background: var(--rose); }
+    section.flow.ship::before { background: var(--green); }
+    section.flow.modes::before { background: linear-gradient(90deg, var(--blue), var(--violet), var(--green)); }
+
+    .flow-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px 16px;
+      margin-bottom: 8px;
+    }
+
+    .flow-head h2 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+
+    .step-chip {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--dim);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .flow p.desc {
+      color: var(--dim);
+      margin: 0 0 18px;
+      max-width: 760px;
+    }
+
+    .mermaid {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 8px;
+      overflow-x: auto;
+    }
+
+    .callout {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--dim);
+      font-size: 0.9rem;
+    }
+
+    .callout strong { color: var(--text); }
+
+    .journey {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin: 20px 0 8px;
+    }
+
+    @media (max-width: 900px) {
+      .journey { grid-template-columns: 1fr 1fr; }
+    }
+
+    .journey-step {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      min-height: 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .journey-step .n {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--blue);
+      letter-spacing: 0.06em;
+    }
+
+    .journey-step .t {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .journey-step .c {
+      font-size: 0.72rem;
+      color: var(--dim);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .mode-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .mode-card h3 {
+      margin: 0 0 6px;
+      font-size: 0.95rem;
+    }
+
+    .mode-card p {
+      margin: 0;
+      color: var(--dim);
+      font-size: 0.85rem;
+    }
+
+    .mode-card code {
+      font-size: 0.75rem;
+      color: #c4b5fd;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--dim);
+      font-size: 0.85rem;
+      margin-top: 40px;
+    }
+
+    footer a { color: var(--blue); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="badge">AGENTOPS · USER FLOWS</div>
+      <h1>How people use Niyam</h1>
+      <p class="lede">
+        Niyam is not another coding agent. It is the control plane around Claude, Codex, Gemini, and friends —
+        rules in <code>.niyam/</code>, agents do the coding, evidence goes out the door.
+      </p>
+      <nav class="toc" aria-label="Jump to flow">
+        <a href="#big-picture">Big picture</a>
+        <a href="#happy-path">Happy path</a>
+        <a href="#setup">Setup</a>
+        <a href="#daily">Day-to-day</a>
+        <a href="#mission">Missions</a>
+        <a href="#governance">Governance</a>
+        <a href="#ship">Ship / CI</a>
+        <a href="#modes">Modes</a>
+      </nav>
+      <div class="legend">
+        <span><i class="dot human"></i> Human</span>
+        <span><i class="dot niyam"></i> Niyam</span>
+        <span><i class="dot agent"></i> AI agent</span>
+        <span><i class="dot gate"></i> Approval / gate</span>
+        <span><i class="dot ship"></i> Ship / evidence</span>
+      </div>
+    </header>
+
+    <!-- BIG PICTURE -->
+    <section class="flow setup" id="big-picture">
+      <div class="flow-head">
+        <h2>1. Big picture — who does what</h2>
+        <span class="step-chip">Architecture</span>
+      </div>
+      <p class="desc">
+        You configure one source of truth. Niyam projects it into each AI runtime, enforces policy while agents work,
+        and packages audit evidence when you ship.
+      </p>
+      <pre class="mermaid">
+flowchart LR
+  subgraph YOU["You / team"]
+    H["Define goals\nApprove risk\nMerge PRs"]
+  end
+
+  subgraph NIYAM["Niyam control plane"]
+    S[".niyam/ source of truth\nagents · skills · policies"]
+    P["sync → CLAUDE.md · AGENTS.md"]
+    G["Guard · Scan · Cost · MCP"]
+    O["Missions · Loops · Control Room"]
+    E["Evidence · GO / NO-GO"]
+  end
+
+  subgraph AGENTS["AI runtimes"]
+    A1["Claude Code"]
+    A2["Codex"]
+    A3["Gemini"]
+  end
+
+  subgraph REPO["Your repository"]
+    C["Code · tests · PRs"]
+  end
+
+  H --> S
+  S --> P --> A1 & A2 & A3
+  A1 & A2 & A3 --> C
+  C --> G
+  O --> A1 & A2 & A3
+  G --> E
+  O --> E
+  E --> H
+
+  classDef human fill:#422006,stroke:#f59e0b,color:#fde68a
+  classDef niyam fill:#172554,stroke:#3b82f6,color:#bfdbfe
+  classDef agent fill:#2e1065,stroke:#8b5cf6,color:#ddd6fe
+  classDef repo fill:#052e16,stroke:#10b981,color:#a7f3d0
+
+  class H human
+  class S,P,G,O,E niyam
+  class A1,A2,A3 agent
+  class C repo
+      </pre>
+      <div class="callout">
+        <strong>Remember:</strong> Runtimes write code. Niyam owns workflow, bounds, safety, and proof.
+      </div>
+    </section>
+
+    <!-- HAPPY PATH STRIP -->
+    <section class="flow modes" id="happy-path">
+      <div class="flow-head">
+        <h2>2. One-week happy path</h2>
+        <span class="step-chip">At a glance</span>
+      </div>
+      <p class="desc">The shortest mental model of “using Niyam” from empty repo to mergeable work.</p>
+      <div class="journey" aria-label="Happy path steps">
+        <div class="journey-step">
+          <div class="n">DAY 0</div>
+          <div class="t">Init</div>
+          <div class="c">niyam init</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">DAY 0</div>
+          <div class="t">Sync</div>
+          <div class="c">niyam sync</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">DAY 1</div>
+          <div class="t">Implement</div>
+          <div class="c">/implement</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">DAY 1</div>
+          <div class="t">Review</div>
+          <div class="c">/review</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">MID</div>
+          <div class="t">Scan</div>
+          <div class="c">niyam scan</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">LARGE</div>
+          <div class="t">Mission</div>
+          <div class="c">mission start</div>
+        </div>
+        <div class="journey-step">
+          <div class="n">SHIP</div>
+          <div class="t">Evidence</div>
+          <div class="c">evidence + CI</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="flow setup" id="setup">
+      <div class="flow-head">
+        <h2>3. First-time setup</h2>
+        <span class="step-chip">Every repo</span>
+      </div>
+      <p class="desc">Bootstrap a governed workspace, detect the stack, project rules into the agent, then verify.</p>
+      <pre class="mermaid">
+flowchart LR
+  A["pipx install niyam"] --> B["niyam init\n--profile fullstack\n--runtime claude"]
+  B --> C["niyam context refresh"]
+  C --> D["niyam sync"]
+  D --> E["niyam doctor"]
+  E --> F["Open agent\n/implement …"]
+
+  classDef step fill:#172554,stroke:#3b82f6,color:#dbeafe
+  classDef done fill:#052e16,stroke:#10b981,color:#a7f3d0
+  class A,B,C,D,E step
+  class F done
+      </pre>
+      <div class="callout">
+        <strong>What appears:</strong> <code>.niyam/</code> with agents, skills, slash commands, policies, and memory stubs —
+        then <code>CLAUDE.md</code> / <code>AGENTS.md</code> for the runtime.
+      </div>
+    </section>
+
+    <!-- DAILY -->
+    <section class="flow daily" id="daily">
+      <div class="flow-head">
+        <h2>4. Day-to-day interactive development</h2>
+        <span class="step-chip">Most common</span>
+      </div>
+      <p class="desc">Human + one agent. Niyam provides methodology (TDD skill), path freezes, and command deny lists.</p>
+      <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor Dev as Developer
+  participant Agent as Claude / Codex
+  participant Niyam as Niyam policies
+  participant Repo as Git repo
+
+  Dev->>Niyam: niyam sync (when rules change)
+  Dev->>Agent: /implement "add rate limiting"
+  Agent->>Niyam: Load agents, skills, policies
+  Agent->>Repo: Write tests first (TDD)
+  Agent->>Repo: Implement feature
+  Niyam-->>Agent: Block denied cmds / frozen paths
+  Dev->>Agent: /review
+  Agent->>Repo: Security + quality pass
+  Dev->>Agent: /ship
+  Agent->>Niyam: Validate + evidence readiness
+  Dev->>Repo: Open PR
+      </pre>
+      <div class="callout">
+        <strong>Prefer slash commands</strong> over free-form “just fix it”:
+        <code>/implement</code> → <code>/review</code> → <code>/ship</code>.
+        High-risk areas (auth, payments, infra, secrets, migrations, CI) still need a human.
+      </div>
+    </section>
+
+    <!-- MISSION -->
+    <section class="flow mission" id="mission">
+      <div class="flow-head">
+        <h2>5. Autonomous mission flow</h2>
+        <span class="step-chip">Batch / multi-step</span>
+      </div>
+      <p class="desc">For migrations and multi-task goals: plan a DAG of task contracts, approve, execute in isolation, validate, review, report.</p>
+      <pre class="mermaid">
+flowchart TB
+  G["Goal / requirements file"] --> PL["niyam mission plan"]
+  PL --> VP["validate-plan"]
+  VP --> AP{"Human approval"}
+  AP -->|approve| ST["mission start"]
+  AP -->|reject / replan| PL
+  ST --> EX["Execute tasks\noptional worktrees · parallel"]
+  EX --> VA["Validate\ntests · lint · security"]
+  VA -->|fail| RT["Retry / replan"]
+  RT --> EX
+  VA -->|pass| RV["Reviewer agent\ndiff + evidence"]
+  RV --> RP["mission report\nreadiness score"]
+  RP --> PR["PR / merge decision"]
+
+  classDef human fill:#422006,stroke:#f59e0b,color:#fde68a
+  classDef niyam fill:#172554,stroke:#3b82f6,color:#bfdbfe
+  classDef gate fill:#4c0519,stroke:#f43f5e,color:#fecdd3
+  classDef ok fill:#052e16,stroke:#10b981,color:#a7f3d0
+
+  class G,PL,VP,ST,EX,VA,RT,RV,RP niyam
+  class AP gate
+  class PR ok
+      </pre>
+      <div class="callout">
+        <strong>Task contracts</strong> make autonomy deterministic: allowed/blocked files, acceptance criteria,
+        validation commands, risk level, preferred executor.
+      </div>
+    </section>
+
+    <!-- GOVERNANCE -->
+    <section class="flow gov" id="governance">
+      <div class="flow-head">
+        <h2>6. Governance & readiness</h2>
+        <span class="step-chip">Before merge</span>
+      </div>
+      <p class="desc">Five pillars feed one evidence pack and a numeric GO / NO-GO decision.</p>
+      <pre class="mermaid">
+flowchart TB
+  SC["niyam scan\nscore 0–100"] --> EV["niyam evidence"]
+  GU["niyam guard\ncommand logs"] --> EV
+  MC["niyam mcp\ntool registry"] --> EV
+  CO["niyam cost\ntoken ledger"] --> EV
+  ME["memory + workspace\nposture"] --> EV
+  EV --> DEC{"GO / NO-GO"}
+  DEC -->|GO| SH["Merge / deploy"]
+  DEC -->|NO-GO| FX["Remediate findings"]
+  FX --> SC
+
+  classDef pillar fill:#4c0519,stroke:#fb7185,color:#ffe4e6
+  classDef evidence fill:#172554,stroke:#3b82f6,color:#dbeafe
+  classDef gate fill:#422006,stroke:#f59e0b,color:#fde68a
+  classDef ok fill:#052e16,stroke:#10b981,color:#a7f3d0
+
+  class SC,GU,MC,CO,ME pillar
+  class EV evidence
+  class DEC gate
+  class SH ok
+  class FX pillar
+      </pre>
+      <div class="callout">
+        <strong>Typical gate commands:</strong>
+        <code>niyam scan . --profile team</code> ·
+        <code>niyam guard run -- npm test</code> ·
+        <code>niyam evidence --include scan,guard,mcp,cost</code>
+      </div>
+    </section>
+
+    <!-- SHIP -->
+    <section class="flow ship" id="ship">
+      <div class="flow-head">
+        <h2>7. Ship path (local + CI)</h2>
+        <span class="step-chip">Delivery</span>
+      </div>
+      <p class="desc">Local evidence becomes a PR artifact; CI re-verifies policy and integrity.</p>
+      <pre class="mermaid">
+flowchart LR
+  W["Agent work\non branch"] --> L["Local evidence\nniyam evidence"]
+  L --> P["Open PR"]
+  P --> C["CI: niyam ci verify\n+ scan / policy"]
+  C --> A{"Checks green\n+ GO?"}
+  A -->|yes| M["Merge"]
+  A -->|no| F["Fix & push"]
+  F --> C
+
+  classDef work fill:#2e1065,stroke:#8b5cf6,color:#ede9fe
+  classDef niyam fill:#172554,stroke:#3b82f6,color:#dbeafe
+  classDef gate fill:#422006,stroke:#f59e0b,color:#fde68a
+  classDef ok fill:#052e16,stroke:#10b981,color:#a7f3d0
+
+  class W work
+  class L,C niyam
+  class P,A gate
+  class M ok
+  class F work
+      </pre>
+    </section>
+
+    <!-- MODES -->
+    <section class="flow modes" id="modes">
+      <div class="flow-head">
+        <h2>8. Choose your interaction mode</h2>
+        <span class="step-chip">Pick the right loop</span>
+      </div>
+      <p class="desc">Same control plane — different intensity of autonomy and human involvement.</p>
+      <div class="modes-grid">
+        <div class="mode-card">
+          <h3>Interactive</h3>
+          <p>Daily feature work with slash commands.</p>
+          <p><code>/implement · /review · /ship</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>Mission</h3>
+          <p>Multi-step goals with plan approval.</p>
+          <p><code>niyam mission · niyam run</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>LoopOps</h3>
+          <p>Budgeted plan → implement → evaluate cycles.</p>
+          <p><code>niyam loop run …</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>Observe</h3>
+          <p>Learn risk without hard blocks first.</p>
+          <p><code>niyam guard run</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>Hard governance</h3>
+          <p>Team/enterprise enforcement + CI gates.</p>
+          <p><code>guard enable · ci verify</code></p>
+        </div>
+        <div class="mode-card">
+          <h3>Control Room</h3>
+          <p>Supervised browser/tasks + portal UI.</p>
+          <p><code>workspace · portal · dashboard</code></p>
+        </div>
+      </div>
+      <pre class="mermaid" style="margin-top:18px">
+flowchart TB
+  Q{"What are you doing?"}
+  Q -->|Small feature| I["Interactive\n/implement → /review → /ship"]
+  Q -->|Large migration| M["Mission\nplan → approve → start"]
+  Q -->|Iterate until metric| L["LoopOps\nbudgeted evaluate loop"]
+  Q -->|Audit a repo| G["Scan + Guard + Evidence"]
+  Q -->|Many repos| F["Fleet / loop --fleet"]
+
+  classDef q fill:#1f2937,stroke:#9ca3af,color:#f3f4f6
+  classDef a fill:#172554,stroke:#3b82f6,color:#dbeafe
+  class Q q
+  class I,M,L,G,F a
+      </pre>
+    </section>
+
+    <footer>
+      Full written guide:
+      <a href="user-guide.md">docs/user-guide.md</a>
+      · CLI:
+      <a href="cli-reference.md">docs/cli-reference.md</a>
+      · Open this file in a browser for live diagrams
+      (<code>open docs/user-flows.html</code>).
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      securityLevel: "loose",
+      flowchart: { curve: "basis", htmlLabels: true },
+      sequence: { mirrorActors: false, messageMargin: 30 }
+    });
+  </script>
+</body>
+</html>
