@@ -892,19 +892,19 @@ def run_mission_plan(
                 console.print(
                     f"[dim]Invoking AI planning engine '{orchestrator}' (attempt {attempt + 1}/{MAX_PLANNER_RETRIES})...[/]"
                 )
-                cmd = [orchestrator, "-p", current_prompt]
-                if orchestrator == "gemini":
-                    cmd.append("--skip-trust")
-
                 try:
-                    res = subprocess.run(
-                        cmd,
-                        stdin=subprocess.DEVNULL,
-                        capture_output=True,
-                        text=True,
-                        timeout=180,
+                    from niyam.runtimes.executor import run_runtime
+
+                    plan_result = run_runtime(
+                        orchestrator,
+                        prompt_text=current_prompt,
+                        cwd=repo_root,
+                        mode="plan",
+                        timeout=600,
+                        repo_root=repo_root,
+                        include_sandbox=False,
                     )
-                    raw_output = (res.stdout or "") + "\n" + (res.stderr or "")
+                    raw_output = (plan_result.stdout or "") + "\n" + (plan_result.stderr or "")
 
                     # Log raw output for debugging
                     out_file = run_dir / f"planner-output-attempt-{attempt + 1}.raw.txt"
@@ -914,8 +914,11 @@ def run_mission_plan(
                             raw_output, encoding="utf-8"
                         )
 
-                    if res.returncode != 0:
-                        error_msg = f"Orchestrator returned non-zero exit code: {res.returncode}"
+                    if not plan_result.success:
+                        error_msg = (
+                            f"Orchestrator returned non-zero exit code: "
+                            f"{plan_result.returncode}"
+                        )
                         if attempt < MAX_PLANNER_RETRIES - 1:
                             current_prompt = build_corrective_prompt(
                                 current_prompt, raw_output, error_msg
@@ -1765,17 +1768,26 @@ def run_mission_replan(
     
     console.print(f"[cyan]Re-planning mission '{mission_id}' using '{orchestrator}'...[/]")
     
-    # Simple execution (similar to run_mission_plan but simplified for replan)
-    cmd = [orchestrator, "-p", prompt]
-    if orchestrator == "gemini":
-        cmd.append("--skip-trust")
-    
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if res.returncode != 0:
-            raise RuntimeError(f"Planner failed with exit code {res.returncode}")
-        
-        parsed = extract_yaml_or_json(res.stdout)
+        from niyam.runtimes.executor import run_runtime
+
+        plan_result = run_runtime(
+            orchestrator,
+            prompt_text=prompt,
+            cwd=repo_root,
+            mode="plan",
+            timeout=600,
+            repo_root=repo_root,
+            include_sandbox=False,
+        )
+        if not plan_result.success:
+            raise RuntimeError(
+                f"Planner failed with exit code {plan_result.returncode}"
+            )
+
+        parsed = extract_yaml_or_json(
+            (plan_result.stdout or "") + "\n" + (plan_result.stderr or "")
+        )
         if not parsed or "tasks" not in parsed:
             raise RuntimeError("Could not parse AI response as a valid task list.")
         

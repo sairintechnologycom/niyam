@@ -19,7 +19,9 @@ from niyam.core.config import get_niyam_dir
 
 # ── Constants ──────────────────────────────────────────────────────────
 
-STALE_HEARTBEAT_TIMEOUT = 60  # seconds
+# Default task timeout is 600s; keep agents "alive" well beyond that unless
+# a heartbeat thread stops updating last_seen.
+STALE_HEARTBEAT_TIMEOUT = 900  # seconds
 
 AgentStatus = Literal["idle", "busy", "waiting", "offline"]
 LedgerAction = Literal["request_lock", "yield_lock", "deny_lock", "handoff", "info"]
@@ -315,6 +317,65 @@ def heartbeat(
         )
         state.agents[agent_id] = agent
         save_swarm_state(state, repo_root)
+
+
+def start_heartbeat_thread(
+    agent_id: str,
+    role: str,
+    task_id: str | None = None,
+    repo_root: Path | None = None,
+    interval_seconds: float = 30.0,
+    status: AgentStatus = "busy",
+):
+    """Start a background thread that refreshes the agent heartbeat.
+
+    Returns a zero-arg ``stop()`` callable. Safe to call even if the thread
+    fails to start (returns a no-op).
+    """
+    import threading
+
+    stop_event = threading.Event()
+
+    def _loop() -> None:
+        while not stop_event.wait(interval_seconds):
+            try:
+                heartbeat(
+                    agent_id=agent_id,
+                    role=role,
+                    status=status,
+                    task_id=task_id,
+                    repo_root=repo_root,
+                )
+            except Exception:
+                # Never let heartbeat failures kill task execution
+                pass
+
+    try:
+        # Immediate first beat so last_seen is fresh at start
+        heartbeat(
+            agent_id=agent_id,
+            role=role,
+            status=status,
+            task_id=task_id,
+            repo_root=repo_root,
+        )
+        thread = threading.Thread(
+            target=_loop,
+            name=f"niyam-heartbeat-{agent_id}",
+            daemon=True,
+        )
+        thread.start()
+    except Exception:
+        return lambda: None
+
+    def stop() -> None:
+        stop_event.set()
+        try:
+            thread.join(timeout=2.0)
+        except Exception:
+            pass
+
+    return stop
 
 
 def deregister_agent(agent_id: str, repo_root: Path | None = None) -> bool:

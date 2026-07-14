@@ -163,11 +163,21 @@ class CodexRuntimeConfig(BaseModel):
     generate_agents_md: bool = True
 
 
+class GeminiRuntimeConfig(BaseModel):
+    """Gemini CLI runtime-specific settings."""
+
+    generate_gemini_md: bool = True
+    generate_settings: bool = True
+
+
 class RuntimesConfig(BaseModel):
-    """Runtime adapters configuration."""
+    """Runtime adapters configuration (projection + optional execution overrides)."""
+
+    model_config = {"extra": "allow"}
 
     claude: Optional[ClaudeRuntimeConfig] = None
     codex: Optional[CodexRuntimeConfig] = None
+    gemini: Optional[GeminiRuntimeConfig] = None
 
 
 # ── Policy schemas ─────────────────────────────────────────────────────

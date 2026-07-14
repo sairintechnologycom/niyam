@@ -174,85 +174,16 @@ def record_acceptance_criteria(
 
 
 def parse_cli_token_usage(output_text: str, runtime: str | None = None) -> dict | None:
-    """Parse token usage from Claude/Gemini/Codex CLI output."""
-    # Claude CLI patterns
-    # Total tokens: 12,345 (input: 8,000 / output: 4,345)
-    # Total cost: $0.1234
-    claude_total_match = re.search(r"Total tokens:\s*([\d,]+)", output_text)
-    if claude_total_match:
-        try:
-            total_tokens = int(claude_total_match.group(1).replace(",", ""))
-            input_match = re.search(r"input:\s*([\d,]+)", output_text)
-            output_match = re.search(r"output:\s*([\d,]+)", output_text)
-            cost_match = re.search(r"Total cost:\s*\$([\d.]+)", output_text)
+    """Parse token usage from coding-agent CLI output via RuntimeSpec parsers."""
+    from niyam.runtimes.executor import parse_usage_from_output
+    from niyam.runtimes.registry import get_runtime_spec
 
-            input_tokens = (
-                int(input_match.group(1).replace(",", "")) if input_match else 0
-            )
-            output_tokens = (
-                int(output_match.group(1).replace(",", "")) if output_match else 0
-            )
-            cost_usd = float(cost_match.group(1)) if cost_match else None
-
-            if input_tokens == 0 and output_tokens == 0:
-                input_tokens = total_tokens
-
-            return {
-                "runtime": "claude",
-                "total_tokens": total_tokens,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": cost_usd,
-                "estimated": False,
-            }
-        except Exception:
-            pass
-
-    # Gemini tokens: 10,500 (prompt: 8,000 / candidates: 2,500)
-    gemini_match = re.search(
-        r"Gemini tokens:\s*([\d,]+)\s*\(prompt:\s*([\d,]+)\s*/\s*candidates:\s*([\d,]+)\)",
-        output_text,
-    )
-    if gemini_match:
-        try:
-            total = int(gemini_match.group(1).replace(",", ""))
-            prompt = int(gemini_match.group(2).replace(",", ""))
-            candidates = int(gemini_match.group(3).replace(",", ""))
-            cost_match = re.search(r"Cost:\s*\$([\d.]+)", output_text)
-            return {
-                "runtime": "gemini",
-                "total_tokens": total,
-                "input_tokens": prompt,
-                "output_tokens": candidates,
-                "cost_usd": float(cost_match.group(1)) if cost_match else None,
-                "estimated": False,
-            }
-        except Exception:
-            pass
-
-    # Codex tokens: 9,000 (input: 6,000 / output: 3,000)
-    codex_match = re.search(
-        r"Codex tokens:\s*([\d,]+)\s*\(input:\s*([\d,]+)\s*/\s*output:\s*([\d,]+)\)",
-        output_text,
-    )
-    if codex_match:
-        try:
-            total = int(codex_match.group(1).replace(",", ""))
-            input_t = int(codex_match.group(2).replace(",", ""))
-            output_t = int(codex_match.group(3).replace(",", ""))
-            cost_match = re.search(r"Total cost:\s*\$([\d.]+)", output_text)
-            return {
-                "runtime": "codex",
-                "total_tokens": total,
-                "input_tokens": input_t,
-                "output_tokens": output_t,
-                "cost_usd": float(cost_match.group(1)) if cost_match else None,
-                "estimated": False,
-            }
-        except Exception:
-            pass
-
-    return None
+    parser = "text_regex"
+    if runtime:
+        spec = get_runtime_spec(runtime)
+        if spec is not None:
+            parser = spec.usage_parser
+    return parse_usage_from_output(output_text, parser=parser, runtime=runtime)
 
 
 def update_token_ledger(
@@ -1123,34 +1054,98 @@ Do not perform destructive operations.
                 task_log_path = task_dir / "output.log"
 
                 try:
-                    args = [current_orchestrator]
-                    if current_orchestrator.lower() == "claude":
-                        args.extend(["--permission-mode", "acceptEdits"])
-                    args.append(str(prompt_path))
+                    from niyam.runtimes.executor import run_runtime
 
-                    if parallel_limit == 1 and not non_interactive:
-                        subprocess.run(
-                            args,
-                            cwd=task_cwd,
-                            check=True,
-                            timeout=timeout,
+                    # Keep swarm lock ownership alive for long-running tasks
+                    hb_stop = None
+                    try:
+                        from niyam.core.swarm import start_heartbeat_thread
+
+                        agent_id = f"{Path(run_dir).name}:{task_id}"
+                        # Prefer mission-scoped agent id if locks used that form
+                        try:
+                            from niyam.mission.executor import _task_agent_id
+
+                            agent_id = _task_agent_id(Path(run_dir).name, task_id)
+                        except Exception:
+                            pass
+                        hb_stop = start_heartbeat_thread(
+                            agent_id=agent_id,
+                            role=task.get("agent", "agent"),
+                            task_id=task_id,
+                            repo_root=repo_root,
+                            interval_seconds=30,
                         )
+                    except Exception:
+                        hb_stop = None
+
+                    try:
+                        result = run_runtime(
+                            current_orchestrator,
+                            prompt_file=prompt_path,
+                            cwd=task_cwd,
+                            model=task.get("model"),
+                            tier=task.get("tier"),
+                            mode="exec",
+                            timeout=int(timeout),
+                            repo_root=repo_root,
+                            log_path=task_log_path,
+                            include_sandbox=True,
+                        )
+                    finally:
+                        if hb_stop is not None:
+                            try:
+                                hb_stop()
+                            except Exception:
+                                pass
+
+                    if result.usage:
+                        try:
+                            update_token_ledger(
+                                run_dir=run_dir,
+                                task_id=task_id,
+                                agent=task.get("agent", "agent"),
+                                runtime=current_orchestrator,
+                                input_tokens=int(result.usage.get("input_tokens") or 0),
+                                output_tokens=int(
+                                    result.usage.get("output_tokens") or 0
+                                ),
+                                estimated=bool(result.usage.get("estimated", False)),
+                                cost_override=result.usage.get("cost_usd"),
+                            )
+                        except Exception:
+                            pass
+
+                    if result.success:
                         success = True
                     else:
-                        with open(task_log_path, "w", encoding="utf-8") as log_f:
-                            subprocess.run(
-                                args,
-                                cwd=task_cwd,
-                                stdin=subprocess.DEVNULL,
-                                stdout=log_f,
-                                stderr=log_f,
-                                check=True,
-                                timeout=timeout,
-                            )
-                        success = True
-                except subprocess.TimeoutExpired:
-                    run_failed = True
-                except subprocess.CalledProcessError:
+                        run_failed = True
+                        exhaustion_detected = bool(result.exhaustion_detected)
+                        # Also inspect log for quota/rate-limit messages when the
+                        # process failed (covers mocks and non-zero exits).
+                        if not exhaustion_detected and task_log_path.exists():
+                            try:
+                                log_content = task_log_path.read_text(
+                                    encoding="utf-8"
+                                ).lower()
+                                exhaustion_keywords = [
+                                    "rate limit",
+                                    "limit exceeded",
+                                    "quota exceeded",
+                                    "insufficient funds",
+                                    "insufficient credit",
+                                    "exhausted",
+                                    "out of tokens",
+                                    "token limit",
+                                    "overloaded",
+                                ]
+                                if any(
+                                    kw in log_content for kw in exhaustion_keywords
+                                ):
+                                    exhaustion_detected = True
+                            except Exception:
+                                pass
+                except Exception:
                     run_failed = True
                     if task_log_path.exists():
                         try:

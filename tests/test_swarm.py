@@ -353,7 +353,9 @@ class TestStaleLockRecovery:
 
         # Make agent-1 stale
         state = load_swarm_state(repo_root)
-        stale_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        stale_time = datetime.now(timezone.utc) - timedelta(
+            seconds=STALE_HEARTBEAT_TIMEOUT + 30
+        )
         state.agents["agent-1"].last_seen = stale_time.isoformat()
         with swarm_state_lock(repo_root):
             save_swarm_state(state, repo_root)
@@ -375,7 +377,9 @@ class TestStaleLockRecovery:
 
         # Make agent-1 stale
         state = load_swarm_state(repo_root)
-        stale_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        stale_time = datetime.now(timezone.utc) - timedelta(
+            seconds=STALE_HEARTBEAT_TIMEOUT + 30
+        )
         state.agents["agent-1"].last_seen = stale_time.isoformat()
         with swarm_state_lock(repo_root):
             save_swarm_state(state, repo_root)
@@ -423,7 +427,9 @@ class TestPruneStaleAgents:
 
         # Make agent-1 stale
         state = load_swarm_state(repo_root)
-        stale_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        stale_time = datetime.now(timezone.utc) - timedelta(
+            seconds=STALE_HEARTBEAT_TIMEOUT + 30
+        )
         state.agents["agent-1"].last_seen = stale_time.isoformat()
         with swarm_state_lock(repo_root):
             save_swarm_state(state, repo_root)
@@ -447,7 +453,9 @@ class TestPruneStaleAgents:
 
         # Make all stale
         state = load_swarm_state(repo_root)
-        stale_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+        stale_time = datetime.now(timezone.utc) - timedelta(
+            seconds=STALE_HEARTBEAT_TIMEOUT + 30
+        )
         for agent in state.agents.values():
             agent.last_seen = stale_time.isoformat()
         with swarm_state_lock(repo_root):
@@ -791,7 +799,9 @@ class TestCLIIntegration:
 
         # Make stale
         state = load_swarm_state(self.root)
-        stale_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        stale_time = datetime.now(timezone.utc) - timedelta(
+            seconds=STALE_HEARTBEAT_TIMEOUT + 30
+        )
         state.agents["agent-1"].last_seen = stale_time.isoformat()
         with swarm_state_lock(self.root):
             save_swarm_state(state, self.root)

@@ -85,35 +85,36 @@ class ClaudeAdapter(CodingAgentAdapter):
         if request.scenario:
             return self._simulate_scenario(request, mode)
 
-        # Real Execution logic: call claude command
+        # Real Execution logic: call claude via RuntimeSpec
         is_test = os.environ.get("NIYAM_TEST") == "1" or "pytest" in sys.modules
         claude_path = shutil.which("claude") if not is_test else None
         if claude_path and not request.dry_run:
             prompt_content = f"Task: {request.goal}\nWorkspace: {request.workspace_path}\nMode: {mode}\n"
             try:
-                # Setup raw output path
+                from niyam.runtimes.executor import run_runtime
+
                 raw_out = request.workspace_path / ".niyam" / "evidence" / "loops" / f"raw_claude_{mode}.txt"
                 raw_out.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Execute non-interactive Claude Code
-                res = subprocess.run(
-                    ["claude", "--bare", "-p", prompt_content],
+                result = run_runtime(
+                    "claude",
+                    prompt_text=prompt_content,
                     cwd=request.workspace_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+                    mode="exec" if mode != "plan" else "plan",
+                    timeout=600,
+                    log_path=raw_out,
+                    include_sandbox=False,
                 )
-                raw_out.write_text(res.stdout + "\n" + res.stderr, encoding="utf-8")
-                status = "success" if res.returncode == 0 else "failed"
+                status = "success" if result.success else "failed"
+                usage = result.usage or {}
                 return AgentTaskResult(
                     status=status,
                     summary=f"Claude {mode} execution completed.",
                     filesChanged=[],
                     commandsRun=["claude"],
                     rawOutputPath=str(raw_out),
-                    tokensIn=2000,
-                    tokensOut=1000,
-                    costUsd=0.03,
+                    tokensIn=int(usage.get("input_tokens") or 0) or 2000,
+                    tokensOut=int(usage.get("output_tokens") or 0) or 1000,
+                    costUsd=float(usage.get("cost_usd") or 0.03),
                 )
             except Exception as e:
                 return AgentTaskResult(
@@ -237,22 +238,28 @@ class CodexAdapter(CodingAgentAdapter):
 
         if codex_path and not request.dry_run:
             try:
-                res = subprocess.run(
-                    ["codex", "run", request.goal],
+                from niyam.runtimes.executor import run_runtime
+
+                result = run_runtime(
+                    "codex",
+                    prompt_text=request.goal,
                     cwd=request.workspace_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+                    mode="exec",
+                    timeout=600,
+                    log_path=raw_out,
+                    include_sandbox=True,
                 )
-                raw_out.write_text(res.stdout + "\n" + res.stderr, encoding="utf-8")
-                status = "passed" if res.returncode == 0 else "failed"
+                status = "passed" if result.success else "failed"
+                usage = result.usage or {}
                 return AgentTaskResult(
                     status=status,
                     summary=f"Codex {mode} completed.",
                     filesChanged=["src/app.py"],
                     commandsRun=["codex"],
                     rawOutputPath=str(raw_out),
-                    costUsd=0.04,
+                    costUsd=float(usage.get("cost_usd") or 0.04),
+                    tokensIn=int(usage.get("input_tokens") or 0),
+                    tokensOut=int(usage.get("output_tokens") or 0),
                 )
             except Exception as e:
                 return AgentTaskResult(
@@ -374,20 +381,26 @@ class GeminiAdapter(CodingAgentAdapter):
 
         if gemini_path and not request.dry_run:
             try:
-                res = subprocess.run(
-                    ["gemini", "-p", request.goal],
+                from niyam.runtimes.executor import run_runtime
+
+                result = run_runtime(
+                    "gemini",
+                    prompt_text=request.goal,
                     cwd=request.workspace_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+                    mode="exec" if mode != "plan" else "plan",
+                    timeout=600,
+                    log_path=raw_out,
+                    include_sandbox=False,
                 )
-                raw_out.write_text(res.stdout + "\n" + res.stderr, encoding="utf-8")
-                status = "success" if res.returncode == 0 else "failed"
+                status = "success" if result.success else "failed"
+                usage = result.usage or {}
                 return AgentTaskResult(
                     status=status,
                     summary=f"Gemini {mode} completed.",
                     rawOutputPath=str(raw_out),
-                    costUsd=0.02,
+                    costUsd=float(usage.get("cost_usd") or 0.02),
+                    tokensIn=int(usage.get("input_tokens") or 0),
+                    tokensOut=int(usage.get("output_tokens") or 0),
                 )
             except Exception as e:
                 return AgentTaskResult(

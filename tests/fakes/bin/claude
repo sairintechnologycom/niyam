@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export NIYAM_FAKE_RUNTIME=claude
+exec python3 "/Users/bhushan/Documents/Projects/sutra/tests/fakes/vendor_cli.py" "$@"

@@ -1,7 +1,20 @@
 # Niyam Multi-Agent Orchestration Review
 
-Date: 2026-07-11
-Scope: review only — no code changes. This document is the work order for follow-up
+Date: 2026-07-11  
+**Update 2026-07-14:** Phases 0–1 (+ core of Phase 2 invocation) implemented:
+
+- `niyam/runtimes/specs.py` — `RuntimeSpec` + built-in claude/codex/gemini grammars  
+- `niyam/runtimes/registry.py` — open registry + `.niyam/runtimes.yaml` `execution_specs`  
+- `niyam/runtimes/executor.py` — `build_runtime_invocation` / `run_runtime` / usage parsers  
+- Mission `task_runner` + LoopOps adapters + planner call `run_runtime`  
+- Fake CLIs in `tests/fakes/bin/` + `tests/test_runtime_orchestration.py`  
+- Swarm heartbeat thread during task exec; `STALE_HEARTBEAT_TIMEOUT=900`  
+- Docs: `docs/runtime-execution.md`  
+
+Remaining from original plan: Phase 3 routing/tiers, Phase 4 supervision loop,
+Phase 5 PATH-shim governance for hookless runtimes.
+
+Scope (original): review only — no code changes. This document is the work order for follow-up
 implementation (each task has file pointers and acceptance criteria so it can be
 handed to any implementation agent).
 
