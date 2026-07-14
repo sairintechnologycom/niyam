@@ -107,8 +107,9 @@ def test_executor_fallback_success(niyam_repo: Path, monkeypatch):
     )
 
     assert res is True
-    # Should have run subprocess twice: once for claude, then fallback to gemini
-    assert len(subprocess_runs) == 2
+    # At least two execution attempts: claude (quota fail) then gemini success.
+    # A third call may be the evidence-pack reviewer (orchestrator supervision).
+    assert len(subprocess_runs) >= 2
     assert "claude" in subprocess_runs[0][0]
     assert "gemini" in subprocess_runs[1][0]
     # Task runtime should have been updated to gemini

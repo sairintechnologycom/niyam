@@ -175,9 +175,10 @@ Instructions:
 2. The tasks must be ordered logically. Any task depending on another task must list it in `depends_on`.
 3. Assign each task to the most appropriate agent from the list of Available Agents. For example, assign development to 'backend-specialist' or 'frontend-specialist', code review to 'security-reviewer', and verification/testing to 'qa-reviewer'.
 4. Optionally, you can assign a custom execution `runtime` (such as `claude`, `gemini`, or `codex`) to a task if a specific runtime is better suited for it.
-5. Use `approval_required: true` for high-risk implementation tasks or any task where human review is critical before proceeding.
-6. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
-7. Return ONLY a valid YAML or JSON block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the content inside ```yaml or ```json code fences.
+5. Assign a cost tier with `tier: premium|standard|economy` (discovery/review → premium, implementation → standard, validation → economy). Optional explicit `model` overrides tier.
+6. Use `approval_required: true` for high-risk implementation tasks or any task where human review is critical before proceeding.
+7. Ensure the first task is a discovery/analysis task, and the last task is a validation task.
+8. Return ONLY a valid YAML or JSON block matching the schema below. Do not output any markdown prose, chat, warnings, or explanation. Only output the content inside ```yaml or ```json code fences.
 
 Schema (YAML format):
 ```yaml
@@ -186,12 +187,14 @@ tasks:
     title: "Discovery: analyze requirements and code structure"
     type: "discovery"
     agent: "{available_agents[0]}"
+    tier: premium
     writes_files: false
   - id: T2
     title: "Implementation: write failing tests"
     type: "implementation"
     agent: "{available_agents[0]}"
     runtime: "claude"
+    tier: standard
     depends_on: ["T1"]
     files_allowed: ["tests/**"]
     tdd_required: true
@@ -200,6 +203,7 @@ tasks:
     type: "implementation"
     agent: "{available_agents[0]}"
     runtime: "gemini"
+    tier: standard
     depends_on: ["T2"]
     files_allowed: ["*"]
     approval_required: true
@@ -207,6 +211,7 @@ tasks:
     title: "Review: security check"
     type: "review"
     agent: "{available_agents[0]}"
+    tier: premium
     depends_on: ["T3"]
     writes_files: false
   - id: T5
@@ -214,6 +219,7 @@ tasks:
     type: "validation"
     agent: "{available_agents[0]}"
     runtime: "codex"
+    tier: economy
     depends_on: ["T4"]
 ```
 """
@@ -1234,6 +1240,27 @@ def run_mission_plan(
             console.print(
                 f"[yellow]Warning: fallback plan failed schema validation: {e}[/]"
             )
+
+    # Cost-aware tier routing (post-normalize AI/template plans)
+    try:
+        from niyam.mission.routing import apply_routing_policy
+
+        cfg_for_routing = None
+        try:
+            cfg_for_routing = load_niyam_config(repo_root)
+        except Exception:
+            cfg_for_routing = None
+        if plan_data.get("tasks"):
+            # Ensure runtime default on tasks before resolving models
+            orch = plan_data.get("mission", {}).get("orchestrator") or "claude"
+            for t in plan_data["tasks"]:
+                if not t.get("runtime"):
+                    t["runtime"] = orch
+            plan_data["tasks"] = apply_routing_policy(
+                plan_data["tasks"], cfg_for_routing
+            )
+    except Exception:
+        pass
 
     # Write mission-plan.yaml
 

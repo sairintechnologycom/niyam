@@ -1020,8 +1020,55 @@ Do not perform destructive operations.
             success = False
             tried_runtimes = []
 
+            # Apply routing + budget-aware tier degradation before execution
+            try:
+                from niyam.mission.routing import (
+                    apply_budget_tier_degradation,
+                    apply_routing_policy,
+                    resolve_model_for_task,
+                )
+
+                cfg_rt = None
+                try:
+                    cfg_rt = load_niyam_config(repo_root)
+                except Exception:
+                    cfg_rt = None
+                if not task.get("tier"):
+                    apply_routing_policy([task], cfg_rt)
+                apply_budget_tier_degradation(task, run_dir, cfg_rt)
+                if task.get("_tier_degraded"):
+                    log_mission_event(
+                        run_dir,
+                        "TIER_DEGRADED",
+                        task_id=task_id,
+                        details=(
+                            f"tier {task.get('_tier_degraded_from')} -> {task.get('tier')} "
+                            f"due to mission budget pressure"
+                        ),
+                    )
+                # Preserve tier when hopping runtimes; resolve model per runtime below
+                if not task.get("model"):
+                    task["model"] = resolve_model_for_task(
+                        task, runtime=orchestrator, repo_root=repo_root
+                    )
+            except Exception:
+                pass
+
             for current_orchestrator in orchestrators_to_try:
                 tried_runtimes.append(current_orchestrator)
+
+                # Re-resolve model for the active runtime while keeping tier
+                try:
+                    from niyam.mission.routing import resolve_model_for_task
+
+                    # Clear runtime-specific model when hopping so tier maps onto new runtime
+                    if len(tried_runtimes) > 1:
+                        task.pop("model", None)
+                    task["model"] = resolve_model_for_task(
+                        task, runtime=current_orchestrator, repo_root=repo_root
+                    )
+                except Exception:
+                    pass
 
                 if not shutil.which(current_orchestrator):
                     with print_lock:
@@ -1085,7 +1132,7 @@ Do not perform destructive operations.
                             prompt_file=prompt_path,
                             cwd=task_cwd,
                             model=task.get("model"),
-                            tier=task.get("tier"),
+                            tier=task.get("tier") or "standard",
                             mode="exec",
                             timeout=int(timeout),
                             repo_root=repo_root,
@@ -1436,6 +1483,81 @@ Do not perform destructive operations.
         (task_dir / "validation.json").write_text(
             json.dumps(validation_results, indent=2), encoding="utf-8"
         )
+        # Human-readable validation log for evidence-pack review
+        lines = []
+        for item in validation_results:
+            status = "PASS" if item.get("success") else "FAIL"
+            lines.append(
+                f"{status}: {item.get('name')} :: {item.get('command')}"
+                + (f" ({item.get('error')})" if item.get("error") else "")
+            )
+        (task_dir / "validation.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Structured evidence review for implementation tasks (Phase 4 supervision)
+    if success and task.get("type") in {"implementation", "recovery"}:
+        try:
+            from niyam.mission.reviewer import review_task_evidence
+
+            transition_task(
+                run_dir,
+                task_id,
+                "reviewing",
+                actor="orchestrator",
+                reason="Evidence-pack review",
+            )
+            verdict = review_task_evidence(
+                task=task,
+                task_dir=task_dir,
+                run_dir=run_dir,
+                repo_root=repo_root,
+            )
+            v = str(verdict.get("verdict") or "PASS").upper()
+            log_mission_event(
+                run_dir,
+                "EVIDENCE_REVIEW",
+                task_id=task_id,
+                details=f"verdict={v}",
+                type=v,
+            )
+            if v == "REWORK_REQUIRED":
+                changes = verdict.get("required_changes") or []
+                healing = "\n".join(f"- {c}" for c in changes) or "Address review findings."
+                with plan_lock:
+                    plan_data = load_plan(run_dir)
+                    for t in plan_data.get("tasks", []):
+                        if t["id"] == task_id:
+                            t["healing_prompt"] = healing
+                            t["retry_count"] = int(t.get("retry_count") or 0)
+                            max_retries = int(t.get("max_retries") or 2)
+                            if t["retry_count"] < max_retries:
+                                t["retry_count"] = t["retry_count"] + 1
+                                save_plan(run_dir, plan_data)
+                                transition_task(
+                                    run_dir,
+                                    task_id,
+                                    "retry_ready",
+                                    reason=f"Reviewer requested rework: {healing[:200]}",
+                                )
+                                success = False
+                            else:
+                                save_plan(run_dir, plan_data)
+                                success = False
+                            break
+            elif v == "REJECT":
+                success = False
+                log_mission_event(
+                    run_dir,
+                    "EVIDENCE_REVIEW_REJECT",
+                    task_id=task_id,
+                    details=str(verdict.get("issues") or []),
+                )
+        except Exception as e:
+            log_mission_event(
+                run_dir,
+                "EVIDENCE_REVIEW_ERROR",
+                task_id=task_id,
+                details=str(e),
+            )
 
     try:
         parsed_usage = None
@@ -1532,6 +1654,8 @@ Do not perform destructive operations.
             "cost_usd": actual_cost,
             "estimated": estimated,
             "runtime": orchestrator,
+            "model": task.get("model"),
+            "tier": task.get("tier"),
         }
         (task_dir / "token-usage.json").write_text(
             json.dumps(token_usage, indent=2), encoding="utf-8"

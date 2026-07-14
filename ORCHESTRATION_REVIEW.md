@@ -11,8 +11,16 @@ Date: 2026-07-11
 - Swarm heartbeat thread during task exec; `STALE_HEARTBEAT_TIMEOUT=900`  
 - Docs: `docs/runtime-execution.md`  
 
-Remaining from original plan: Phase 3 routing/tiers, Phase 4 supervision loop,
-Phase 5 PATH-shim governance for hookless runtimes.
+**Update 2026-07-14 (later):** Phases 3–4 core implemented:
+
+- `TaskContract.model` / `tier`; `routing:` + `orchestrator:` on `NiyamConfig`  
+- `niyam/mission/routing.py` — tier defaults, model resolve, 80% budget degrade  
+- `niyam/mission/reviewer.py` — evidence pack + PASS/REWORK/REJECT  
+- task_runner: degrade tier, resolve model on failover, post-validation review  
+- Tests: `tests/test_routing_and_review.py`  
+
+Remaining: Phase 4.3 merge-conflict recovery, Phase 4.4 DAGPlanner-only
+scheduler, Phase 5 PATH-shim governance.
 
 Scope (original): review only — no code changes. This document is the work order for follow-up
 implementation (each task has file pointers and acceptance criteria so it can be

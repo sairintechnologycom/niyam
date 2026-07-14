@@ -85,7 +85,37 @@ class BudgetConfig(BaseModel):
     max_task_cost_usd: Optional[float] = None
     max_mission_tokens: Optional[int] = None
     max_task_tokens: Optional[int] = None
+    # At this fraction of mission budget, drop one model tier (default 80%).
+    degrade_tier_at: float = 0.8
 
+
+class RoutingConfig(BaseModel):
+    """Cost-aware model tier routing for mission tasks."""
+
+    model_config = {"extra": "allow"}
+
+    by_type: dict[str, str] = Field(
+        default_factory=lambda: {
+            "discovery": "premium",
+            "review": "premium",
+            "implementation": "standard",
+            "validation": "economy",
+            "recovery": "standard",
+        }
+    )
+    by_agent: dict[str, str] = Field(default_factory=dict)
+    default_tier: str = "standard"
+
+
+class OrchestratorConfig(BaseModel):
+    """Orchestrator supervision settings."""
+
+    model_config = {"extra": "allow"}
+
+    reviewer: Optional[str] = "claude"
+    reviewer_tier: str = "premium"
+    evidence_review: bool = True
+    plan_timeout_seconds: int = 600
 
 
 class GovernanceConfig(BaseModel):
@@ -108,6 +138,8 @@ class NiyamConfig(BaseModel):
     packs: list[str] = Field(default_factory=list)
     guard: GuardState = Field(default_factory=GuardState)
     governance: Optional[GovernanceConfig] = None
+    routing: RoutingConfig = Field(default_factory=RoutingConfig)
+    orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
     saas: SaaSConfig = Field(default_factory=SaaSConfig)
     show_marketing_metrics: bool = False
     baseline_multiplier: float = 5.0
@@ -249,6 +281,9 @@ class TaskContract(BaseModel):
     ]
     agent: str
     runtime: Optional[str] = None
+    # Cost-aware routing: explicit model id or tier resolved via RuntimeSpec
+    model: Optional[str] = None
+    tier: Optional[Literal["premium", "standard", "economy"]] = None
     depends_on: list[str] = Field(default_factory=list)
     allowed_files: list[str] = Field(
         default_factory=lambda: ["*"],
