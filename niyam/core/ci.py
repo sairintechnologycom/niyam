@@ -47,14 +47,19 @@ def run_ci_verify(
     mission_id = resolve_mission_id(niyam_dir)
     run_dir = niyam_dir / "runs" / mission_id if mission_id else None
     evidence_path = run_dir / "evidence.md" if run_dir else None
-    scan_results_path = run_dir / "scan-report.json" if run_dir else None
-    if not scan_results_path or not scan_results_path.exists():
-        # Check fallback names
-        if run_dir:
-            for fname in ["scan.json", "evidence.json"]:
-                if (run_dir / fname).exists():
-                    scan_results_path = run_dir / fname
-                    break
+
+    # Prefer mission-scoped scan, then latest workspace scan report
+    scan_results_path = None
+    if run_dir:
+        for fname in ("scan-report.json", "scan.json"):
+            candidate = run_dir / fname
+            if candidate.is_file():
+                scan_results_path = candidate
+                break
+    if scan_results_path is None:
+        from niyam.core.evidence import find_latest_scan_report
+
+        scan_results_path = find_latest_scan_report(root)
 
     integrity_status = "skipped"
     policy_status = "passed"
@@ -70,14 +75,29 @@ def run_ci_verify(
 
     # 1. Readiness Score Check
     if scan_results_path and scan_results_path.exists():
-        console.print("[cyan]Checking governance readiness score...[/]")
+        try:
+            scan_display = scan_results_path.relative_to(root)
+        except ValueError:
+            scan_display = scan_results_path
+        console.print(
+            f"[cyan]Checking governance readiness score...[/] "
+            f"[dim]({scan_display})[/]"
+        )
         try:
             with open(scan_results_path, encoding="utf-8") as f:
                 scan_data = json.load(f)
-                score = scan_data.get("score") or scan_data.get("readiness_score")
+                score = scan_data.get("score")
+                if score is None:
+                    score = scan_data.get("readiness_score")
                 decision = scan_data.get("decision", "UNKNOWN")
-                
-                if score is not None:
+
+                if score is None:
+                    message = f"Scan report has no readiness score: {scan_display}."
+                    console.print(f"[bold yellow]⚠ Warning:[/] {message}")
+                    if strict:
+                        failures.append(message)
+                        governance_status = "failed"
+                else:
                     console.print(f"  Current Score: [bold]{score}[/] (Decision: [bold]{decision}[/])")
                     if score < min_score:
                         failures.append(f"Readiness score {score} is below minimum requirement of {min_score}.")
@@ -89,21 +109,37 @@ def run_ci_verify(
                         console.print(f"  [bold green]✓[/] Readiness score passes threshold.")
         except Exception as e:
             console.print(f"[bold yellow]⚠ Warning:[/] Failed to parse scan results: {e}")
+            if strict:
+                failures.append(f"Failed to parse scan report: {e}")
+                governance_status = "failed"
     else:
+        remediate = "Run: niyam scan .  (writes .niyam/scan-report.json)"
         if strict:
-            failures.append("No scan results or evidence found for latest mission.")
+            failures.append(
+                f"No scan report found. {remediate}"
+            )
             governance_status = "failed"
-            console.print("[bold red]❌ Governance check failed:[/] No scan report found.")
+            console.print(
+                "[bold red]❌ Governance check failed:[/] No scan report found.\n"
+                f"  [dim]{remediate}[/]"
+            )
         else:
-            console.print("[bold yellow]⚠ Warning:[/] No scan report found. Skipping score checks (non-strict mode).")
+            console.print(
+                "[bold yellow]⚠ Warning:[/] No scan report found. Skipping score checks (non-strict mode).\n"
+                f"  [dim]{remediate}[/]"
+            )
 
     # 2. Cryptographic Evidence Integrity Check
     if not evidence_path or not evidence_path.exists():
         if strict:
-            failures.append("Evidence report (evidence.md) not found.")
+            failures.append(
+                "Evidence report (evidence.md) not found. "
+                "Run: niyam mission report"
+            )
             integrity_status = "failed"
             console.print(
-                "[bold red]❌ Integrity check failed:[/] evidence.md not found in run directory."
+                "[bold red]❌ Integrity check failed:[/] evidence.md not found.\n"
+                "  [dim]Run: niyam mission report[/]"
             )
         else:
             console.print(

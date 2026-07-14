@@ -68,7 +68,8 @@ Remediation actions are recommended below:
 {% if guard_summary and guard_summary.total_actions > 0 -%}
 ### Agent Governance Summary (Niyam Guard)
 * **Total Actions:** {{ guard_summary.total_actions }}
-* **Total Blocked:** {{ guard_summary.total_blocked }}
+* **Hard-Blocked (enforced):** {{ guard_summary.total_blocked }}
+* **Policy Deny Matches:** {{ guard_summary.total_policy_matched | default(0) }} *(includes observe-mode matches that still executed)*
 * **Total Warned:** {{ guard_summary.total_warned }}
 * **Total Approval Required:** {{ guard_summary.total_approval_required }}
 * **Total Failed:** {{ guard_summary.total_failed }}
@@ -80,7 +81,8 @@ Remediation actions are recommended below:
 #### Latest Session Details
 * **Session ID:** `{{ guard_summary.latest_session.session_id }}`
 * **Session Total Actions:** {{ guard_summary.latest_session.total_actions }}
-* **Session Blocked:** {{ guard_summary.latest_session.total_blocked }}
+* **Session Hard-Blocked:** {{ guard_summary.latest_session.total_blocked }}
+* **Session Policy Deny Matches:** {{ guard_summary.latest_session.total_policy_matched | default(0) }}
 * **Session Warned:** {{ guard_summary.latest_session.total_warned }}
 * **Session Failed:** {{ guard_summary.latest_session.total_failed }}
 {%- endif %}

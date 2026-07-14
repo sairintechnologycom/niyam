@@ -449,6 +449,67 @@ def test_find_latest_scan_report_prefers_canonical(tmp_path: Path) -> None:
     assert found == canonical
 
 
+def test_guard_summary_hard_block_vs_policy_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Observe-mode policy matches must not count as hard blocks (E2E-08)."""
+    from niyam.core import evidence as evidence_mod
+    from niyam.core.evidence import run_generate_evidence
+
+    niyam_dir = tmp_path / ".niyam"
+    logs_dir = niyam_dir / "logs"
+    logs_dir.mkdir(parents=True)
+    (niyam_dir / "niyam.yaml").write_text("version: '1.0.0'\nproject_name: guard-test\n")
+    (niyam_dir / "scan-report.json").write_text(
+        json.dumps(
+            {
+                "score": 70,
+                "decision": "GO",
+                "findings": [],
+                "summary": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # One observe-mode policy match (allowed), one true hard block
+    logs = [
+        {
+            "timestamp": "2026-07-14T00:00:00Z",
+            "session_id": "s1",
+            "actor_type": "human",
+            "command": "rm -rf /tmp/x",
+            "exit_code": 0,
+            "mode": "observe",
+            "policy_decision": "block",
+            "decision": "allowed",
+        },
+        {
+            "timestamp": "2026-07-14T00:00:01Z",
+            "session_id": "s1",
+            "actor_type": "agent",
+            "command": "rm -rf /tmp/y",
+            "exit_code": 1,
+            "mode": "block",
+            "policy_decision": "block",
+            "decision": "blocked",
+        },
+    ]
+    log_path = logs_dir / "guard-actions.jsonl"
+    log_path.write_text(
+        "\n".join(json.dumps(entry) for entry in logs) + "\n", encoding="utf-8"
+    )
+
+    monkeypatch.setattr(evidence_mod, "find_niyam_root", lambda start=None: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    report = run_generate_evidence(fmt="markdown", include="scan,guard")
+    assert "**Hard-Blocked (enforced):** 1" in report
+    assert "**Policy Deny Matches:** 2" in report
+    # Must not claim 2 hard blocks from observe+block
+    assert "**Hard-Blocked (enforced):** 2" not in report
+
+
 def test_evidence_does_not_include_raw_secrets(tmp_path: Path) -> None:
     """Verify secrets in scan results are redacted in generated evidence reports."""
     scan_json = tmp_path / "scan.json"

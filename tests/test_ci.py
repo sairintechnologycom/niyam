@@ -152,6 +152,134 @@ def test_ci_verify_strict_missing_evidence(niyam_repo: Path) -> None:
     assert excinfo.value.code == 1
 
 
+def test_ci_verify_uses_workspace_scan_report(niyam_repo: Path) -> None:
+    """CI verify should load .niyam/scan-report.json when no mission scan exists."""
+    os.chdir(niyam_repo)
+    niyam_dir = get_niyam_dir(niyam_repo)
+    console = Console(quiet=True)
+
+    # Passing readiness score at workspace level (no mission-scoped scan)
+    scan_payload = {
+        "score": 82,
+        "readiness_score": 82,
+        "decision": "GO",
+        "findings": [],
+    }
+    (niyam_dir / "scan-report.json").write_text(
+        json.dumps(scan_payload), encoding="utf-8"
+    )
+
+    # Minimal evidence so integrity does not hard-fail before governance
+    mission_id = "ci-scan-link"
+    run_dir = niyam_dir / "runs" / mission_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "mission-plan.yaml").write_text(
+        "mission:\n  id: ci-scan-link\n  status: completed\n  orchestrator: claude\ntasks: []\n",
+        encoding="utf-8",
+    )
+    (run_dir / "evidence.md").write_text(
+        "# Niyam Mission Evidence Package - ci-scan-link\n"
+        "<!-- NIYAM_SIGNATURE_START\n"
+        "{\n"
+        '  "mission_id": "ci-scan-link",\n'
+        '  "timestamp": "2026-07-14T00:00:00Z",\n'
+        '  "files": {}\n'
+        "}\n"
+        "NIYAM_SIGNATURE_END -->\n",
+        encoding="utf-8",
+    )
+    (run_dir / "evidence.json").write_text(
+        json.dumps({"readiness_score": None, "decision": None}), encoding="utf-8"
+    )
+
+    from unittest.mock import MagicMock, patch
+
+    from niyam.core.ci import run_ci_verify
+
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = ""
+    mock_cfg = MagicMock()
+    mock_cfg.validation = None  # skip lint/test suite for this unit
+
+    with (
+        patch("subprocess.run", return_value=mock_run),
+        patch("niyam.core.ci.run_verify_report"),
+        patch("niyam.core.ci.load_project_config", return_value=mock_cfg),
+    ):
+        # Should not raise — governance score comes from workspace scan
+        run_ci_verify(target_branch="main", strict=True, min_score=50, console=console)
+
+    report_path = niyam_dir / "ci-report.json"
+    assert report_path.exists()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["governance_status"] == "passed"
+
+
+def test_ci_verify_strict_rejects_scan_without_score(niyam_repo: Path) -> None:
+    """Strict CI must not pass when a scan artifact has no score."""
+    os.chdir(niyam_repo)
+    niyam_dir = get_niyam_dir(niyam_repo)
+    (niyam_dir / "scan-report.json").write_text(
+        json.dumps({"decision": "GO", "findings": []}), encoding="utf-8"
+    )
+
+    from unittest.mock import MagicMock, patch
+
+    from niyam.core.ci import run_ci_verify
+
+    mock_run = MagicMock(returncode=0, stdout="")
+    mock_cfg = MagicMock(validation=None)
+    with (
+        patch("subprocess.run", return_value=mock_run),
+        patch("niyam.core.ci.load_project_config", return_value=mock_cfg),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        run_ci_verify(target_branch="main", strict=True, console=Console(quiet=True))
+
+    assert excinfo.value.code == 1
+    report = json.loads((niyam_dir / "ci-report.json").read_text(encoding="utf-8"))
+    assert report["governance_status"] == "failed"
+    assert any("no readiness score" in failure for failure in report["failures"])
+
+
+def test_ci_verify_treats_zero_as_a_real_score(niyam_repo: Path) -> None:
+    """A zero readiness score must fail the threshold, not parse as missing."""
+    os.chdir(niyam_repo)
+    niyam_dir = get_niyam_dir(niyam_repo)
+    (niyam_dir / "scan-report.json").write_text(
+        json.dumps({"score": 0, "decision": "NO_GO"}), encoding="utf-8"
+    )
+
+    from niyam.core.ci import run_ci_verify
+
+    with pytest.raises(SystemExit):
+        run_ci_verify(target_branch="main", strict=True, console=Console(quiet=True))
+
+    report = json.loads((niyam_dir / "ci-report.json").read_text(encoding="utf-8"))
+    assert any("Readiness score 0" in failure for failure in report["failures"])
+
+
+def test_ci_verify_strict_missing_scan_suggests_remediation(niyam_repo: Path) -> None:
+    """Missing scan in strict mode should fail with actionable remediation text."""
+    os.chdir(niyam_repo)
+    console = Console(quiet=True)
+    from io import StringIO
+    from rich.console import Console as RichConsole
+
+    from niyam.core.ci import run_ci_verify
+
+    buf = StringIO()
+    noisy = RichConsole(file=buf, force_terminal=False, width=120)
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_ci_verify(target_branch="main", strict=True, console=noisy)
+    assert excinfo.value.code == 1
+    output = buf.getvalue()
+    assert "No scan report found" in output or "scan report" in output.lower()
+    assert "niyam scan" in output
+
+
 def test_ci_verify_non_strict_missing_evidence(niyam_repo: Path) -> None:
     """Should warn but pass CI verification in non-strict mode if evidence.md is missing."""
     os.chdir(niyam_repo)
@@ -169,6 +297,30 @@ def test_ci_verify_non_strict_missing_evidence(niyam_repo: Path) -> None:
     with patch("subprocess.run", return_value=mock_run):
         # Should not raise SystemExit
         run_ci_verify(target_branch="main", strict=False, console=console)
+
+
+def test_ci_verify_does_not_verify_unsigned_workspace_evidence(
+    niyam_repo: Path,
+) -> None:
+    """Governance evidence is not a signed mission integrity artifact."""
+    os.chdir(niyam_repo)
+    niyam_dir = get_niyam_dir(niyam_repo)
+    (niyam_dir / "evidence.md").write_text(
+        "# Unsigned governance evidence\n", encoding="utf-8"
+    )
+
+    from unittest.mock import MagicMock, patch
+
+    from niyam.core.ci import run_ci_verify
+
+    mock_run = MagicMock(returncode=0, stdout="")
+    with (
+        patch("subprocess.run", return_value=mock_run),
+        patch("niyam.core.ci.run_verify_report") as verify,
+    ):
+        run_ci_verify(target_branch="main", strict=False, console=Console(quiet=True))
+
+    verify.assert_not_called()
 
 
 def test_ci_verify_write_violation(niyam_repo: Path) -> None:

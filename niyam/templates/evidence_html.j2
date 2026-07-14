@@ -174,7 +174,8 @@
         <h3>Niyam Guard Summary</h3>
         <div class="meta-list">
             <div class="meta-item"><span>Total Actions:</span> {{ guard_summary.total_actions }}</div>
-            <div class="meta-item"><span>Total Blocked:</span> {{ guard_summary.total_blocked }}</div>
+            <div class="meta-item"><span>Hard-Blocked (enforced):</span> {{ guard_summary.total_blocked }}</div>
+            <div class="meta-item"><span>Policy Deny Matches:</span> {{ guard_summary.total_policy_matched | default(0) }}</div>
             <div class="meta-item"><span>Total Warned:</span> {{ guard_summary.total_warned }}</div>
             <div class="meta-item"><span>Total Approval Required:</span> {{ guard_summary.total_approval_required }}</div>
             <div class="meta-item"><span>Total Failed:</span> {{ guard_summary.total_failed }}</div>
@@ -188,7 +189,8 @@
         <ul>
             <li><strong>Session ID:</strong> <code>{{ guard_summary.latest_session.session_id }}</code></li>
             <li><strong>Session Total Actions:</strong> {{ guard_summary.latest_session.total_actions }}</li>
-            <li><strong>Session Blocked:</strong> {{ guard_summary.latest_session.total_blocked }}</li>
+            <li><strong>Session Hard-Blocked:</strong> {{ guard_summary.latest_session.total_blocked }}</li>
+            <li><strong>Session Policy Deny Matches:</strong> {{ guard_summary.latest_session.total_policy_matched | default(0) }}</li>
             <li><strong>Session Warned:</strong> {{ guard_summary.latest_session.total_warned }}</li>
             <li><strong>Session Failed:</strong> {{ guard_summary.latest_session.total_failed }}</li>
         </ul>

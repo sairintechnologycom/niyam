@@ -96,6 +96,49 @@ def test_fleet_status_reports_missions(fleet_env):
     assert "1/2" in result.stdout # Progress
 
 
+def test_fleet_status_rolls_up_scan_readiness(fleet_env):
+    """Fleet status should show readiness from latest scan-report.json (E2E-04)."""
+    root_dir, repo1, repo2 = fleet_env
+
+    runner.invoke(app, ["fleet", "register", str(repo1), "--alias", "alpha"])
+    runner.invoke(app, ["fleet", "register", str(repo2), "--alias", "beta"])
+
+    (repo1 / ".niyam" / "scan-report.json").write_text(
+        json.dumps(
+            {
+                "score": 88,
+                "readiness_score": 88,
+                "decision": "GO",
+                "findings": [{"severity": "medium", "id": "X1"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (repo2 / ".niyam" / "scan-report.json").write_text(
+        json.dumps(
+            {
+                "score": 42,
+                "readiness_score": 42,
+                "decision": "NO_GO",
+                "findings": [
+                    {"severity": "critical", "id": "C1"},
+                    {"severity": "high", "id": "H1"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["fleet", "status"])
+    assert result.exit_code == 0
+    assert "88" in result.stdout
+    assert "42" in result.stdout
+    # Fleet health summary averages scored repos
+    assert "Fleet Health Summary" in result.stdout or "Average Readiness" in result.stdout
+    # Critical/high risks from beta
+    assert "1" in result.stdout
+
+
 def test_fleet_sync_policies(fleet_env):
     """Verify fleet sync correctly copies policies from source to target."""
     root_dir, repo1, repo2 = fleet_env

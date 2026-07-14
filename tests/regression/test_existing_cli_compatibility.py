@@ -65,8 +65,12 @@ def test_cli_entrypoint_import() -> None:
     assert callable(main)
 
 
-def test_deprecated_commands_warnings() -> None:
+def test_deprecated_commands_warnings(monkeypatch) -> None:
     """Verify that deprecated top-level commands emit warnings."""
+    monkeypatch.setattr("niyam.evidence.reporter.run_report", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "niyam.cli.mission.mission_start_wizard", lambda runtime=None: None
+    )
     # 1. status
     result = runner.invoke(app, ["status", "--mission", "NONEXISTENT"])
     assert "is deprecated" in result.output
@@ -93,8 +97,9 @@ def test_deprecated_commands_warnings() -> None:
     assert "mission start-wizard" in result.output
 
 
-def test_new_subgroup_commands_exist() -> None:
+def test_new_subgroup_commands_exist(monkeypatch) -> None:
     """Verify new subgroup commands are registered under 'mission' and help works."""
+    monkeypatch.setattr("niyam.evidence.reporter.run_report", lambda **kwargs: None)
     assert runner.invoke(app, ["mission", "validate-task", "--help"]).exit_code == 0
     assert runner.invoke(app, ["mission", "start-wizard", "--help"]).exit_code == 0
     

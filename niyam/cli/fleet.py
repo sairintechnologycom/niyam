@@ -128,30 +128,35 @@ def fleet_status() -> None:
         readiness = "[dim]N/A[/]"
         risks = "[dim]0 / 0[/]"
         
-        # 1. Try to load latest scan report for readiness score
-        scan_report_path = niyam_dir / "reports" / "scan.json"
-        if not scan_report_path.exists():
-             scan_report_path = niyam_dir / "scan-report.json"
-             
-        if scan_report_path.exists():
+        # 1. Load latest scan report for readiness score (canonical + mission paths)
+        from niyam.core.evidence import find_latest_scan_report
+
+        scan_report_path = find_latest_scan_report(repo_path)
+        if scan_report_path is not None and scan_report_path.is_file():
             try:
                 with open(scan_report_path, "r", encoding="utf-8") as f:
                     report = json.load(f)
                     score = report.get("score", report.get("readiness_score", 0))
-                    
+                    if score is None:
+                        score = 0
+
                     score_color = "green" if score >= 80 else "yellow" if score >= 60 else "red"
                     readiness = f"[{score_color}]{score}[/]"
-                    
+
                     total_score += score
                     scored_repos += 1
-                    
+
                     findings = report.get("findings", [])
-                    crit = sum(1 for f in findings if f.get("severity") == "critical")
-                    high = sum(1 for f in findings if f.get("severity") == "high")
-                    
+                    # Open findings only (baseline-accepted should not inflate fleet risk)
+                    open_findings = [
+                        f for f in findings if f.get("status") != "accepted_existing"
+                    ]
+                    crit = sum(1 for f in open_findings if f.get("severity") == "critical")
+                    high = sum(1 for f in open_findings if f.get("severity") == "high")
+
                     total_critical += crit
                     total_high += high
-                    
+
                     risks = f"[bold red]{crit}[/] / [red]{high}[/]"
             except Exception:
                 readiness = "[red]Error[/]"

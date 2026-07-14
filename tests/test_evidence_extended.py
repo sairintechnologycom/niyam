@@ -399,14 +399,14 @@ def test_evidence_with_and_without_guard_logs(
     # 1. Summarize total commands
     assert "Total Actions:** 2" in report_with_logs
     # 2. Summarize blocked/warned/approved actions
-    assert "Total Blocked:** 1" in report_with_logs
+    assert "Hard-Blocked (enforced):** 1" in report_with_logs
     assert "Total Warned:** 0" in report_with_logs
     # 3. Summarize failed commands (blocked does not count as run/failed)
     assert "Total Failed:** 0" in report_with_logs
     # 4. Include latest session details
     assert "Session ID:** `session-123`" in report_with_logs
     assert "Session Total Actions:** 2" in report_with_logs
-    assert "Session Blocked:** 1" in report_with_logs
+    assert "Session Hard-Blocked:** 1" in report_with_logs
     # 5. Top command categories
     assert "npm (1)" in report_with_logs
     assert "rm (1)" in report_with_logs

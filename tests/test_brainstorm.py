@@ -221,6 +221,7 @@ def test_run_brainstorm_with_repo_context(tmp_repo: Path, monkeypatch):
 def test_run_brainstorm_interactive_refine(tmp_repo: Path, monkeypatch):
     """Test brainstorming refinement loop when user chooses 'refine' and then 'accept'."""
     os.chdir(tmp_repo)
+    monkeypatch.delenv("NIYAM_TEST", raising=False)
     console = Console(quiet=True)
 
     # Mock runtime to be found

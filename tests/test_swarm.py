@@ -332,7 +332,7 @@ class TestHeartbeat:
     def test_naive_timestamp_handled(self) -> None:
         """A naive (no timezone) timestamp should be handled gracefully."""
         # Old ISO format without tz info
-        naive_recent = datetime.utcnow().isoformat()
+        naive_recent = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         agent = SwarmAgent(id="a1", role="test", last_seen=naive_recent)
         assert is_agent_stale(agent) is False
 
@@ -929,5 +929,4 @@ class TestConcurrency:
 
         assert flag1.value == 1  # P1 successfully got lock and held it
         assert flag2.value == 0  # P2 failed due to timeout
-
 

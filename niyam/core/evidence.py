@@ -178,6 +178,35 @@ def _get_git_metadata(repo_root: Path) -> dict[str, str]:
     except Exception:
         pass
 
+    import os
+    # Fallback to standard environment variables if git command yields "unknown"
+    if metadata["branch"] == "unknown":
+        for var in ("GITHUB_REF_NAME", "CI_COMMIT_REF_NAME", "GIT_BRANCH", "BUILDKITE_BRANCH", "TRAVIS_BRANCH"):
+            val = os.environ.get(var)
+            if val:
+                metadata["branch"] = val
+                break
+        else:
+            ref = os.environ.get("GITHUB_REF")  # e.g. refs/heads/main
+            if ref and ref.startswith("refs/heads/"):
+                metadata["branch"] = ref[len("refs/heads/"):]
+            elif ref and ref.startswith("refs/tags/"):
+                metadata["branch"] = ref[len("refs/tags/"):]
+
+    if metadata["commit_sha"] == "unknown":
+        for var in ("GITHUB_SHA", "CI_COMMIT_SHA", "GIT_COMMIT", "BUILDKITE_COMMIT", "TRAVIS_COMMIT"):
+            val = os.environ.get(var)
+            if val:
+                metadata["commit_sha"] = val[:8] if len(val) > 8 else val
+                break
+
+    if metadata["commit_author"] == "unknown":
+        for var in ("GITHUB_ACTOR", "CI_COMMIT_AUTHOR", "GIT_AUTHOR_NAME", "BUILDKITE_BUILD_CREATOR", "TRAVIS_COMMIT_AUTHOR"):
+            val = os.environ.get(var)
+            if val:
+                metadata["commit_author"] = val
+                break
+
     return metadata
 
 
@@ -934,33 +963,40 @@ def run_generate_evidence(
     guard_logs_all = _get_guard_logs(root) if "guard" in include_list else []
 
     # Calculate guard action metrics
+    # Hard-blocked = enforcement actually stopped the command (decision blocked/denied).
+    # Policy-matched = deny rule matched (includes observe mode where command still ran).
+    def _is_hard_blocked(log: dict[str, Any]) -> bool:
+        return log.get("decision") in ("blocked", "denied")
+
+    def _is_policy_deny_match(log: dict[str, Any]) -> bool:
+        return log.get("policy_decision") == "block"
+
+    def _is_warned(log: dict[str, Any]) -> bool:
+        return log.get("decision") == "warned" or log.get("policy_decision") == "warn"
+
+    def _is_approval_required(log: dict[str, Any]) -> bool:
+        return log.get("policy_decision") == "approval_required" or log.get(
+            "decision"
+        ) in ("denied", "approved")
+
+    def _is_failed_exec(log: dict[str, Any]) -> bool:
+        return (
+            log.get("exit_code", 0) != 0
+            and not _is_hard_blocked(log)
+        )
+
     guard_summary = None
     if "guard" in include_list and guard_logs_all:
         total_actions = len(guard_logs_all)
-        total_blocked = sum(
-            1
-            for log in guard_logs_all
-            if log.get("decision") in ("blocked", "denied")
-            or log.get("policy_decision") == "block"
+        total_blocked = sum(1 for log in guard_logs_all if _is_hard_blocked(log))
+        total_policy_matched = sum(
+            1 for log in guard_logs_all if _is_policy_deny_match(log)
         )
-        total_warned = sum(
-            1
-            for log in guard_logs_all
-            if log.get("decision") == "warned" or log.get("policy_decision") == "warn"
-        )
+        total_warned = sum(1 for log in guard_logs_all if _is_warned(log))
         total_approval_required = sum(
-            1
-            for log in guard_logs_all
-            if log.get("policy_decision") == "approval_required"
-            or log.get("decision") in ("denied", "approved")
+            1 for log in guard_logs_all if _is_approval_required(log)
         )
-        total_failed = sum(
-            1
-            for log in guard_logs_all
-            if log.get("exit_code", 0) != 0
-            and log.get("decision") not in ("blocked", "denied")
-            and log.get("policy_decision") != "block"
-        )
+        total_failed = sum(1 for log in guard_logs_all if _is_failed_exec(log))
 
         top_command_categories = _get_top_command_categories(guard_logs_all)
 
@@ -979,35 +1015,24 @@ def run_generate_evidence(
             "session_id": latest_session_id,
             "total_actions": len(latest_session_logs),
             "total_blocked": sum(
-                1
-                for log in latest_session_logs
-                if log.get("decision") in ("blocked", "denied")
-                or log.get("policy_decision") == "block"
+                1 for log in latest_session_logs if _is_hard_blocked(log)
             ),
-            "total_warned": sum(
-                1
-                for log in latest_session_logs
-                if log.get("decision") == "warned"
-                or log.get("policy_decision") == "warn"
+            "total_policy_matched": sum(
+                1 for log in latest_session_logs if _is_policy_deny_match(log)
             ),
+            "total_warned": sum(1 for log in latest_session_logs if _is_warned(log)),
             "total_approval_required": sum(
-                1
-                for log in latest_session_logs
-                if log.get("policy_decision") == "approval_required"
-                or log.get("decision") in ("denied", "approved")
+                1 for log in latest_session_logs if _is_approval_required(log)
             ),
             "total_failed": sum(
-                1
-                for log in latest_session_logs
-                if log.get("exit_code", 0) != 0
-                and log.get("decision") not in ("blocked", "denied")
-                and log.get("policy_decision") != "block"
+                1 for log in latest_session_logs if _is_failed_exec(log)
             ),
         }
 
         guard_summary = {
             "total_actions": total_actions,
             "total_blocked": total_blocked,
+            "total_policy_matched": total_policy_matched,
             "total_warned": total_warned,
             "total_approval_required": total_approval_required,
             "total_failed": total_failed,
@@ -1023,6 +1048,7 @@ def run_generate_evidence(
                     "duration_ms": log.get("duration_ms"),
                     "policy_decision": log.get("policy_decision"),
                     "decision": log.get("decision"),
+                    "mode": log.get("mode"),
                 }
                 for log in guard_logs_all[-5:]
             ],
