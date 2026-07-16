@@ -27,6 +27,9 @@ def fleet_register(
     alias: Optional[str] = typer.Option(None, "--alias", "-a", help="Alias for the repository."),
     tags: Optional[str] = typer.Option(None, "--tags", "-t", help="Comma-separated list of tags."),
     depends_on: Optional[str] = typer.Option(None, "--depends-on", "-d", help="Comma-separated list of repo aliases this repo depends on."),
+    application: Optional[str] = typer.Option(
+        None, "--application", help="Registered AI Application ID."
+    ),
 ) -> None:
     """Register a Niyam workspace in the fleet."""
     if not path.exists():
@@ -40,7 +43,17 @@ def fleet_register(
         
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     dep_list = [d.strip() for d in depends_on.split(",")] if depends_on else None
-    repo = register_repo(niyam_root, alias=alias, tags=tag_list, depends_on=dep_list)
+    try:
+        repo = register_repo(
+            niyam_root,
+            alias=alias,
+            tags=tag_list,
+            depends_on=dep_list,
+            application_id=application,
+        )
+    except ValueError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        raise typer.Exit(1)
     
     console.print(f"[bold green]✓[/] Registered repository: [bold cyan]{repo.alias}[/]")
     console.print(f"  [dim]Path:[/] {repo.path}")
@@ -84,12 +97,19 @@ def fleet_list() -> None:
         
     table = Table(title="Niyam Fleet Repositories")
     table.add_column("Alias", style="bold cyan")
+    table.add_column("Application", style="magenta")
     table.add_column("Path", style="dim")
     table.add_column("Tags", style="green")
     table.add_column("Depends On", style="yellow")
     
     for repo in config.repos:
-        table.add_row(repo.alias, repo.path, ", ".join(repo.tags), ", ".join(repo.depends_on))
+        table.add_row(
+            repo.alias,
+            repo.application_id or "-",
+            repo.path,
+            ", ".join(repo.tags),
+            ", ".join(repo.depends_on),
+        )
         
     console.print(table)
 
@@ -189,7 +209,14 @@ def fleet_status() -> None:
                 except Exception:
                     status = "[red]Error loading plan[/]"
         
-        table.add_row(repo.alias, latest_mission, readiness, risks, status, progress)
+        table.add_row(
+            repo.alias,
+            latest_mission,
+            readiness,
+            risks,
+            status,
+            progress,
+        )
         
     console.print(table)
     

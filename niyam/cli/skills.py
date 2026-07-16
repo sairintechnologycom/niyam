@@ -28,6 +28,7 @@ def list_skills() -> None:
     table = Table(title="Agent Skill Governance Registry")
     table.add_column("Skill Name", style="cyan")
     table.add_column("Version", style="magenta")
+    table.add_column("Application", style="cyan")
     table.add_column("Risk Level", style="bold")
     table.add_column("Approved", style="green")
     table.add_column("Registered At", style="dim")
@@ -46,6 +47,7 @@ def list_skills() -> None:
         table.add_row(
             name,
             skill.manifest.version,
+            skill.application_id or "-",
             f"[{risk_style}]{skill.risk_level.upper()}[/]",
             approved_str,
             skill.registered_at[:10],
@@ -58,6 +60,9 @@ def list_skills() -> None:
 def register(
     path: Path = typer.Argument(..., help="Path to the skill directory or SKILL.md file."),
     approved: bool = typer.Option(False, "--approved", help="Explicitly approve the skill during registration."),
+    application: Optional[str] = typer.Option(
+        None, "--application", help="Registered AI Application ID."
+    ),
 ) -> None:
     """Register a skill for governance oversight."""
     skill_file = path
@@ -69,7 +74,9 @@ def register(
         raise typer.Exit(1)
 
     try:
-        skill = register_skill(skill_file, approved=approved)
+        skill = register_skill(
+            skill_file, approved=approved, application_id=application
+        )
         console.print(f"[green]Successfully registered skill:[/] [cyan]{skill.manifest.name}[/]")
         console.print(f"  Risk Level: {skill.risk_level.upper()}")
         console.print(f"  Approved: {'Yes' if skill.approved else 'No (Requires operator approval)'}")

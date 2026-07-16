@@ -191,7 +191,7 @@ def run_guard_verify_commit(console: Console) -> None:
     if blocked_files:
         console.print("[bold red]🛑 Commit Blocked by Niyam Guard[/]")
         console.print(
-            f"The following staged files are inside [bold]frozen paths[/]:"
+            "The following staged files are inside [bold]frozen paths[/]:"
         )
         for f in blocked_files:
             console.print(f"  [red]• {f}[/]")
@@ -580,6 +580,7 @@ def run_guard_run(
     console: Console,
     dry_run: bool = False,
     mode_override: str | None = None,
+    application_id: str | None = None,
 ) -> None:
     if not cmd_args:
         console.print(
@@ -697,8 +698,9 @@ def run_guard_run(
     matched_rule = None
     reason = None
     policy_decision = "allow"
+    attribute_policy_enforced = False
 
-    from niyam.core.policy import is_exception_active
+    from niyam.core.policy import evaluate_application_policy, is_exception_active
 
     for pattern in blocked_commands:
         if _match_command_pattern(cmd_args, pattern):
@@ -787,6 +789,23 @@ def run_guard_run(
                 policy_decision = "warn"
                 break
 
+    application_decision = evaluate_application_policy(application_id, root)
+    decision_priority = {
+        "allow": 0,
+        "observe": 1,
+        "warn": 2,
+        "approval_required": 3,
+        "block": 4,
+    }
+    attribute_policy_enforced = application_decision.result in (
+        "block",
+        "approval_required",
+    )
+    if decision_priority[application_decision.result] > decision_priority[policy_decision]:
+        matched_rule = f"team_policy:{application_decision.rule_id}"
+        reason = application_decision.reason
+        policy_decision = application_decision.result
+
     def write_log(
         exit_code: int,
         duration_ms: int,
@@ -810,6 +829,7 @@ def run_guard_run(
             "decision": final_decision,
             "matched_rule": matched_rule,
             "reason": reason,
+            "application_id": application_id,
         }
         if output_data is not None:
             log_entry["output"] = redact_text(output_data)
@@ -859,14 +879,14 @@ def run_guard_run(
         raise SystemExit(0)
 
     # Enforcement
-    if policy_decision == "block" and mode == "block":
+    if policy_decision == "block" and (mode == "block" or attribute_policy_enforced):
         console.print("[bold red]Blocked:[/] Command violates governance policy.")
         write_log(1, 0, "blocked", "block")
         raise SystemExit(1)
 
     elif (policy_decision == "block" and mode in ("approve", "approval")) or (
         policy_decision == "approval_required"
-        and mode in ("block", "approve", "approval")
+        and (mode in ("block", "approve", "approval") or attribute_policy_enforced)
     ):
         allowed = _prompt_confirm(
             console, "Approval required for command. Allow execution?"

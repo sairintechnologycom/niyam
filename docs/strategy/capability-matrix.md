@@ -20,7 +20,7 @@ Governance, compliance, guardrails, FinOps, runtime control, and evidence are **
 | --- | --- |
 | **What Niyam is** | Local-first **AgentOps control plane** for governed AI coding agents and AI-assisted repositories |
 | **Strongest commercial surface** | Production readiness scoring + policy enforcement + evidence packs |
-| **What Niyam is not yet** | Org-wide AI inventory, multi-cloud discovery, enterprise Trust Center, or universal agent fabric |
+| **What Niyam is not yet** | Complete org-wide AI inventory, enterprise Trust Center, or universal agent fabric |
 | **Platform maturity (full vision)** | ~**3.5 / 10** — deep vertical product; shallow enterprise platform breadth |
 | **AgentOps maturity (coding agents)** | ~**8 / 10** — multi-module, CLI-complete, tested |
 
@@ -42,11 +42,11 @@ Governance, compliance, guardrails, FinOps, runtime control, and evidence are **
 | Evidence packs | **Built** | Multi-section, identity-signable |
 | Agent execution (mission/loop/swarm) | **Built** | Coding-agent runtime |
 | FinOps (token cost) | **Partial** | Ledger + scorecard; no outcome ROI |
-| Discovery / inventory | **Early–Partial** | Fleet = Niyam workspaces only |
+| Discovery / inventory | **Partial** | Source metadata plus read-only cloud/Kubernetes runtime discovery |
 | Architecture intelligence | **Early** | Stack/context refresh |
 | Trust Center (exec Q&A) | **Early** | Local portal + evidence |
-| Niyam Graph / AI Application identity | **Not built** | Objects exist in silos |
-| Multi-cloud connectors | **Not built** | PR/CI delivery hooks only |
+| Niyam Graph / AI Application identity | **Built (local)** | Stable applications and direct typed relationships |
+| Multi-cloud connectors | **Partial** | Read-only AWS/Azure/GCP/Kubernetes metadata discovery |
 | SaaS control plane | **Early** | Client upload hook |
 | Continuous improvement loop | **Partial** | Memory lineage, auto-heal, analytics seeds |
 
@@ -76,7 +76,7 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 
 | Stage | Status | Primary code / CLI |
 | --- | --- | --- |
-| Discover | **Early** | `fleet discover`, `mcp list`, `skills list` |
+| Discover | **Partial** | `discovery source/runtime`, `fleet discover`, `mcp list`, `skills list` |
 | Understand | **Early** | `context refresh`, stack detector |
 | Assess | **Built** | `scan`, scoring, decision engine |
 | Govern | **Built** | `guard`, `policy`, MCP/skill approval |
@@ -97,13 +97,13 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | MCP / tool inventory | **Built** | `niyam/core/mcp.py`, `niyam mcp *` |
 | Skill inventory | **Built** | `niyam/core/skills.py`, `niyam skills *` |
 | Runtime inventory | **Built** | `niyam/runtimes/`, `niyam runtime add` |
-| Org-wide AI apps / shadow AI | **Not built** | — |
-| GitHub / ADO / GitLab inventory crawlers | **Not built** | PR/CI helpers only |
-| AWS / Azure / GCP / K8s AI asset discovery | **Not built** | — |
-| Model / prompt-chain inventory at org scale | **Not built** | model is a field on cost events only |
+| Org-wide AI apps / shadow AI | **Partial** | source candidates and explicitly registered Applications; SaaS shadow AI remains |
+| GitHub / ADO / GitLab inventory crawlers | **Built (metadata)** | read-only repository discovery, normalized evidence, Application registration |
+| AWS / Azure / GCP / K8s AI asset discovery | **Built (metadata)** | fixed read-only CLI commands normalize models, agents, endpoints, workloads, services, ownership, and provenance |
+| Model / prompt / data inventory | **Built (local)** | versioned models, prompts, datasets, vector stores, and knowledge bases linked through the graph |
 | Enterprise inventory dashboard | **Not built** | — |
 
-**Verdict:** Partial — local AgentOps inventory only.
+**Verdict:** Partial — local registry plus source and runtime metadata; enterprise-wide coverage and dashboard remain.
 
 ### Pillar 2 — AI Architecture Intelligence
 
@@ -112,11 +112,11 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | Stack detection | **Built** | `niyam/core/scanner/stack_detector.py` |
 | Project context refresh | **Built** | `niyam/core/context.py`, `niyam context *` |
 | Manual architecture docs in context | **Partial** | `context add` (prd / tech-spec / custom) |
-| Auto flow diagrams / dependency graphs | **Not built** | `graphify-out/` is dev tooling, not product |
-| Data lineage / trust boundaries | **Not built** | — |
-| External calls / identity / storage map | **Not built** | — |
+| Auto flow diagrams / dependency graphs | **Partial** | local direct object graph and function-level source→sink flows; no rendered topology |
+| Data lineage / trust boundaries | **Partial** | Python function-level external/identity→storage flows with source locations |
+| External calls / identity / storage map | **Built (Python)** | `niyam architecture scan/show`; other languages remain |
 
-**Verdict:** Early.
+**Verdict:** Partial locally; multi-language and runtime topology remain.
 
 ### Pillar 3 — AI Production Readiness ⭐ strongest product
 
@@ -148,10 +148,10 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | Skill approval | **Built** | `skills approve` |
 | Memory policy checks | **Built** | `memory policy-check` |
 | LoopOps budgets / approval-on-risk | **Built** | `niyam loop run` |
-| Org model allowlists (e.g. no GPT-4o for finance) | **Partial** | patterns possible; no multi-app policy mesh |
+| Cross-Application model / data policy mesh | **Built (local)** | typed owner/status/version/tag selectors over Applications and linked inventory; Guard fails closed |
 | Continuous enforce across cloud AI runtimes | **Not built** | local/agent path only |
 
-**Verdict:** Built for AgentOps enforcement; Partial as enterprise policy fabric.
+**Verdict:** Built for local AgentOps and Application-aware enforcement; cloud-runtime enforcement remains.
 
 ### Pillar 5 — Agent Runtime
 
@@ -182,7 +182,7 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | Agent performance scorecard | **Built** | `cost scorecard`, `niyam/core/analytics.py` |
 | Mission token waste metrics | **Partial** | analytics wasted cost / retries |
 | Latency / failure signals | **Partial** | mission metrics |
-| Attribution by team / AI Application | **Not built** | repo/task/session only |
+| Attribution by team / AI Application | **Partial** | application IDs span cost, missions, fleet, MCP, skills, and evidence; team rollups remain |
 | Business outcome / ROI | **Not built** | — |
 | Prompt efficiency / cache hit / reasoning cost | **Not built** | — |
 
@@ -222,7 +222,7 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 
 | # | Module | Status | Primary surface |
 | --- | --- | --- | --- |
-| 1 | AI Inventory | **Early–Partial** | fleet + mcp + skills (Niyam objects only) |
+| 1 | AI Inventory | **Partial** | Applications, source/runtime discovery, and versioned model/prompt/data objects |
 | 2 | Architecture Discovery | **Early** | `context refresh`, stack detector |
 | 3 | Production Readiness | **Built** | `scan`, scoring, decision, CI gates |
 | 4 | AI Security | **Built (partial breadth)** | secrets/auth/cloud rules, redaction, external scanners, guard |
@@ -239,7 +239,7 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 
 | Engine | Status | Notes |
 | --- | --- | --- |
-| Discovery Engine | **Early** | Fleet discover; no enterprise connectors |
+| Discovery Engine | **Partial** | Source-control and read-only cloud/Kubernetes metadata connectors |
 | Architecture Engine | **Early** | Context/stack only |
 | Policy Engine | **Built** | Guard + team policy + exceptions + MCP/skills |
 | Runtime Engine | **Built** | Mission / loop / swarm / workspace |
@@ -247,7 +247,7 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | Evidence Engine | **Built** | Multi-section compiler + HTML/MD/JSON |
 | Intelligence Engine | **Early** | Analytics + memory recall; no graph intelligence |
 | Portal / Control Room | **Partial–Built (local)** | FastAPI portal + workspace; not multi-tenant SaaS |
-| Connectors (cloud, ITSM, IdP) | **Not built** | GitHub PR, GHA, ADO as delivery hooks only |
+| Connectors (cloud, ITSM, IdP) | **Partial** | source-control and read-only cloud/runtime discovery built; ITSM and IdP remain |
 
 ---
 
@@ -264,13 +264,13 @@ Discover → Understand → Assess → Govern → Execute → Observe → Learn 
 | Memory record | **First-class** |
 | Workspace session / approval | **First-class** |
 | Cryptographic identity | **First-class** (local signing) |
-| **AI Application** | **Not built** |
-| Model (inventory) | **Partial** (cost event field) |
-| Prompt / prompt version | **Partial** (portal prompt-audit path; full audit still polish) |
-| Dataset / vector store / knowledge base | **Not built** |
-| **Niyam Graph (relationships)** | **Not built** |
+| **AI Application** | **Built (local registry)** — `niyam applications register/list/show` |
+| Model (inventory) | **Built (local, versioned)** |
+| Prompt / prompt version | **Built (local, versioned)** |
+| Dataset / vector store / knowledge base | **Built (local, versioned)** |
+| **Niyam Graph (relationships)** | **Partial** — versioned local direct relationships via `niyam graph link/show` |
 
-Without **AI Application** as root identity, Inventory + Trust Center + FinOps attribution cannot become the platform thesis.
+The local **AI Application** root identity is a shared attribution key across cost, missions, fleet, MCP tools, skills, evidence, and versioned inventory objects. Enterprise aggregation and Trust Center queries remain incomplete.
 
 ---
 
@@ -278,7 +278,7 @@ Without **AI Application** as root identity, Inventory + Trust Center + FinOps a
 
 | Phase | Intent | Current fit |
 | --- | --- | --- |
-| **P1 Trust** (0–6m): Discovery, Inventory, Readiness, Evidence | Sell trust at ship time | **~55–65% of the repo slice.** Readiness + Evidence Built. Inventory/Discovery Early. |
+| **P1 Trust** (0–6m): Discovery, Inventory, Readiness, Evidence | Sell trust at ship time | **~65–75% of the repo slice.** Readiness + Evidence Built. Inventory/Discovery Partial. |
 | **P2 Control** (6–12m): Policy, FinOps, Architecture, Exec dashboards | Policy + cost + architecture | Policy Built (local). FinOps Partial. Architecture/exec Early. |
 | **P3 Execution** (12–18m): Agent registry, runtime gov, approvals, safe action | Runtime path | Coding-agent runtime Built. Universal agent registry / safe action Not built. |
 | **P4 Autonomy** (18–24m): orchestration, auto-remediation, digital twin | Optimize | Auto-heal/replan Partial. Rest Not built. |
@@ -331,13 +331,13 @@ Trust these as real product, not vapor:
 | AgentOps control plane (coding agents) | **8** | Deep, multi-module |
 | Production readiness (repo) | **8** | Best commercial wedge |
 | Evidence / audit trail | **8** | Strong differentiator |
-| Policy enforcement (local) | **7** | Real enforce, not docs |
+| Policy enforcement (local) | **8** | Command and Application/inventory attribute enforcement |
 | FinOps | **4** | Token cost only |
-| Discovery / inventory (enterprise) | **2** | Fleet ≠ AI inventory |
+| Discovery / inventory (enterprise) | **4** | Local registry and metadata connectors; org aggregation remains |
 | Architecture intelligence | **2** | Context only |
 | Trust Center (executive) | **2** | Local portal ≠ Trust Center |
-| Niyam Graph / object platform | **1** | Objects in silos |
-| Cross-cloud control plane | **1** | Hooks only |
+| Niyam Graph / object platform | **3** | Local direct graph; no enterprise query layer |
+| Cross-cloud control plane | **3** | Read-only metadata discovery; no runtime enforcement |
 | **Company platform thesis overall** | **~3.5** | Vertical depth high; platform breadth low |
 
 This is a classic infrastructure pattern: **one sharp beachhead product**, then platform expansion.
@@ -362,7 +362,7 @@ Map gaps to existing modules so work extends the product, not a greenfield rewri
 
 | ID | Gap | Extend from |
 | --- | --- | --- |
-| C-01 | Org model / data policy mesh | `policy`, guard, cost model field |
+| C-01 | Org model / data policy mesh (local implementation built) | `policy`, guard, inventory graph |
 | C-02 | FinOps attribution (app / team / model) | `cost`, `analytics` |
 | C-03 | Architecture export for inventoried apps | `context`, stack detector |
 | C-04 | Executive dashboard | `portal`, SaaS client |
@@ -378,7 +378,7 @@ Map gaps to existing modules so work extends the product, not a greenfield rewri
 
 ### Phase 1 non-goals (do not boil the ocean)
 
-- Multi-cloud AI asset discovery across AWS/Azure/GCP  
+- Multi-cloud runtime mutation or enforcement
 - Enterprise AI digital twin  
 - Outcome-based ROI FinOps  
 - Replacing Vanta / Datadog / Wiz / ServiceNow  
@@ -393,7 +393,7 @@ Map gaps to existing modules so work extends the product, not a greenfield rewri
 | Niyam is already multi-module (company-shaped product surface) | **Yes** |
 | Best current product = Production Readiness + Evidence | **Yes** |
 | “AI Governance Platform” undersells / boxes the brand | **Yes** — code is execution + evidence, not only GRC |
-| Ready to claim control tower for all enterprise AI | **No** — inventory + graph + connectors missing |
+| Ready to claim control tower for all enterprise AI | **No** — enterprise coverage, Trust queries, and runtime enforcement remain |
 | Phase 1 should stay Trust (inventory / readiness / evidence) | **Yes** |
 | Agent Runtime is purely future | **Partially wrong** — coding-agent runtime is Built; general agent runtime is future |
 | FinOps is a large opportunity | **Yes** — current product is token accounting only |

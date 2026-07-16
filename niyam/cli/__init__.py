@@ -238,6 +238,41 @@ loop_app = typer.Typer(
 )
 app.add_typer(loop_app)
 
+applications_app = typer.Typer(
+    name="applications",
+    help="Inventory first-class AI Applications.",
+    no_args_is_help=True,
+)
+app.add_typer(applications_app)
+
+graph_app = typer.Typer(
+    name="graph",
+    help="Link and query governed AI objects.",
+    no_args_is_help=True,
+)
+app.add_typer(graph_app)
+
+architecture_app = typer.Typer(
+    name="architecture",
+    help="Build and inspect local architecture inventory.",
+    no_args_is_help=True,
+)
+app.add_typer(architecture_app)
+
+discovery_app = typer.Typer(
+    name="discovery",
+    help="Run read-only enterprise discovery.",
+    no_args_is_help=True,
+)
+app.add_typer(discovery_app)
+
+inventory_app = typer.Typer(
+    name="inventory",
+    help="Manage versioned models, prompts, and data assets.",
+    no_args_is_help=True,
+)
+app.add_typer(inventory_app)
+
 from niyam.cli.suggest import suggest_app
 app.add_typer(suggest_app)
 
@@ -307,6 +342,11 @@ from niyam.cli import workspace  # noqa: F401
 from niyam.cli import loop  # noqa: F401
 from niyam.cli import suggest  # noqa: F401
 from niyam.cli import completion  # noqa: F401
+from niyam.cli import applications  # noqa: F401
+from niyam.cli import graph  # noqa: F401
+from niyam.cli import architecture  # noqa: F401
+from niyam.cli import discovery  # noqa: F401
+from niyam.cli import inventory  # noqa: F401
 
 
 def _harden_typer_parsing() -> None:

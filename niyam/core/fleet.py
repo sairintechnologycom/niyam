@@ -15,6 +15,7 @@ class FleetRepo(BaseModel):
     alias: str
     tags: List[str] = Field(default_factory=list)
     depends_on: List[str] = Field(default_factory=list)
+    application_id: str | None = None
 
 
 class FleetConfig(BaseModel):
@@ -79,9 +80,14 @@ def register_repo(
     alias: Optional[str] = None,
     tags: Optional[List[str]] = None,
     depends_on: Optional[List[str]] = None,
+    application_id: str | None = None,
+    config_path: Path | None = None,
 ) -> FleetRepo:
     """Register a repository in the fleet."""
-    config = load_fleet_config()
+    from niyam.core.applications import require_application
+
+    application_id = require_application(application_id, path)
+    config = load_fleet_config(config_path)
 
     abs_path = str(path.absolute())
     # Check if already registered
@@ -94,15 +100,21 @@ def register_repo(
                 repo.tags = tags
             if depends_on is not None:
                 repo.depends_on = depends_on
-            save_fleet_config(config)
+            if application_id is not None:
+                repo.application_id = application_id
+            save_fleet_config(config, config_path)
             return repo
 
     # New registration
     new_repo = FleetRepo(
-        path=abs_path, alias=alias or path.name, tags=tags or [], depends_on=depends_on or []
+        path=abs_path,
+        alias=alias or path.name,
+        tags=tags or [],
+        depends_on=depends_on or [],
+        application_id=application_id,
     )
     config.repos.append(new_repo)
-    save_fleet_config(config)
+    save_fleet_config(config, config_path)
     return new_repo
 
 

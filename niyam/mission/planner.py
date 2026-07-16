@@ -698,6 +698,7 @@ def run_mission_plan(
     template: str | None = None,
     runtime_override: str | None = None,
     auto_heal_override: bool | None = None,
+    application_id: str | None = None,
 ) -> str:
     """Generate a mission plan from a requirements file."""
     if console is None:
@@ -709,6 +710,10 @@ def run_mission_plan(
     if not repo_root:
         raise NiyamConfigError("Not a Niyam workspace. Run 'niyam init' first.")
     niyam_dir = get_niyam_dir(repo_root)
+
+    from niyam.core.applications import require_application
+
+    application_id = require_application(application_id, repo_root)
 
     if not niyam_dir.exists():
         console.print(
@@ -1307,6 +1312,9 @@ def run_mission_plan(
             console.print(
                 f"[yellow]Warning: fallback plan failed schema validation: {e}[/]"
             )
+
+    if application_id:
+        plan_data["mission"]["application_id"] = application_id
 
     # Cost-aware tier routing (post-normalize AI/template plans)
     try:

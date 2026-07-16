@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Optional, Any
@@ -14,7 +13,6 @@ from filelock import FileLock
 from pydantic import BaseModel, Field
 
 from niyam.core.config import find_niyam_root
-from niyam.governance.common.redaction import redact_secrets
 
 
 # ── Team Policy Models ──────────────────────────────────────────────────
@@ -26,11 +24,29 @@ class PolicyRole(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class PolicySelector(BaseModel):
+    """Typed attributes used to select an Application or linked inventory object."""
+
+    object_type: Literal[
+        "application",
+        "model",
+        "prompt",
+        "dataset",
+        "vector-store",
+        "knowledge-base",
+    ]
+    owner: str | None = None
+    status: Literal["prototype", "production", "retired"] | None = None
+    version: str | None = None
+    tag: str | None = None
+
+
 class PolicyRule(BaseModel):
     """A granular governance rule."""
     id: str
     type: Literal["block", "warn", "approval_required", "observe"]
-    pattern: str
+    pattern: str = ""
+    selector: PolicySelector | None = None
     description: str = ""
     exception_allowed: bool = True
 
@@ -41,6 +57,14 @@ class TeamPolicy(BaseModel):
     name: str
     roles: list[PolicyRole] = Field(default_factory=list)
     rules: list[PolicyRule] = Field(default_factory=list)
+
+
+class ApplicationPolicyDecision(BaseModel):
+    """One pre-execution Application policy decision."""
+
+    result: Literal["allow", "block", "warn", "approval_required", "observe"]
+    rule_id: str | None = None
+    reason: str = ""
 
 
 # ── Policy Exception (Risk Acceptance) Models ──────────────────────────
@@ -159,9 +183,87 @@ def load_team_policy(root: Path | None = None) -> Optional[TeamPolicy]:
         
     try:
         with open(path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-            return TeamPolicy.model_validate(data)
-    except Exception as e:
-        import logging
-        logging.getLogger("niyam.policy").error(f"Failed to load team policy: {e}")
-        return None
+            return TeamPolicy.model_validate(yaml.safe_load(f))
+    except Exception as exc:
+        raise ValueError(f"Failed to load team policy at {path}: {exc}") from exc
+
+
+def evaluate_application_policy(
+    application_id: str | None, root: Path | None = None
+) -> ApplicationPolicyDecision:
+    """Evaluate attribute selectors against an Application and its graph objects."""
+    try:
+        policy = load_team_policy(root)
+    except ValueError as exc:
+        return ApplicationPolicyDecision(
+            result="block", rule_id="policy-invalid", reason=str(exc)
+        )
+    selector_rules = [rule for rule in policy.rules if rule.selector] if policy else []
+    if not selector_rules:
+        return ApplicationPolicyDecision(result="allow")
+    if not application_id:
+        return ApplicationPolicyDecision(
+            result="block",
+            rule_id="application-context-required",
+            reason="Application context is required by attribute policy.",
+        )
+
+    try:
+        from niyam.core.applications import load_application_registry
+        from niyam.core.graph import get_relationships
+        from niyam.core.inventory import load_inventory
+
+        application = load_application_registry(root).applications.get(application_id)
+        if application is None:
+            raise ValueError(f"AI Application '{application_id}' is not registered.")
+        subjects = [{"object_type": "application", **application.model_dump()}]
+        selected_types = {
+            rule.selector.object_type
+            for rule in selector_rules
+            if rule.selector and rule.selector.object_type != "application"
+        }
+        if selected_types:
+            inventory = load_inventory(root)
+            for edge in get_relationships(
+                "application", application_id, direction="outgoing", root=root
+            ):
+                if edge.target_type not in selected_types:
+                    continue
+                key = f"{edge.target_type}:{edge.target_id}"
+                record = inventory.objects.get(key)
+                if record is None:
+                    raise ValueError(f"Linked inventory object '{key}' is not registered.")
+                subjects.append(record.model_dump())
+    except Exception as exc:
+        return ApplicationPolicyDecision(
+            result="block", rule_id="policy-context-invalid", reason=str(exc)
+        )
+
+    matches: list[PolicyRule] = []
+    for rule in selector_rules:
+        selector = rule.selector
+        if selector is None:
+            continue
+        for subject in subjects:
+            if subject.get("object_type") != selector.object_type:
+                continue
+            if selector.owner is not None and subject.get("owner") != selector.owner:
+                continue
+            if selector.status is not None and subject.get("status") != selector.status:
+                continue
+            if selector.version is not None and subject.get("version") != selector.version:
+                continue
+            if selector.tag is not None and selector.tag not in subject.get("tags", []):
+                continue
+            matches.append(rule)
+            break
+
+    if not matches:
+        return ApplicationPolicyDecision(result="allow")
+    priority = {"block": 4, "approval_required": 3, "warn": 2, "observe": 1}
+    rule = max(matches, key=lambda item: priority[item.type])
+    return ApplicationPolicyDecision(
+        result=rule.type,
+        rule_id=rule.id,
+        reason=rule.description or f"Application policy '{rule.id}' matched.",
+    )

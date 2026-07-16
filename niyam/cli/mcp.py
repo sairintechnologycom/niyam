@@ -53,6 +53,10 @@ def mcp_register(
         Optional[str],
         typer.Option("--owner", help="Owner of the tool."),
     ] = None,
+    application: Annotated[
+        Optional[str],
+        typer.Option("--application", help="Registered AI Application ID."),
+    ] = None,
     risk: Annotated[
         Optional[str],
         typer.Option(
@@ -121,6 +125,14 @@ def mcp_register(
         registry = load_mcp_registry()
     except ValueError as e:
         console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
+
+    from niyam.core.applications import require_application
+
+    try:
+        application = require_application(application)
+    except ValueError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
         raise SystemExit(1)
 
     # Existence check
@@ -244,6 +256,7 @@ def mcp_register(
             existing_tool.created_at if existing_tool.created_at else now_str
         )
         final_updated_at = now_str
+        final_application_id = application or existing_tool.application_id
     else:
         final_type = type
         final_command_or_url = redacted_command_or_url
@@ -257,6 +270,7 @@ def mcp_register(
         final_notes = redacted_notes
         final_created_at = now_str
         final_updated_at = now_str
+        final_application_id = application
 
     tool = MCPTool(
         name=name,
@@ -272,6 +286,7 @@ def mcp_register(
         notes=final_notes,
         created_at=final_created_at,
         updated_at=final_updated_at,
+        application_id=final_application_id,
     )
 
     with mcp_registry_lock():
@@ -378,6 +393,7 @@ def mcp_list() -> None:
     table = Table(title="Registered AI Agent Tools / MCP Servers")
     table.add_column("Name", style="cyan")
     table.add_column("Type", style="magenta")
+    table.add_column("Application", style="cyan")
     table.add_column("Risk Level", justify="center")
     table.add_column("Approved", justify="center")
     table.add_column("Owner", style="dim")
@@ -396,6 +412,7 @@ def mcp_list() -> None:
         table.add_row(
             tool.name,
             tool.type,
+            tool.application_id or "-",
             f"[{risk_style}]{tool.risk_level}[/]",
             approved_text,
             tool.owner or "N/A",
@@ -440,6 +457,7 @@ def mcp_show(
         f"[bold]Risk Level:[/] [{risk_style}]{tool.risk_level}[/]\n"
         f"[bold]Approved:[/] {approved_text}\n"
         f"[bold]Owner:[/] {tool.owner or 'N/A'}\n"
+        f"[bold]Application:[/] {tool.application_id or 'N/A'}\n"
         f"[bold]Command/URL:[/] {tool.command_or_url or 'N/A'}\n"
         f"[bold]Capabilities:[/] {', '.join(tool.capabilities) if tool.capabilities else 'None'}\n"
         f"[bold]Data Access:[/] {tool.data_access or 'N/A'}\n"

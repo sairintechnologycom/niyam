@@ -43,6 +43,12 @@ Compare the current project workspace file structure with the cached context fil
 ### `niyam policy validate`
 Validate policy definitions, active guardrails, and environment check settings.
 
+Team-policy rules may include a typed `selector` with `object_type` plus one or
+more of `owner`, `status`, `version`, or `tag`. Supported object types are
+`application`, `model`, `prompt`, `dataset`, `vector-store`, and
+`knowledge-base`. Selector rules use the existing `block`, `warn`,
+`approval_required`, or `observe` rule type.
+
 ### `niyam runtime add`
 Activate an additional AI runtime client adapter.
 - **Arguments:**
@@ -99,6 +105,11 @@ Wrap and run a shell command under guardrails.
   - `--capture-output`: Record stdout/stderr stream outputs in log database.
   - `--dry-run`: Evaluate policies and print what would happen without executing.
   - `--mode`: Override guard mode (`observe`, `warn`, `block`, `approve`).
+  - `--application`: Application context for attribute-policy evaluation.
+
+When any selector rule exists, missing or invalid Application/inventory context
+fails closed before the command runs. Attribute `block` and
+`approval_required` decisions remain enforced even in observe mode.
 
 #### `niyam guard status`
 Display active guard status, frozen paths, and observed execution metrics.
@@ -137,6 +148,104 @@ Registers Niyam's local Memory Ledger MCP server in `.niyam/mcp-registry.json`.
   - `--name`: Registry name. Defaults to `niyam-memory-ledger`.
   - `--approved` / `--no-approved`: Approval state for the server.
   - `--update`: Update an existing registry entry.
+
+---
+
+### `niyam applications`
+Manage the local inventory of first-class AI Applications.
+
+#### `niyam applications register`
+Register an application in `.niyam/applications.json`.
+- **Arguments:**
+  - `application_id`: Stable lowercase application identifier.
+- **Options:**
+  - `--name`: Display name; required for new applications.
+  - `--owner`: Owning team or person.
+  - `--repository`: Repository path or URL.
+  - `--description`: Application description.
+  - `--status`: `prototype`, `production`, or `retired`.
+  - `--tags`: Comma-separated tags.
+  - `--update`: Explicitly update an existing application.
+
+#### `niyam applications list`
+List registered AI Applications.
+
+#### `niyam applications show`
+Show one application by ID.
+
+Application-aware commands accept `--application APPLICATION_ID` after the
+application is registered: `cost log`, `mcp register`, `skills register`,
+`mission plan`, and `fleet register`. Existing records without attribution
+remain valid.
+
+### `niyam graph`
+Link and query direct relationships between governed objects.
+
+#### `niyam graph link`
+Create an idempotent directed relationship.
+- **Arguments:** `SOURCE_TYPE:ID RELATIONSHIP TARGET_TYPE:ID`
+- **Example:** `niyam graph link application:support-bot uses model:gpt-5`
+
+#### `niyam graph show`
+Show direct incoming and outgoing relationships for a `TYPE:ID` object reference.
+
+### `niyam inventory`
+Manage versioned model, prompt, and data objects in `.niyam/inventory.json`.
+
+#### `niyam inventory register`
+Register a `model`, `prompt`, `dataset`, `vector-store`, or `knowledge-base`.
+New objects require `--name` and `--version`; optional fields are `--owner`,
+`--location`, `--description`, and `--tags`. Use `--application` to create an
+Application `uses` relationship and `--update` for an existing object.
+
+#### `niyam inventory list`
+List inventory objects, optionally filtered with `--type`.
+
+#### `niyam inventory show`
+Show one object using a `TYPE:ID` reference.
+
+### `niyam architecture`
+Build and inspect a source-linked local architecture inventory.
+
+#### `niyam architecture scan`
+Analyze Python source without executing project code and write
+`.niyam/architecture.json`. Detects services/routes, outbound HTTP calls,
+identity boundaries, storage access, and function-level data flows.
+
+#### `niyam architecture show`
+Display detected architecture signals with file and line locations.
+
+### `niyam discovery source`
+Discover repository metadata using read-only GitHub, GitLab, or Azure DevOps
+REST APIs. Normalized evidence is stored under `.niyam/discovery/`; likely AI
+repositories are registered as Applications and linked in the local graph.
+
+- `--provider`: `github`, `gitlab`, or `azure-devops`.
+- `--organization`: GitHub organization, GitLab group, or Azure organization.
+- `--project`: Optional Azure DevOps project.
+- `--base-url`: Optional self-hosted API base URL.
+- `--token-env`: Environment variable holding the read token. Tokens are never persisted.
+- `--max-pages`: Bounded pagination limit, default `10`.
+- `--register-all`: Register every repository instead of AI candidates only.
+
+### `niyam discovery runtime`
+Discover AI runtime metadata through fixed, read-only provider CLI commands and
+write normalized evidence under `.niyam/discovery/`. Supported providers are
+AWS (Bedrock models/agents and SageMaker endpoints), Azure (Cognitive Services
+and optional Azure ML endpoints), GCP (Vertex AI models/endpoints), and
+Kubernetes (deployments, stateful sets, and services).
+
+- `--provider`: `aws`, `azure`, `gcp`, or `kubernetes`.
+- `--application`: Optional registered Application ID to graph-link assets.
+- `--region`: AWS or GCP region; required for GCP.
+- `--project`: GCP project; required for GCP.
+- `--resource-group`, `--workspace`, `--subscription`: Azure scope. Azure ML
+  endpoint discovery runs when both resource group and workspace are supplied.
+- `--context`: Optional Kubernetes context.
+
+Discovery uses the existing authenticated `aws`, `az`, `gcloud`, or `kubectl`
+CLI session. Niyam does not accept or persist provider credentials. Individual
+command failures are retained in the evidence as partial failures.
 
 ---
 

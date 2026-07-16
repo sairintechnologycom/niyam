@@ -29,6 +29,7 @@ class CostEvent(BaseModel):
     branch: str
     status: str
     notes: Optional[str] = None
+    application_id: str | None = None
 
 
 def get_pricing_path(root: Path | None = None) -> Path:
@@ -282,6 +283,7 @@ def generate_cost_metrics(events: list[CostEvent]) -> dict:
         "by_task": {},
         "by_session": {},
         "by_tool": {},
+        "by_application": {},
         "failed_repeated_cost": 0.0,
         "failed_repeated_count": 0,
         "wastage_by_tool": {},
@@ -324,6 +326,11 @@ def generate_cost_metrics(events: list[CostEvent]) -> dict:
         if tool not in metrics["by_tool"]:
             metrics["by_tool"][tool] = 0.0
         metrics["by_tool"][tool] += cost
+
+        if event.application_id:
+            application = event.application_id
+            metrics["by_application"].setdefault(application, 0.0)
+            metrics["by_application"][application] += cost
 
         # Status checks (failed/repeated)
         status = event.status.lower()

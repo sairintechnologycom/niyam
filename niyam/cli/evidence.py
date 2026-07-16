@@ -36,10 +36,10 @@ def evidence_command(
             "--include",
             help=(
                 "Comma-separated sections to include: scan, guard, mcp, cost, "
-                "memory, workspace."
+                "memory, workspace, applications."
             ),
         ),
-    ] = "scan,guard,mcp,cost",
+    ] = "scan,guard,mcp,cost,applications",
 ) -> None:
     """Audit-ready evidence and readiness report generation."""
     # Handle 'generate' as a positional argument for backward compatibility

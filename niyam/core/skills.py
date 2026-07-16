@@ -42,6 +42,7 @@ class RegisteredSkill(BaseModel):
     registered_at: str
     updated_at: str
     requires_approval: bool = True
+    application_id: str | None = None
 
 
 class SkillRegistry(BaseModel):
@@ -203,9 +204,15 @@ def classify_skill_risk(
 
 
 def register_skill(
-    skill_path: Path, root: Path | None = None, approved: bool = False
+    skill_path: Path,
+    root: Path | None = None,
+    approved: bool = False,
+    application_id: str | None = None,
 ) -> RegisteredSkill:
     """Parse, classify, and register a skill in the local registry."""
+    from niyam.core.applications import require_application
+
+    application_id = require_application(application_id, root)
     manifest, checksum, prompt_content = parse_skill_file(skill_path)
     risk_level = classify_skill_risk(manifest, prompt_content)
     
@@ -224,6 +231,7 @@ def register_skill(
         registered_at=now,
         updated_at=now,
         requires_approval=requires_approval,
+        application_id=application_id,
     )
     
     with skill_registry_lock(root):

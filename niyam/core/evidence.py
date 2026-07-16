@@ -486,6 +486,29 @@ def _get_cost_data(repo_root: Path) -> dict[str, Any]:
         }
 
 
+def _get_applications_data(repo_root: Path) -> dict[str, Any]:
+    """Retrieve first-class AI Applications and their direct relationships."""
+    from niyam.core.applications import load_application_registry
+    from niyam.core.graph import get_relationships
+
+    registry = load_application_registry(repo_root)
+    applications = []
+    for application in registry.applications.values():
+        item = application.model_dump()
+        item["relationships"] = [
+            edge.model_dump()
+            for edge in get_relationships(
+                "application", application.application_id, root=repo_root
+            )
+        ]
+        applications.append(item)
+    return {
+        "exists": bool(applications),
+        "total": len(applications),
+        "applications": applications,
+    }
+
+
 def _get_memory_data(repo_root: Path) -> dict[str, Any]:
     """Retrieve memory ledger analytics."""
     from niyam.core.memory import get_memory_dir
@@ -716,7 +739,7 @@ class UnifiedEvidenceCompiler:
     def compile(self, include_list: list[str] | None = None) -> dict[str, Any]:
         """Compile all available evidence into a single dictionary."""
         if include_list is None:
-            include_list = ["scan", "guard", "mcp", "cost"]
+            include_list = ["scan", "guard", "mcp", "cost", "applications"]
         
         # 1. Base Metadata
         git_meta = _get_git_metadata(self.root)
@@ -771,6 +794,11 @@ class UnifiedEvidenceCompiler:
         skills_data = _get_skills_data(self.root) if "skills" in include_list else {}
         policy_exceptions = _get_policy_exceptions_data(self.root) if "policy" in include_list else {}
         cost_data = _get_cost_data(self.root) if "cost" in include_list else {}
+        applications_data = (
+            _get_applications_data(self.root)
+            if "applications" in include_list
+            else {}
+        )
         guard_logs = _get_guard_logs(self.root) if "guard" in include_list else []
         memory_data = _get_memory_data(self.root) if "memory" in include_list else {}
         workspace_data = (
@@ -801,6 +829,7 @@ class UnifiedEvidenceCompiler:
             "memory": memory_data,
             "workspace": workspace_data,
             "cost": cost_data,
+            "applications": applications_data,
             "guard_logs": guard_logs[:100], # Cap logs in unified package
             "task_logs": task_logs,
         }
@@ -822,7 +851,7 @@ def run_generate_evidence(
     from_scan_json: str | None = None,
     fmt: str = "markdown",
     output: str | None = None,
-    include: str = "scan,guard,mcp,skills,policy,cost",
+    include: str = "scan,guard,mcp,skills,policy,cost,applications",
     mission_id: str | None = None,
 ) -> str:
     """Generate evidence report locally and return the formatted output string."""
@@ -932,6 +961,9 @@ def run_generate_evidence(
     policy_data = _get_policy_exceptions_data(root) if "policy" in include_list else {}
     memory_data = _get_memory_data(root) if "memory" in include_list else {}
     workspace_data = _get_workspace_data(root) if "workspace" in include_list else {}
+    applications_data = (
+        _get_applications_data(root) if "applications" in include_list else {}
+    )
 
     # 2. Findings breakdown & critical/high counts
     findings = list(scan_results.get("findings", []))
@@ -1155,6 +1187,7 @@ def run_generate_evidence(
         "policy": policy_data,
         "memory": memory_data,
         "workspace": workspace_data,
+        "applications": applications_data,
         "cost": cost_data,
         "audit_trail": audit_trail,
     }

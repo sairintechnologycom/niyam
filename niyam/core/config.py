@@ -333,6 +333,7 @@ class MissionMeta(BaseModel):
     worktree: bool = True
     auto_heal: bool = False
     base_sha: Optional[str] = None
+    application_id: Optional[str] = None
 
 
 class MissionPlan(BaseModel):

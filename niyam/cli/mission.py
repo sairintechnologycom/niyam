@@ -183,6 +183,10 @@ def mission_plan(
         Optional[Runtime],
         typer.Option("--runtime", "-r", help="Runtime override for this mission."),
     ] = None,
+    application: Annotated[
+        Optional[str],
+        typer.Option("--application", help="Registered AI Application ID."),
+    ] = None,
 ) -> None:
     """Generate a mission plan from a requirements file."""
     from niyam.mission.planner import run_mission_plan
@@ -194,6 +198,7 @@ def mission_plan(
             console=console,
             template=template,
             runtime_override=runtime.value if runtime else None,
+            application_id=application,
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -271,6 +276,10 @@ def mission_show(
             f"[{col}]{t_status}[/]",
         )
 
+    if mission_meta.get("application_id"):
+        console.print(
+            f"Application: [bold cyan]{mission_meta['application_id']}[/]"
+        )
     console.print(Panel(table, border_style="magenta"))
 
 
@@ -1558,4 +1567,3 @@ def mission_start_wizard(
     finally:
         if temp_req.exists():
             temp_req.unlink()
-

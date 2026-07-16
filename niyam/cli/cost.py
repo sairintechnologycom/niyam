@@ -37,6 +37,10 @@ def cost_log(
     notes: Annotated[
         Optional[str], typer.Option("--notes", help="Additional notes.")
     ] = None,
+    application: Annotated[
+        Optional[str],
+        typer.Option("--application", help="Registered AI Application ID."),
+    ] = None,
 ) -> None:
     """Log an AI cost and token usage event."""
     from niyam.core.cost import (
@@ -49,6 +53,14 @@ def cost_log(
     )
 
     root = find_niyam_root() or Path.cwd()
+
+    from niyam.core.applications import require_application
+
+    try:
+        application = require_application(application, root)
+    except ValueError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        raise typer.Exit(1)
 
     if input_tokens < 0 or output_tokens < 0:
         console.print("[bold red]Error:[/] Token counts must be non-negative.")
@@ -78,6 +90,7 @@ def cost_log(
         branch=get_branch_name(root),
         status=status,
         notes=notes,
+        application_id=application,
     )
 
     log_cost_event(event, root)
@@ -137,6 +150,10 @@ def cost_summary() -> None:
         top_task = max(metrics["by_task"].items(), key=lambda x: x[1])
         table.add_row("Task", top_task[0], f"${top_task[1]:.2f}")
 
+    if metrics["by_application"]:
+        top_application = max(metrics["by_application"].items(), key=lambda x: x[1])
+        table.add_row("Application", top_application[0], f"${top_application[1]:.2f}")
+
     console.print(table)
 
 
@@ -171,6 +188,12 @@ def cost_report() -> None:
 
     for repo, cost in sorted(metrics["by_repo"].items()):
         repo_table.add_row(repo, f"${cost:.4f}")
+
+    application_table = Table(title="Cost by AI Application")
+    application_table.add_column("Application", style="cyan")
+    application_table.add_column("Cost", justify="right", style="green")
+    for application, cost in sorted(metrics["by_application"].items()):
+        application_table.add_row(application, f"${cost:.4f}")
 
     # 3. Total estimated cost by task
     task_table = Table(title="Cost by Task")
@@ -222,6 +245,9 @@ def cost_report() -> None:
     console.print()
     console.print(repo_table)
     console.print()
+    if metrics["by_application"]:
+        console.print(application_table)
+        console.print()
     console.print(task_table)
     console.print()
     console.print(tool_table)

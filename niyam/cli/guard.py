@@ -85,6 +85,10 @@ def guard_run(
         Optional[str],
         typer.Option("--mode", help="Guard mode: observe, block, warn, approve."),
     ] = None,
+    application: Annotated[
+        Optional[str],
+        typer.Option("--application", help="AI Application policy context."),
+    ] = None,
 ) -> None:
     """Run a shell command under Niyam guard observation."""
     from niyam.policies.guard import run_guard_run
@@ -95,6 +99,7 @@ def guard_run(
         dry_run=dry_run,
         console=console,
         mode_override=mode,
+        application_id=application,
     )
 
 
@@ -136,6 +141,10 @@ def guard_observe(
             "--capture-output", help="Capture command stdout/stderr output in logs."
         ),
     ] = False,
+    application: Annotated[
+        Optional[str],
+        typer.Option("--application", help="AI Application policy context."),
+    ] = None,
 ) -> None:
     """[Alias] Run a command under observation (Alias for 'guard run --mode observe')."""
     from niyam.policies.guard import run_guard_run
@@ -146,6 +155,7 @@ def guard_observe(
         dry_run=False,
         console=console,
         mode_override="observe",
+        application_id=application,
     )
 
 

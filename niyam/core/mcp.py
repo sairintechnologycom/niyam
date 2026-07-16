@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -14,6 +15,8 @@ from pydantic import BaseModel, Field
 
 from niyam.core.config import find_niyam_root
 from niyam.governance.common.redaction import redact_secrets
+
+logger = logging.getLogger(__name__)
 
 
 class MCPTool(BaseModel):
@@ -35,6 +38,7 @@ class MCPTool(BaseModel):
     updated_at: str | None = None
     approved_by: str | None = None
     approval_reason: str | None = None
+    application_id: str | None = None
 
 
 
@@ -112,7 +116,7 @@ def _classify_risk_ai(
     capabilities: list[str] | None = None,
     data_access: str | None = None,
     notes: str | None = None,
-) -> Optional[Literal["low", "medium", "high", "critical"]]:
+) -> Literal["low", "medium", "high", "critical"] | None:
     """AI-powered semantic risk classification using available runtimes."""
     import subprocess
     import shutil
