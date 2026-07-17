@@ -80,9 +80,9 @@ BUILTIN_RUNTIME_SPECS: dict[str, RuntimeSpec] = {
         ],
         model_flag="--model",
         models={
-            "premium": "claude-opus",
-            "standard": "claude-sonnet",
-            "economy": "claude-haiku",
+            "premium": "opus",
+            "standard": "sonnet",
+            "economy": "haiku",
         },
         output_format="json",
         usage_parser="claude_json",
@@ -96,11 +96,8 @@ BUILTIN_RUNTIME_SPECS: dict[str, RuntimeSpec] = {
         exec_args=["exec", "--json", "-"],
         plan_args=["exec", "--json", "-"],
         model_flag="--model",
-        models={
-            "premium": "o3",
-            "standard": "gpt-5-codex",
-            "economy": "gpt-4.1-mini",
-        },
+        # Codex account entitlements vary; let its CLI select the available default.
+        models={},
         sandbox_args=["--sandbox", "workspace-write"],
         output_format="jsonl",
         usage_parser="codex_jsonl",

@@ -51,17 +51,21 @@ def test_apply_routing_policy_sets_tier_and_model() -> None:
     assert tasks[1]["tier"] == "standard"
     assert tasks[2]["tier"] == "economy"
     # Models resolved via RuntimeSpec
-    assert tasks[0].get("model") == "claude-opus"
-    assert tasks[1].get("model") == "claude-sonnet"
-    assert tasks[2].get("model") == "claude-haiku"
+    assert tasks[0].get("model") == "opus"
+    assert tasks[1].get("model") == "sonnet"
+    assert tasks[2].get("model") == "haiku"
 
 
 def test_resolve_model_preserves_tier_across_runtime_hop() -> None:
     task = {"type": "implementation", "tier": "economy", "runtime": "claude"}
     m1 = resolve_model_for_task(task, runtime="claude")
     m2 = resolve_model_for_task(task, runtime="gemini")
-    assert m1 == "claude-haiku"
+    assert m1 == "haiku"
     assert m2 == "gemini-2.0-flash"
+
+
+def test_codex_uses_its_account_default_model() -> None:
+    assert resolve_model_for_task({"tier": "standard"}, runtime="codex") is None
 
 
 def test_budget_degrade_at_80_percent(tmp_path: Path) -> None:
