@@ -1,11 +1,13 @@
 # Niyam
 
-**Niyam is an open-source AgentOps control plane for governed autonomous AI development.** It provides safety guardrails, portable memory ledgers, and human-in-the-loop approval gates to run AI coding agents (such as Claude Code, Codex, Gemini, and AGY) with production-grade safety and reliability.
+**Niyam is an open-source AgentOps control plane for AI coding agents, AI governance, and production readiness.** It adds guardrails, portable memory, human approval gates, readiness scanning, cost tracking, and audit evidence around Claude Code, Codex, Gemini, AGY, and other developer agents.
 
 > One `.niyam/` source of truth. Many AI runtimes. Policy-driven autonomy. Portable memory. Evidence-backed delivery.
 
 [![PyPI package version for Niyam](https://badge.fury.io/py/niyam.svg)](https://badge.fury.io/py/niyam)
 [![MIT License for Niyam](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Start here:** [Install](#installation--setup) · [How it works](#how-niyam-works) · [Feature map](#complete-feature-map) · [Quick start](#quick-start) · [Docs](#documentation--architecture)
 
 ---
 
@@ -21,6 +23,20 @@ Niyam acts as an **AgentOps control plane** for teams that need to govern what A
 *   **Browser Agent Supervision:** Control and record browser actions executed by autonomous agents.
 *   **FinOps & Token Cost Tracking:** Track actual agent spend and token consumption locally.
 *   **Audit-Ready Evidence Reports:** Synthesize scan results, command histories, and approval logs into compliance documents.
+
+## How Niyam Works
+
+```mermaid
+flowchart LR
+  D[Developer or CI] --> N[Niyam\ncontrol plane]
+  N --> R[Claude · Codex · Gemini · AGY]
+  N --> P[Policies\nscopes · approvals · guardrails]
+  N --> E[Evidence\nreadiness · cost · audit trail]
+  R --> C[Repository]
+  P --> C
+```
+
+Niyam does not replace your coding agent. It gives every runtime the same project context, safe operating boundaries, validation expectations, and a traceable delivery record.
 
 ---
 
@@ -118,6 +134,26 @@ niyam loop run loops/security-audit.yaml --require-approval-on high-risk
 ### Enhanced CLI UX
 *   **Smart Autosuggestion:** Integrated suggestion engine offering typo correction ("Did you mean?"), context-aware flags, and alias resolution.
 *   **Shell Autocompletion:** Native `<TAB>` completion support for Bash, Zsh, Fish, and PowerShell (`niyam completion install`).
+
+## Complete Feature Map
+
+| Area | What Niyam provides | Start with |
+| --- | --- | --- |
+| **Workspace & runtimes** | Guided setup, profiles, runtime projections, health checks, Sutra migration, and shared project context. | `niyam init` · `niyam runtime add` · `niyam doctor` |
+| **Agent orchestration** | Requirement/PRD ingestion, task graphs, scopes, approvals, retries, rollback, worktrees, dashboards, timelines, and task audits. | `niyam run` · `niyam mission plan` |
+| **Readiness & security** | Repository scans, profiles, baselines, GO/NO-GO decisions, secret redaction, command blocking, careful mode, and frozen paths. | `niyam scan` · `niyam guard enable` |
+| **MCP & skill governance** | Tool and MCP registry, capability risk assessment, approvals, memory-server registration, skill inventory, and policy checks. | `niyam mcp register` · `niyam skills register` |
+| **Evidence & compliance** | Markdown/HTML/SARIF reports combining scan, guard, MCP, cost, memory, workspace, mission, and signature evidence. | `niyam evidence` |
+| **Memory & context** | Portable project context, structured Memory Ledger, recall, redaction, lineage, import/export, policy checks, and MCP access. | `niyam context refresh` · `niyam memory init` |
+| **FinOps** | Local token ledger, model pricing, cost summaries, budget-aware task routing, and mission cost reports. | `niyam cost summary` |
+| **Control Room & portal** | Supervised task sessions, approvals, takeover, browser-action recording, local Portal API, and live dashboards. | `niyam workspace create` · `niyam portal` |
+| **Multi-agent coordination** | Agent heartbeats, file/resource locks, lock negotiation, swarm logs, and stale-agent cleanup. | `niyam swarm init` |
+| **Fleet operations** | Register, discover, sync, assess, and run governed work across multiple repositories. | `niyam fleet discover` |
+| **CI, PRs & review** | CI verification/generation, evidence-aware pull requests, and structured code or PR reviews. | `niyam ci verify` · `niyam review` |
+| **AI system inventory** | Applications, models, prompts, datasets, vector stores, architecture inventory, source/runtime discovery, and relationship graphs. | `niyam applications` · `niyam inventory` · `niyam graph` |
+| **Identity & extensions** | Local evidence signing, policy validation, capability packs, templates, and optional SaaS evidence upload. | `niyam identity init` · `niyam pack add` |
+
+For commands and behavior in depth, read the [CLI reference](docs/cli-reference.md) and [feature catalog](docs/codebase/feature-catalog.md).
 
 ---
 
