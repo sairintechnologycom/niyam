@@ -102,7 +102,7 @@ flowchart LR
 
 | Layer | Role |
 | --- | --- |
-| **AI runtimes** (Claude, Codex, Gemini) | Write code, reason, use tools |
+| **AI runtimes** (Claude, Codex, Gemini, AGY) | Write code, reason, use tools |
 | **Niyam** | Rules, isolation, approvals, memory, cost, evidence |
 | **Repo (`.niyam/`)** | Single source of truth projected into each runtime |
 
@@ -181,7 +181,7 @@ flowchart TD
 
 | Scenario | Use Niyam because | Start with |
 | --- | --- | --- |
-| **Daily feature work with Claude, Codex, or Gemini** | One project rulebook follows the runtime, so agents get consistent context and validation expectations. | `init` → `sync` → `/implement` → `/review` |
+| **Daily feature work with Claude, Codex, Gemini, or AGY** | One project rulebook follows the runtime, so agents get consistent context and validation expectations. | `init` → `sync` → `/implement` → `/review` |
 | **Vibe-coded repo approaching a release** | Scan finds concrete readiness gaps and produces a GO/NO-GO decision instead of relying on a manual checklist. | `niyam scan . --profile team` → `niyam evidence` |
 | **Auth, payments, infrastructure, secrets, or database work** | Guardrails, path freezes, redaction, and explicit approvals bound the highest-risk actions. | `niyam guard enable` → `niyam guard run -- <command>` |
 | **Migration or large refactor** | A mission makes scope, dependencies, validation, and approval explicit; worktrees can isolate concurrent tasks. | `niyam mission plan <requirements-file>` |
@@ -191,7 +191,7 @@ flowchart TD
 
 ### Why use it
 
-Niyam’s value is the control plane around the coding agent: it keeps the project rules portable, constrains risky actions, makes larger tasks reviewable, and leaves evidence for a merge or release decision. It does **not** replace Claude, Codex, or Gemini—the runtime writes code; Niyam makes that work governed and repeatable.
+Niyam’s value is the control plane around the coding agent: it keeps the project rules portable, constrains risky actions, makes larger tasks reviewable, and leaves evidence for a merge or release decision. It does **not** replace Claude, Codex, Gemini, or AGY—the runtime writes code; Niyam makes that work governed and repeatable.
 
 ---
 
@@ -266,7 +266,8 @@ niyam doctor
 ### Optional next steps after init
 
 ```bash
-niyam runtime add codex    # multi-runtime workspace
+niyam runtime add codex    # add another coding runtime
+niyam runtime add agy      # add the AGY runtime
 niyam pack add <pack>      # install capability packs
 niyam setup                # interactive wizard
 ```

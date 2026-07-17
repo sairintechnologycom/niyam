@@ -1,6 +1,6 @@
 # Niyam
 
-**Niyam is an open-source AgentOps control plane for governed autonomous AI development.** It provides safety guardrails, portable memory ledgers, and human-in-the-loop approval gates to run AI coding agents (such as Claude Code, Cursor, and Gemini) with production-grade safety and reliability.
+**Niyam is an open-source AgentOps control plane for governed autonomous AI development.** It provides safety guardrails, portable memory ledgers, and human-in-the-loop approval gates to run AI coding agents (such as Claude Code, Codex, Gemini, and AGY) with production-grade safety and reliability.
 
 > One `.niyam/` source of truth. Many AI runtimes. Policy-driven autonomy. Portable memory. Evidence-backed delivery.
 

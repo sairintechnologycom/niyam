@@ -10,12 +10,19 @@ rather than hard-coding Claude-only argv shapes.
 | `claude` | `claude -p <prompt> --output-format json --permission-mode acceptEdits` | argv (`-p`) | `claude_json` |
 | `codex` | `codex exec --sandbox workspace-write --json -` | stdin | `codex_jsonl` |
 | `gemini` | `gemini -p <prompt> -o json` | argv (`-p`) | `gemini_json` |
+| `agy` | `agy --print <prompt>` | argv (`--print`) | text |
 
 Source: `niyam/runtimes/specs.py`, registry merge in `niyam/runtimes/registry.py`,
 invocation in `niyam/runtimes/executor.py`.
 
 Mission task execution (`mission/task_runner.py`) and LoopOps adapters call
 `run_runtime()` so plan/exec share one path.
+
+## Model selection
+
+Claude uses its stable CLI aliases: `opus`, `sonnet`, and `haiku`. Codex uses
+the model selected by the signed-in Codex CLI because available models vary by
+account. Set a task's `model` explicitly only when your account supports it.
 
 ## Custom runtimes
 
