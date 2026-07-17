@@ -43,7 +43,7 @@ async def verify_token(x_niyam_token: str = Header(None)):
 app = FastAPI(
     title="Niyam Portal API",
     description="Backend for AI Development Orchestration Dashboard",
-    version="1.0.0",
+    version="1.0.1",
 )
 
 from niyam.mission.utils import load_plan
