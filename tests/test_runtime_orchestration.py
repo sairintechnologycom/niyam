@@ -38,11 +38,12 @@ def fake_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     return cap
 
 
-def test_builtin_registry_has_three_runtimes() -> None:
+def test_builtin_registry_has_agy_runtime() -> None:
     names = list_runtime_names()
     assert "claude" in names
     assert "codex" in names
     assert "gemini" in names
+    assert "agy" in names
     assert set(BUILTIN_RUNTIME_SPECS) <= set(names)
 
 
@@ -79,6 +80,12 @@ def test_gemini_invocation_has_p_and_json_no_skip_trust() -> None:
     assert "-o" in inv.argv
     assert "json" in inv.argv
     assert "--skip-trust" not in inv.argv
+
+
+def test_agy_invocation_uses_non_interactive_print_mode() -> None:
+    inv = build_runtime_invocation("agy", prompt_text="review diff", include_sandbox=False)
+    assert inv.argv[0].endswith("agy") or inv.argv[0] == "agy"
+    assert inv.argv[1:] == ["--print", "review diff"]
 
 
 def test_custom_runtime_spec_from_runtimes_yaml(tmp_path: Path) -> None:
@@ -193,6 +200,12 @@ def test_run_runtime_gemini_with_fakes(fake_path: Path) -> None:
     assert result.usage is not None
     assert result.usage["input_tokens"] == 100
     assert (fake_path / "gemini-prompt.txt").read_text() == "review the diff"
+
+
+def test_run_runtime_agy_with_fakes(fake_path: Path) -> None:
+    result = run_runtime("agy", prompt_text="review the diff", include_sandbox=False, timeout=30)
+    assert result.success, result.stderr
+    assert (fake_path / "agy-prompt.txt").read_text() == "review the diff"
 
 
 def test_codex_rejects_legacy_positional_without_exec(fake_path: Path) -> None:

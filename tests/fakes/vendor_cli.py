@@ -29,9 +29,9 @@ def _capture(name: str, argv: list[str], prompt: str) -> None:
 
 def _extract_p_prompt(argv: list[str]) -> str | None:
     for i, arg in enumerate(argv):
-        if arg in ("-p", "--prompt") and i + 1 < len(argv):
+        if arg in ("-p", "--prompt", "--print") and i + 1 < len(argv):
             return argv[i + 1]
-        if arg.startswith("-p=") or arg.startswith("--prompt="):
+        if arg.startswith("-p=") or arg.startswith("--prompt=") or arg.startswith("--print="):
             return arg.split("=", 1)[1]
     return None
 
@@ -133,6 +133,16 @@ def run_gemini(argv: list[str]) -> int:
     return 0
 
 
+def run_agy(argv: list[str]) -> int:
+    prompt = _extract_p_prompt(argv)
+    if prompt is None:
+        print("error: missing --print prompt", file=sys.stderr)
+        return 2
+    _capture("agy", argv, prompt)
+    print(f"Total tokens: 125 (input: 95 / output: 30)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
     # Determine identity from symlink/name or NIYAM_FAKE_RUNTIME
@@ -145,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
             name = "codex"
         elif "gemini" in prog:
             name = "gemini"
+        elif "agy" in prog:
+            name = "agy"
         else:
             name = "claude"
     if name == "claude":
@@ -153,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_codex(argv)
     if name == "gemini":
         return run_gemini(argv)
+    if name == "agy":
+        return run_agy(argv)
     print(f"unknown fake runtime {name}", file=sys.stderr)
     return 2
 

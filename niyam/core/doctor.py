@@ -132,7 +132,7 @@ def _check_config_schema(repo_root: Path) -> list[DiagnosticResult]:
         results.append(DiagnosticResult("niyam.yaml schema", True, "Valid"))
 
         # Check runtimes are known
-        known_runtimes = {"claude", "codex", "gemini"}
+        known_runtimes = {"claude", "codex", "gemini", "agy"}
         for rt in config.runtimes:
             if rt in known_runtimes:
                 results.append(
@@ -670,6 +670,9 @@ def run_doctor(
         all_results.extend(_check_claude_runtime(root))
 
     if runtime == "codex" or (runtime is None and "codex" in config.runtimes):
+        all_results.extend(_check_codex_runtime(root))
+
+    if runtime == "agy" or (runtime is None and "agy" in config.runtimes):
         all_results.extend(_check_codex_runtime(root))
 
     if runtime == "gemini" or (runtime is None and "gemini" in config.runtimes):

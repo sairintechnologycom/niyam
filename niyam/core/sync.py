@@ -59,6 +59,11 @@ def run_sync(
 
             adapter = GeminiAdapter(repo_root, verbose=verbose, dry_run=dry_run)
             adapter.sync(console)
+        elif rt == "agy":
+            from niyam.runtimes.agy import AgyAdapter
+
+            adapter = AgyAdapter(repo_root, verbose=verbose, dry_run=dry_run)
+            adapter.sync(console)
         else:
             console.print(f"[yellow]Unknown runtime: {rt}[/]")
 
@@ -110,6 +115,8 @@ def run_runtime_add(
             "generate_gemini_md": True,
             "generate_style_md": True,
         }
+    elif runtime == "agy":
+        runtimes_data["agy"] = {"generate_agents_md": True}
 
     with open(runtimes_yaml_path, "w") as f:
         yaml.dump(runtimes_data, f, default_flow_style=False, sort_keys=False)

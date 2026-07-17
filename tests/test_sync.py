@@ -173,6 +173,19 @@ class TestGeminiSync:
         assert (gemini_dir / "settings.json").exists()
 
 
+class TestAgySync:
+    def test_agy_sync_creates_shared_agents_md(self, niyam_repo: Path) -> None:
+        from niyam.core.sync import run_runtime_add
+
+        console = Console(quiet=True)
+        os.chdir(niyam_repo)
+        run_runtime_add(runtime="agy", console=console)
+
+        assert (niyam_repo / "AGENTS.md").exists()
+        with open(niyam_repo / ".niyam" / "niyam.yaml") as f:
+            assert "agy" in yaml.safe_load(f)["runtimes"]
+
+
 class TestRuntimeAdd:
     """Tests for runtime add command."""
 

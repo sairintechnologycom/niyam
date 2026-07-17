@@ -161,6 +161,40 @@ flowchart TB
 
 ---
 
+## Is Niyam the right fit?
+
+Use Niyam when AI-assisted work needs repeatable boundaries or proof—not just a good prompt. For a throwaway local experiment with one developer, plain agent use is usually enough. Start small: `init`, `sync`, and the slash-command workflow; add missions, CI gates, or Control Room only when that problem exists.
+
+```mermaid
+flowchart TD
+  Start[AI-assisted change] --> Risk{Could it affect production,<br/>sensitive data, or protected code?}
+  Risk -->|Yes| Govern[Use Niyam guard + scan]
+  Risk -->|No| Scope{Is it multi-step, long-running,<br/>or shared across agents?}
+  Scope -->|Yes| Mission[Use a Niyam mission]
+  Scope -->|No| Audit{Do you need a repeatable<br/>review or audit trail?}
+  Audit -->|Yes| Daily[Use init + sync + /implement /review /ship]
+  Audit -->|No| Plain[Plain agent workflow is sufficient]
+  Govern --> Evidence[Evidence + human approval before ship]
+  Mission --> Evidence
+  Daily --> Scan[Run scan before merge when risk increases]
+```
+
+| Scenario | Use Niyam because | Start with |
+| --- | --- | --- |
+| **Daily feature work with Claude, Codex, or Gemini** | One project rulebook follows the runtime, so agents get consistent context and validation expectations. | `init` → `sync` → `/implement` → `/review` |
+| **Vibe-coded repo approaching a release** | Scan finds concrete readiness gaps and produces a GO/NO-GO decision instead of relying on a manual checklist. | `niyam scan . --profile team` → `niyam evidence` |
+| **Auth, payments, infrastructure, secrets, or database work** | Guardrails, path freezes, redaction, and explicit approvals bound the highest-risk actions. | `niyam guard enable` → `niyam guard run -- <command>` |
+| **Migration or large refactor** | A mission makes scope, dependencies, validation, and approval explicit; worktrees can isolate concurrent tasks. | `niyam mission plan <requirements-file>` |
+| **Multiple agents or changing runtimes** | Synced policies and portable memory prevent each agent from inventing its own context or rules. | `niyam runtime add <runtime>` → `niyam sync` |
+| **Compliance, customer assurance, or incident review** | Evidence combines scan results, guarded actions, tool posture, cost, approvals, and workspace history. | `niyam evidence --include scan,guard,mcp,cost,memory,workspace` |
+| **Autonomous browser or long-running agent task** | Control Room provides supervision, takeover, and a task timeline. | `niyam workspace create ...` |
+
+### Why use it
+
+Niyam’s value is the control plane around the coding agent: it keeps the project rules portable, constrains risky actions, makes larger tasks reviewable, and leaves evidence for a merge or release decision. It does **not** replace Claude, Codex, or Gemini—the runtime writes code; Niyam makes that work governed and repeatable.
+
+---
+
 ## 3. Install
 
 **Global install (recommended):**

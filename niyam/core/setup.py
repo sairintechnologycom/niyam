@@ -67,7 +67,7 @@ def run_setup(console: Console) -> None:
     # 3. Detect Runtimes in PATH
     console.print("\n[cyan]Detecting available runtimes in PATH...[/]")
     detected_runtimes = []
-    for rt in ["claude", "gemini", "codex"]:
+    for rt in ["claude", "agy", "gemini", "codex"]:
         if shutil.which(rt):
             detected_runtimes.append(rt)
             console.print(f"  [green]✓[/] Detected runtime: [bold cyan]{rt}[/]")
@@ -77,12 +77,12 @@ def run_setup(console: Console) -> None:
     runtimes_to_enable = []
     if not detected_runtimes:
         console.print(
-            "\n[yellow]⚠️ No AI runtimes (claude, gemini, codex) were detected in your PATH.[/]"
+            "\n[yellow]⚠️ No AI runtimes (claude, agy, gemini, codex) were detected in your PATH.[/]"
         )
         console.print("Please install them or specify the one you plan to use.")
         chosen_rt = Prompt.ask(
             "Which runtime would you like to configure anyway?",
-            choices=["claude", "gemini", "codex", "none"],
+            choices=["claude", "agy", "gemini", "codex", "none"],
             default="none",
         )
         if chosen_rt != "none":

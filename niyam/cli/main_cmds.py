@@ -15,6 +15,7 @@ class Runtime(str, Enum):
     claude = "claude"
     codex = "codex"
     gemini = "gemini"
+    agy = "agy"
 
 
 class ReportFormat(str, Enum):

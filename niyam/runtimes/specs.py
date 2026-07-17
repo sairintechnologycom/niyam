@@ -15,7 +15,7 @@ class RuntimeSpec(BaseModel):
     """How Niyam invokes a coding-agent CLI for plan/exec work.
 
     Projection (CLAUDE.md / AGENTS.md generation) remains separate in
-    ``niyam.runtimes.{claude,codex,gemini}`` adapters. This model only
+    ``niyam.runtimes.{claude,codex,gemini,agy}`` adapters. This model only
     describes *execution* against the real vendor grammar.
     """
 
@@ -121,6 +121,16 @@ BUILTIN_RUNTIME_SPECS: dict[str, RuntimeSpec] = {
         output_format="json",
         usage_parser="gemini_json",
         capabilities=["review", "validation", "implementation"],
+    ),
+    "agy": RuntimeSpec(
+        name="agy",
+        binary="agy",
+        prompt_delivery="argv",
+        exec_args=["--print", "{prompt}"],
+        plan_args=["--mode", "plan", "--print", "{prompt}"],
+        model_flag="--model",
+        output_format="text",
+        capabilities=["planning", "implementation", "review"],
     ),
 }
 

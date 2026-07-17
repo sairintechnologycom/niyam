@@ -84,4 +84,5 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = ["tests/e2e/fixtures"]
 addopts = "-v --tb=short"
